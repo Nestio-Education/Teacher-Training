@@ -109,6 +109,15 @@ class HealthResponse(BaseModel):
     status: str
     module: str
 
+class AssignmentFeedbackRequest(BaseModel):
+    teacher_name: str
+    course_title: str
+    submission_text: str
+    rubric_score: float
+
+class AssignmentFeedbackResponse(BaseModel):
+    feedback: str
+
 
 # ── FastAPI App ──────────────────────────────────────────────────
 app = FastAPI(
@@ -192,6 +201,71 @@ async def teacher_support_chat(req: ChatRequest):
                 "Please try again in a moment, or contact the SpacECE "
                 "coordinator for immediate help."
             )
+        )
+
+
+@app.post("/api/v1/assignment-feedback", response_model=AssignmentFeedbackResponse)
+async def assignment_feedback(req: AssignmentFeedbackRequest):
+    if not GROQ_API_KEY or GROQ_API_KEY.startswith("YOUR_") or "placeholder" in GROQ_API_KEY.lower():
+        return AssignmentFeedbackResponse(
+            feedback="AI Feedback is not configured. Please add your Groq API key."
+        )
+
+    system_prompt = (
+        "You are an expert Teacher Assessor for SpacECE. "
+        "Your job is to read a teacher's assignment submission and provide a short, constructive review based on their rubric score. "
+        "If the score is >= 85, praise them and point out specific strengths. "
+        "If the score is < 85, encourage them and point out specific areas to improve. "
+        "Structure your response exactly like this:\n\n"
+        "Dear [Teacher Name],\n\n"
+        "[1-2 sentence overall impression]\n\n"
+        "- [Bullet point 1: Specific feedback referencing their text]\n"
+        "- [Bullet point 2: Specific feedback referencing their text]\n"
+        "- [Bullet point 3: Specific feedback referencing their text]\n\n"
+        "Best regards,\nAdmin Team"
+    )
+
+    user_prompt = (
+        f"Teacher Name: {req.teacher_name}\n"
+        f"Course Title: {req.course_title}\n"
+        f"Rubric Score: {req.rubric_score}/100\n"
+        f"Submission Text:\n{req.submission_text}\n"
+    )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt}
+    ]
+
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": GROQ_MODEL,
+                    "max_tokens": 500,
+                    "messages": messages,
+                    "temperature": 0.5
+                },
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            reply = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+
+            if not reply:
+                raise ValueError("Empty reply from Groq API")
+
+            return AssignmentFeedbackResponse(feedback=reply)
+
+    except Exception as exc:
+        logger.error("Groq API error (Feedback): %s", exc)
+        return AssignmentFeedbackResponse(
+            feedback="Error generating AI feedback. Please try again or use manual feedback."
         )
 
 

@@ -5,11 +5,11 @@ import OverviewTab from "../admin/OverviewTab";
 import CenterManagementTab from "../admin/CenterManagementTab";
 import TeacherManagementTab from "../admin/TeacherManagementTab";
 import LessonPlanManagementTab from "../admin/LessonPlanManagementTab";
-import CurriculumTrainingTab from "../pages/CurriculumTrainingTab"; // already imported — just confirm it points at the new file
+import CurriculumTrainingTab from "../admin/CurriculumTrainingTab";
 import ActivityMonitoringTab from "../admin/ActivityMonitoringTab";
 import ChildrenManagementTab from "../admin/ChildrenManagement";
 import TrainerManagementTab from "../admin/TrainerManagementTab";
-//import AssignmentReviewTab from "../admin/AssignmentReviewTab";
+import AssignmentReviewTab from "../admin/AssignmentReviewTab";
 import AttendanceTab from "../admin/AttendanceTab";
 import ReportsTab from "../admin/ReportsTab";
 import NotificationsTab from "../admin/NotificationsTab";
@@ -18,9 +18,9 @@ import FeedbackManagementTab from "../admin/FeedbackManagementTab";
 //import ScheduleManagementTab from "../admin/ScheduleManagementTab";
 //import CertificateManagementTab from "../admin/CertificateManagementTab";
 //import AutomationTab from "../admin/AutomationTab";
-import SystemHealthTab from "../admin/SystemHealthTab";
-import AdminProfileTab from "../admin/AdminProfileTab";
-import HelpFAQTab from "../admin/HelpFAQTab";
+//import SystemHealthTab from "../admin/SystemHealthTab";
+//import AdminProfileTab from "../admin/AdminProfileTab";
+//import HelpFAQTab from "../admin/HelpFAQTab";
 import { getAdminTeachers, getCourseAssignments, getCourses, updateTeacherStatus } from "../services/api";
 //import CourseManagementTab from "../admin/CourseManagementTab";
 //import BatchManagementTab from "../admin/BatchManagementTab";
@@ -96,7 +96,7 @@ export default function AdminDashboard({ user, onLogout }) {
     { key: "lessonplans", label: "Lesson Plans", icon: "\uD83D\uDCCB" },
     { key: "children", label: "Children & Classes", icon: "\uD83D\uDC76" },
     { key:"trainers",     label:"Trainer Management",icon:"\uD83C\uDF93" },
-   // { key:"assignments",  label:"Assignment Review", icon:"\uD83D\uDCDD", badge:assignments.filter(a=>a.status==="pending").length },
+    { key:"assignments",  label:"Assignment Review", icon:"📝", badge:assignments.filter(a=>a.status==="pending").length },
     { key:"attendance",   label:"Attendance",        icon:"\uD83D\uDCC5" },
    
     { key:"reports",      label:"Reports & Analytics",icon:"\uD83D\uDCC8" },
@@ -134,7 +134,7 @@ export default function AdminDashboard({ user, onLogout }) {
       case "lessonplans": return <LessonPlanManagementTab setToast={setToast} />;
       case "children": return <ChildrenManagementTab setToast={setToast}/>;
       case "trainers": return <TrainerManagementTab batches={[]} setToast={setToast}/>;
-     // case "assignments":  return <AssignmentReviewTab assignments={assignments} setAssignments={setAssignments} setToast={setToast} teachers={teachers} user={user}/>;
+       case "assignments":  return <AssignmentReviewTab assignments={assignments} setAssignments={setAssignments} setToast={setToast} teachers={teachers} user={user}/>;
       case "attendance":   return <AttendanceTab teachers={teachers} sessions={[]}/>;
       case "reports":      return <ReportsTab teachers={teachers} courses={courses} batches={[]}/>;
       case "notifications":return <NotificationsTab teachers={teachers} setToast={setToast}/>;

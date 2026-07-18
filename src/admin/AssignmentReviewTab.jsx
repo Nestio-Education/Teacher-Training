@@ -293,19 +293,33 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
   const runAiFeedback = async (assignment) => {
     setAiLoading(true);
     setAiSuggestion("");
-    await new Promise((resolve) => setTimeout(resolve, 1200));
 
     const pct = rubricPct(assignment);
     const teacherName = getTeacherName(assignment).split(" ")[0] || "Teacher";
     const title = toText(assignment?.title, "the assignment");
+    const submissionText = toText(assignment?.notes, "No submission text provided.");
 
-    const suggestion = pct >= 85
-      ? `Dear ${teacherName},\n\nExcellent work on "${title}". Your submission is clear, aligned to the course outcomes, and ready for approval.\n\nHighlights:\n- Strong content accuracy\n- Clear presentation\n- Practical classroom application\n\nBest regards,\nAdmin Team`
-      : pct >= 60
-        ? `Dear ${teacherName},\n\nThank you for submitting "${title}". The submission is on the right track, but a few areas need strengthening.\n\n- Add a little more classroom detail\n- Tighten the structure and sequencing\n- Review the rubric comments before final submission\n\nBest regards,\nAdmin Team`
-        : `Dear ${teacherName},\n\nThank you for submitting "${title}". The work needs more improvement before it can be approved.\n\n- Revisit the assignment instructions\n- Improve alignment with the learning outcomes\n- Expand the practical examples\n\nBest regards,\nAdmin Team`;
+    try {
+      const response = await fetch("http://localhost:8001/api/v1/assignment-feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          teacher_name: teacherName,
+          course_title: title,
+          submission_text: submissionText,
+          rubric_score: pct
+        })
+      });
+      
+      if (!response.ok) throw new Error("Failed to generate AI feedback");
+      
+      const data = await response.json();
+      setAiSuggestion(data.feedback || "Error generating feedback.");
+    } catch (err) {
+      console.error(err);
+      setAiSuggestion(`Dear ${teacherName},\n\nThank you for submitting "${title}". The work needs more improvement before it can be approved.\n\n- Revisit the assignment instructions\n- Improve alignment with the learning outcomes\n- Expand the practical examples\n\nBest regards,\nAdmin Team`);
+    }
 
-    setAiSuggestion(suggestion);
     setAiLoading(false);
   };
 

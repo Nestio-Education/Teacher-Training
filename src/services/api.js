@@ -937,8 +937,8 @@ export function detectRiskFlags(text, description) {
   return request("/api/ai/risk-flags", { method: "POST", body: JSON.stringify({ text, description }) });
 }
 
-export function autoGradeAssessment(assessmentId, answers) {
-  return request("/api/ai/auto-grade", { method: "POST", body: JSON.stringify({ assessmentId, answers }) });
+export function autoGradeAssessment(answers) {
+  return request("/api/assessments/ai-grade", { method: "POST", body: JSON.stringify({ answers }) });
 }
 
 export function askEnhancedChatbot(message) {
