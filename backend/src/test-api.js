@@ -1,7 +1,7 @@
 async function testLiveApi() {
   console.log("Logging in as admin...");
   try {
-    const loginRes = await fetch("http://localhost:5001/api/auth/login", {
+    const loginRes = await fetch("http://localhost:5000/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: "admin@spaceece.com", password: "Admin@123" })
@@ -19,7 +19,7 @@ async function testLiveApi() {
 
     // Test 1: Activities
     console.log("--- Testing GET /api/admin/activities ---");
-    const actRes = await fetch("http://localhost:5001/api/admin/activities", { headers: getHeaders });
+    const actRes = await fetch("http://localhost:5000/api/admin/activities", { headers: getHeaders });
     console.log(`Status: ${actRes.status}`);
     const actData = await actRes.json();
     if (actRes.ok) {
@@ -30,7 +30,7 @@ async function testLiveApi() {
 
     // Test 2: Lesson Plan Assignments
     console.log("\n--- Testing GET /api/admin/lesson-plans/assignments ---");
-    const lpRes = await fetch("http://localhost:5001/api/admin/lesson-plans/assignments", { headers: getHeaders });
+    const lpRes = await fetch("http://localhost:5000/api/admin/lesson-plans/assignments", { headers: getHeaders });
     console.log(`Status: ${lpRes.status}`);
     const lpData = await lpRes.json();
     if (lpRes.ok) {
@@ -41,7 +41,7 @@ async function testLiveApi() {
 
     // Test 3: Children
     console.log("\n--- Testing GET /api/admin/children ---");
-    const childRes = await fetch("http://localhost:5001/api/admin/children", { headers: getHeaders });
+    const childRes = await fetch("http://localhost:5000/api/admin/children", { headers: getHeaders });
     console.log(`Status: ${childRes.status}`);
     const childData = await childRes.json();
     if (childRes.ok) {
@@ -52,7 +52,7 @@ async function testLiveApi() {
 
     // Test 4: Lesson Plans
     console.log("\n--- Testing GET /api/lesson-plans ---");
-    const lpPlansRes = await fetch("http://localhost:5001/api/lesson-plans", { headers: getHeaders });
+    const lpPlansRes = await fetch("http://localhost:5000/api/lesson-plans", { headers: getHeaders });
     console.log(`Status: ${lpPlansRes.status}`);
     const lpPlansData = await lpPlansRes.json();
     if (lpPlansRes.ok) {
@@ -63,7 +63,7 @@ async function testLiveApi() {
 
     // Test 5: Centers
     console.log("\n--- Testing GET /api/centers ---");
-    const centersRes = await fetch("http://localhost:5001/api/centers", { headers: getHeaders });
+    const centersRes = await fetch("http://localhost:5000/api/centers", { headers: getHeaders });
     console.log(`Status: ${centersRes.status}`);
     const centersData = await centersRes.json();
     if (centersRes.ok) {
@@ -74,7 +74,7 @@ async function testLiveApi() {
 
     // Test 6: Classes
     console.log("\n--- Testing GET /api/admin/classes ---");
-    const classesRes = await fetch("http://localhost:5001/api/admin/classes", { headers: getHeaders });
+    const classesRes = await fetch("http://localhost:5000/api/admin/classes", { headers: getHeaders });
     console.log(`Status: ${classesRes.status}`);
     const classesData = await classesRes.json();
     if (classesRes.ok) {
@@ -85,7 +85,7 @@ async function testLiveApi() {
 
     // Test 7: Courses
     console.log("\n--- Testing GET /api/courses ---");
-    const coursesRes = await fetch("http://localhost:5001/api/courses", { headers: getHeaders });
+    const coursesRes = await fetch("http://localhost:5000/api/courses", { headers: getHeaders });
     console.log(`Status: ${coursesRes.status}`);
     const coursesData = await coursesRes.json();
     if (coursesRes.ok) {
@@ -96,7 +96,7 @@ async function testLiveApi() {
 
     // Test 8: Teachers
     console.log("\n--- Testing GET /api/admin/teachers ---");
-    const teachersRes = await fetch("http://localhost:5001/api/admin/teachers", { headers: getHeaders });
+    const teachersRes = await fetch("http://localhost:5000/api/admin/teachers", { headers: getHeaders });
     console.log(`Status: ${teachersRes.status}`);
     const teachersData = await teachersRes.json();
     if (teachersRes.ok) {

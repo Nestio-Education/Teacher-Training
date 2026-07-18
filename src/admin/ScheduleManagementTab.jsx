@@ -47,7 +47,7 @@ function UnderConstruction({ title = "This section", icon = "🎓" }) {
 }
 
 // We need schedule APIs from api.js - inline them since they're already defined
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 async function apiRequest(path, options = {}) {
   const token = localStorage.getItem("spaceece_auth_token");
