@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 
 async function request(path, options = {}) {
   const token = localStorage.getItem("spaceece_auth_token");
@@ -937,8 +937,8 @@ export function detectRiskFlags(text, description) {
   return request("/api/ai/risk-flags", { method: "POST", body: JSON.stringify({ text, description }) });
 }
 
-export function autoGradeAssessment(assessmentId, answers) {
-  return request("/api/ai/auto-grade", { method: "POST", body: JSON.stringify({ assessmentId, answers }) });
+export function autoGradeAssessment(answers) {
+  return request("/api/assessments/ai-grade", { method: "POST", body: JSON.stringify({ answers }) });
 }
 
 export function askEnhancedChatbot(message) {

@@ -37,11 +37,24 @@ export default function TeacherCourseNotes({ assignments = [], onMarkDone, onGoT
       setNotesByCourseId((prev) => ({ ...prev, [courseId]: { loading: true, topics: [] } }));
       getCourseNotes(courseId)
         .then((res) => {
-          const topics = (res.notes || []).map((n) => ({
+          let topics = (res.notes || []).map((n) => ({
             _id: n._id || n.id,
             title: n.title,
             notes: n.content,
           }));
+          
+          if (topics.length === 0 && a.course && a.course.modules) {
+            a.course.modules.forEach(mod => {
+              (mod.contents || []).forEach(content => {
+                topics.push({
+                  _id: content._id,
+                  title: content.title,
+                  notes: content.notes || content.description,
+                });
+              });
+            });
+          }
+          
           setNotesByCourseId((prev) => ({ ...prev, [courseId]: { loading: false, topics } }));
         })
         .catch((err) => {
@@ -71,17 +84,23 @@ export default function TeacherCourseNotes({ assignments = [], onMarkDone, onGoT
 
   /* ── Course list view ── */
   if (!activeAssignmentId) {
+    const displayAssignments = assignments.filter((a) => {
+      if (!a.course) return false;
+      const title = a.course.title || "";
+      return !title.toLowerCase().includes("ai testing");
+    });
+
     return (
       <div style={{ animation: "fadeIn 0.3s ease" }}>
         <h1 style={S.pageTitle}>My Courses</h1>
         <p style={S.pageSub}>Read each course's topic-wise notes to complete it — no videos, just focused study material.</p>
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {assignments.length === 0 ? (
+          {displayAssignments.length === 0 ? (
             <div style={{ padding: 40, textAlign: "center", background: "white", borderRadius: 16, border: "1px dashed #cbd5e1", color: "#94a3b8" }}>
               No courses assigned yet. Your admin will assign courses from the Course Library.
             </div>
           ) : (
-            assignments.map((c) => {
+            displayAssignments.map((c) => {
               const courseId = getCourseId(c);
               const entry = notesByCourseId[courseId];
               const allTopics = entry?.topics || [];

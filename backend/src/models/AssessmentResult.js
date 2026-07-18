@@ -4,8 +4,8 @@ const answerSchema = new mongoose.Schema(
   {
     questionId: { type: String, required: true },
     question: String,
-    chosenOption: Number,
-    correctOption: { type: Number, required: true },
+    chosenOption: { type: mongoose.Schema.Types.Mixed },
+    correctOption: { type: Number },
     isCorrect: { type: Boolean, required: true },
     options: [String],
   },

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { S } from "../components/Shared";
-import { submitAssessmentResult, getMyAssessmentResults, updateCourseAssignmentProgress } from "../services/api";
+import { submitAssessmentResult, getMyAssessmentResults, updateCourseAssignmentProgress, autoGradeAssessment, getCourseAssessment } from "../services/api";
 
 /* ═══════════════════════════════════════════════════════════
    PROCTORED ASSESSMENT — SELF-CONTAINED VERSION
@@ -354,8 +354,9 @@ export default function ProctoredAssessment({ assignments = [] }) {
   }, [assignments]);
 
   // Courses eligible for assessment = fully-read (progressPercent 100)
-  const eligible = assignments.filter((a) => (a.progressPercent || 0) === 100);
-  const notReady = assignments.filter((a) => (a.progressPercent || 0) < 100);
+  const displayAssignments = assignments.filter((a) => a.course && !a.course.title?.toLowerCase().includes("ai testing"));
+  const eligible = displayAssignments.filter((a) => (a.progressPercent || 0) === 100);
+  const notReady = displayAssignments.filter((a) => (a.progressPercent || 0) < 100);
 
   const stopCamera = () => {
     if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
@@ -413,30 +414,76 @@ export default function ProctoredAssessment({ assignments = [] }) {
     setScoring(true);
 
     const courseTitle = activeAssignment?.course?.title || "Course";
-    const feedback = buildFeedback(questions, answers, courseTitle);
-    const finalResult = { ...feedback, forced, warnings: warnRef.current, answers, courseTitle };
+    
+    // Auto-grade via backend
+    const formattedAnswers = questions.map((q, i) => {
+      const userAns = answers[i] !== undefined ? answers[i] : "";
+      return {
+        question: q.question || q.q,
+        type: q.type || "MCQ",
+        correct_answer: q.correct_answer || (q.opts ? q.opts[q.ans] : ""),
+        expected_answer_points: q.expected_answer_points || [],
+        user_answer: (q.type === "MCQ" || !q.type) && typeof userAns === "number" ? (q.options || q.opts)[userAns] : userAns
+      };
+    });
+
+    let gradeResult;
+    try {
+      gradeResult = await autoGradeAssessment(formattedAnswers);
+    } catch (err) {
+      console.error("AI grading failed", err);
+      // Fallback
+      gradeResult = { score: 0, max_score: 0, percentage: 0, grade: "F", results: [] };
+    }
+
+    let correctCount = 0;
+    let wrongCount = 0;
+    let unansweredCount = 0;
+
+    (gradeResult.results || []).forEach((r, i) => {
+      if (!answers[i]) {
+        unansweredCount++;
+      } else if (r.score > 0) {
+        correctCount++;
+      } else {
+        wrongCount++;
+      }
+    });
+
+    const finalResult = {
+      score: gradeResult.score,
+      total: gradeResult.max_score,
+      percentage: gradeResult.percentage,
+      grade: gradeResult.grade,
+      performance: `You scored ${gradeResult.score}/${gradeResult.max_score} (${gradeResult.percentage}%) on "${courseTitle}".`,
+      strengths: ["Completed the AI assessment"],
+      improvements: [],
+      recommendation: gradeResult.percentage >= 70 ? "Great work!" : "Review the course materials.",
+      forced,
+      warnings: warnRef.current,
+      answers,
+      courseTitle,
+      results: gradeResult.results,
+      correct: correctCount,
+      wrong: wrongCount,
+      unanswered: unansweredCount
+    };
+    
     const assignmentId = activeAssignment?._id;
 
-    // ALWAYS persist locally first — this is what guarantees "no retake"
-    // holds on this device no matter what happens with the network below.
     if (assignmentId) saveStoredAttempt(assignmentId, finalResult);
 
     let savedToServer = false;
     if (assignmentId) {
       try {
-        // Primary save path: the SAME endpoint that already reliably
-        // persists reading progress, just extended with assessment
-        // fields. Existing progress fields are preserved by spreading
-        // them back in, so this call can't accidentally reset reading
-        // completion.
         await updateCourseAssignmentProgress(assignmentId, {
           completedContent: activeAssignment.completedContent,
           progressPercent: activeAssignment.progressPercent,
           status: activeAssignment.status,
-          assessmentScore: feedback.score,
-          assessmentTotal: feedback.total,
-          assessmentPercentage: feedback.percentage,
-          assessmentGrade: feedback.grade,
+          assessmentScore: gradeResult.score,
+          assessmentTotal: gradeResult.max_score,
+          assessmentPercentage: gradeResult.percentage,
+          assessmentGrade: gradeResult.grade,
           assessmentCompletedAt: new Date().toISOString(),
           assessmentWarnings: warnRef.current,
           assessmentForced: forced,
@@ -447,17 +494,23 @@ export default function ProctoredAssessment({ assignments = [] }) {
       }
     }
 
-    // Secondary, best-effort attempt at the original dedicated endpoint,
-    // in case it becomes available later — failure here is silent and
-    // never overrides the outcome of the primary save above.
     try {
+      const formattedAnswers = questions.map((q, i) => ({
+        questionId: q.id || `q${i}`,
+        question: q.q,
+        chosenOption: answers[i],
+        correctOption: q.ans !== undefined ? q.ans : -1,
+        isCorrect: q.type === "short_answer" ? true : answers[i] === q.ans,
+        options: q.opts || []
+      }));
+
       await submitAssessmentResult({
         courseId: activeAssignment?.course?._id || activeAssignment?.course?.id,
         courseTitle,
-        score: feedback.score, total: feedback.total, percentage: feedback.percentage, grade: feedback.grade,
-        performance: feedback.performance, strengths: feedback.strengths, improvements: feedback.improvements,
-        recommendation: feedback.recommendation, correct: feedback.correct, wrong: feedback.wrong,
-        unanswered: feedback.unanswered, warnings: warnRef.current, forced, answers,
+        score: finalResult.score, total: finalResult.total, percentage: finalResult.percentage, grade: finalResult.grade,
+        performance: finalResult.performance, strengths: finalResult.strengths, improvements: finalResult.improvements,
+        recommendation: finalResult.recommendation, correct: finalResult.correct, wrong: finalResult.wrong,
+        unanswered: finalResult.unanswered, warnings: warnRef.current, forced, answers: formattedAnswers,
       });
     } catch (err) {
       console.error("submitAssessmentResult failed (non-blocking, secondary path):", err);
@@ -513,21 +566,44 @@ export default function ProctoredAssessment({ assignments = [] }) {
 
   /* No network call here anymore — questions resolve instantly and
      locally, so "Start Exam" can never fail with "Request failed". */
-  const startAssessmentFor = (assignment) => {
-    if (myResults[assignment._id]) {
-      setLoadError(`You've already completed the assessment for "${assignment.course?.title}". Only one attempt is allowed — use "View Result" to see your score.`);
+  const startAssessmentFor = async (assignment) => {
+    if (warnRef.current >= MAX_WARNINGS) return;
+
+    if (myResults[assignment._id] || assignment.assessmentCompletedAt) {
+      const stored = loadStoredAttempt(assignment._id) || myResults[assignment._id];
+      if (stored) {
+        setActiveAssignment(assignment);
+        setResult(stored);
+        setScreen("result");
+      } else {
+        setLoadError(`You've already completed the assessment for "${assignment.course?.title}".`);
+      }
       return;
     }
-    const libraryId = resolveLibraryId(assignment.course);
-    const bank = libraryId ? ASSESSMENT_BANK[libraryId] : null;
-    if (!bank) {
-      setLoadError(`No assessment is available yet for "${assignment.course?.title}". Ask your admin to confirm this course was created from the Course Library.`);
-      return;
+
+    try {
+      const res = await getCourseAssessment(assignment.course.id || assignment.course._id);
+      if (res && res.assessment && res.assessment.questions && res.assessment.questions.length > 0) {
+        setLoadError("");
+        setActiveAssignment(assignment);
+        setQuestions(res.assessment.questions);
+        setScreen("instructions");
+      } else {
+        const libraryId = resolveLibraryId(assignment.course);
+        const bank = libraryId ? ASSESSMENT_BANK[libraryId] : null;
+        if (!bank) {
+          setLoadError(`No assessment is available yet for "${assignment.course?.title}". Ask your admin to confirm this course was created from the Course Library.`);
+          return;
+        }
+        setLoadError("");
+        setActiveAssignment(assignment);
+        setQuestions(bank);
+        setScreen("instructions");
+      }
+    } catch (error) {
+      console.error(error);
+      setLoadError(`Failed to load assessment for "${assignment.course?.title}".`);
     }
-    setLoadError("");
-    setActiveAssignment(assignment);
-    setQuestions(bank);
-    setScreen("instructions");
   };
 
   const startExam = async () => {
@@ -572,12 +648,12 @@ export default function ProctoredAssessment({ assignments = [] }) {
             const attempt = myResults[a._id];
             const hasBank = !!resolveLibraryId(a.course);
             return (
-              <div key={a._id} style={{ background: "white", borderRadius: 16, padding: "20px 24px", border: "1px solid #f1f5f9", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", borderLeft: `4px solid ${attempt ? "#3b82f6" : hasBank ? "#10b981" : "#f59e0b"}` }}>
+              <div key={a._id} style={{ background: "white", borderRadius: 16, padding: "20px 24px", border: "1px solid #f1f5f9", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", borderLeft: `4px solid ${attempt ? "#3b82f6" : "#10b981"}` }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 800, color: "#1c1917" }}>{title}</div>
                     <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 3 }}>
-                      {hasBank ? "10 MCQ · AI-scored · 20 minutes" : "⚠️ No assessment linked to this course yet"}
+                      {hasBank ? "10 MCQ · AI-scored · 20 minutes" : "Assessment · AI-scored · 20 minutes"}
                     </div>
                     {attempt && (
                       <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
@@ -595,7 +671,7 @@ export default function ProctoredAssessment({ assignments = [] }) {
                       📄 View Result
                     </button>
                   ) : (
-                    <button onClick={() => startAssessmentFor(a)} disabled={!hasBank} style={{ ...S.primaryBtn, background: hasBank ? "linear-gradient(135deg,#10b981,#059669)" : "#d1d5db", fontSize: 12, cursor: hasBank ? "pointer" : "not-allowed" }}>
+                    <button onClick={() => startAssessmentFor(a)} style={{ ...S.primaryBtn, background: "linear-gradient(135deg,#10b981,#059669)", fontSize: 12, cursor: "pointer" }}>
                       Start Exam →
                     </button>
                   )}
@@ -677,7 +753,7 @@ export default function ProctoredAssessment({ assignments = [] }) {
 
         <div style={{ background: "white", borderRadius: 20, padding: "28px", border: "1px solid #f1f5f9", boxShadow: "0 4px 20px rgba(0,0,0,0.08)", marginBottom: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 16 }}>
-            <PieChart correct={result.correct} wrong={result.wrong} unanswered={result.unanswered} total={result.total} />
+            <PieChart correct={result.correct || 0} wrong={result.wrong || 0} unanswered={result.unanswered || 0} total={(result.correct || 0) + (result.wrong || 0) + (result.unanswered || 0) || 1} />
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 56, fontWeight: 900, color: gradeColor, lineHeight: 1 }}>{result.score}</div>
               <div style={{ fontSize: 14, color: "#9ca3af" }}>out of {result.total}</div>
@@ -750,20 +826,40 @@ export default function ProctoredAssessment({ assignments = [] }) {
               <div style={{ fontSize: 12, color: "#94a3b8" }}>{answered} answered · {questions.length - answered} remaining</div>
             </div>
             <div style={{ background: "#1e293b", borderRadius: 16, padding: "24px", marginBottom: 20, border: "1px solid #334155" }}>
-              <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, marginBottom: 8 }}>Q{currentQ + 1} · {q.topic}</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: "white", lineHeight: 1.6 }}>{q.q}</div>
+              <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, marginBottom: 8 }}>Q{currentQ + 1} · {q.topic || "Knowledge Check"}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "white", lineHeight: 1.6 }}>{q.q || q.question}</div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
-              {q.opts.map((opt, i) => {
-                const selected = answers[currentQ] === i;
-                return (
-                  <button key={i} onClick={() => setAnswers((prev) => ({ ...prev, [currentQ]: i }))}
-                    style={{ background: selected ? "#1d4ed8" : "#1e293b", border: `2px solid ${selected ? "#3b82f6" : "#334155"}`, borderRadius: 12, padding: "14px 18px", textAlign: "left", color: selected ? "white" : "#cbd5e1", fontSize: 14, cursor: "pointer", display: "flex", gap: 12, alignItems: "center", fontFamily: "inherit" }}>
-                    <div style={{ width: 28, height: 28, borderRadius: 8, background: selected ? "#3b82f6" : "#334155", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: selected ? "white" : "#64748b", flexShrink: 0 }}>{["A", "B", "C", "D"][i]}</div>
-                    {opt}
-                  </button>
-                );
-              })}
+              {q.type === "short_answer" ? (
+                <textarea
+                  className="dark-input"
+                  value={answers[currentQ] || ""}
+                  onChange={(e) => setAnswers((prev) => ({ ...prev, [currentQ]: e.target.value }))}
+                  placeholder="Type your answer here..."
+                  style={{
+                    background: "#1e293b",
+                    border: "1px solid #334155",
+                    borderRadius: 12,
+                    padding: "16px",
+                    color: "white",
+                    fontSize: 14,
+                    minHeight: "120px",
+                    resize: "vertical",
+                    fontFamily: "inherit"
+                  }}
+                />
+              ) : (
+                (q.opts || q.options || []).map((opt, i) => {
+                  const selected = answers[currentQ] === i;
+                  return (
+                    <button key={i} onClick={() => setAnswers((prev) => ({ ...prev, [currentQ]: i }))}
+                      style={{ background: selected ? "#1d4ed8" : "#1e293b", border: `2px solid ${selected ? "#3b82f6" : "#334155"}`, borderRadius: 12, padding: "14px 18px", textAlign: "left", color: selected ? "white" : "#cbd5e1", fontSize: 14, cursor: "pointer", display: "flex", gap: 12, alignItems: "center", fontFamily: "inherit" }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 8, background: selected ? "#3b82f6" : "#334155", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: selected ? "white" : "#64748b", flexShrink: 0 }}>{["A", "B", "C", "D"][i]}</div>
+                      {opt}
+                    </button>
+                  );
+                })
+              )}
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
               <button onClick={() => setCurrentQ((q2) => Math.max(0, q2 - 1))} disabled={currentQ === 0} style={{ background: "#1e293b", border: "1px solid #334155", color: "#94a3b8", padding: "10px 20px", borderRadius: 10, cursor: currentQ === 0 ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 600 }}>← Previous</button>

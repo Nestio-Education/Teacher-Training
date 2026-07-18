@@ -4,7 +4,7 @@ import { t } from "../services/i18n";
 import { getStoredSession, getMyCenter } from "../services/api";
 import { MentorProfileTab, MentorNotificationsTab, MentorFeedbackTab, MenteeManagementTab, ImpactCapstoneTab, PDCATab } from "./MentorDashboardTabs";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 
 const getMentorPhotoUrl = (user) => {
   const photo = user?.mentorProfile?.profilePhoto || user?.mentorProfile?.photo || user?.photoUrl || user?.profilePhoto;
