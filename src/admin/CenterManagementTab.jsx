@@ -224,15 +224,26 @@ function CenterFormModal({ center, allTeachers = [], onSave, onClose, setToast }
       
       // Teacher has classes but no center set
       const classNames = teacherClasses.map(c => c?.name).filter(Boolean);
+      // Start: Dnyaneshwari Thorat
       return { 
         ...t, 
         available: true, 
         reason: classNames.length > 0 ? `Assigned: ${classNames.join(", ")}` : "" 
       };
+      // End: Dnyaneshwari Thorat
     });
   };
 
   const teacherAvailability = getTeacherAvailability();
+  
+  // Start: Dnyaneshwari Thorat
+  const [assignTeacherSearch, setAssignTeacherSearch] = useState("");
+  const filteredApprovedTeachers = approvedTeachers.filter(t => 
+    t.name.toLowerCase().includes(assignTeacherSearch.toLowerCase()) || 
+    t.email.toLowerCase().includes(assignTeacherSearch.toLowerCase())
+  );
+  // End: Dnyaneshwari Thorat
+
   const availableTeachers = teacherAvailability.filter(t => t.available);
 
   // Get available teachers for a specific class (all approved teachers are selectable)
@@ -496,22 +507,40 @@ function CenterFormModal({ center, allTeachers = [], onSave, onClose, setToast }
         </div>
 
         {/* ── Teachers Section ── */}
-        <label style={S.label}>
-          Assign Teachers to Center
-          <span style={{ fontSize: 10, color: "#9ca3af", fontWeight: 400, marginLeft: 6 }}>
-            (selected teachers will have this center set on their dashboard)
-          </span>
-        </label>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <label style={{ ...S.label, margin: 0 }}>
+            Assign Teachers to Center
+            <span style={{ fontSize: 10, color: "#9ca3af", fontWeight: 400, marginLeft: 6 }}>
+              (selected teachers will have this center set on their dashboard)
+            </span>
+          </label>
+          {approvedTeachers.length > 0 && (
+            <input
+              type="text"
+              placeholder="Search teachers..."
+              value={assignTeacherSearch}
+              onChange={e => setAssignTeacherSearch(e.target.value)}
+              style={{
+                padding: "4px 8px",
+                fontSize: 11,
+                borderRadius: 6,
+                border: "1px solid #cbd5e1",
+                outline: "none",
+                width: 150
+              }}
+            />
+          )}
+        </div>
         <div style={{
           display: "flex", flexDirection: "column", gap: 6, marginBottom: 20,
           maxHeight: 180, overflowY: "auto",
           border: "1px solid #e5e7eb", borderRadius: 10, padding: "8px"
         }}>
-          {approvedTeachers.length === 0 ? (
+          {filteredApprovedTeachers.length === 0 ? (
             <div style={{ padding: 12, fontSize: 12, color: "#9ca3af", textAlign: "center" }}>
-              No teachers available.
+              No teachers found.
             </div>
-          ) : approvedTeachers.map(t => {
+          ) : filteredApprovedTeachers.map(t => {
             const teacherId = t._id || t.id;
             const selected = form.teachers.includes(teacherId);
             const assignedToClass = classesList.some(c => c.teacherId === teacherId);
@@ -595,10 +624,17 @@ function CenterDetailModal({ center, allTeachers = [], onClose, setToast }) {
     }
   };
 
+  // Start: Dnyaneshwari Thorat
+  const [teacherSearch, setTeacherSearch] = useState("");
   const assignedTeachers = allTeachers.filter(t => {
     const tid = t._id || t.id;
     return center.teachers.includes(tid);
   });
+  const filteredAssignedTeachers = assignedTeachers.filter(t => 
+    t.name.toLowerCase().includes(teacherSearch.toLowerCase()) || 
+    t.email.toLowerCase().includes(teacherSearch.toLowerCase())
+  );
+  // End: Dnyaneshwari Thorat
 
   return (
     <Modal title={`🏫 ${center.name}`} onClose={onClose}>
@@ -718,14 +754,33 @@ function CenterDetailModal({ center, allTeachers = [], onClose, setToast }) {
         )}
       </div>
 
-      {/* ── Assigned Teachers List ── */}
+      {/* Start: Dnyaneshwari Thorat */}
+      {/* ── Assigned Teachers List with Search ── */}
       <div style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 8 }}>
-          👩‍🏫 Assigned Teachers ({assignedTeachers.length})
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>
+            👩‍🏫 Assigned Teachers ({assignedTeachers.length})
+          </div>
+          {assignedTeachers.length > 0 && (
+            <input
+              type="text"
+              placeholder="Search teachers in center..."
+              value={teacherSearch}
+              onChange={e => setTeacherSearch(e.target.value)}
+              style={{
+                padding: "4px 8px",
+                fontSize: 11,
+                borderRadius: 6,
+                border: "1px solid #cbd5e1",
+                outline: "none",
+                width: 170
+              }}
+            />
+          )}
         </div>
-        {assignedTeachers.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {assignedTeachers.map((t, i) => {
+        {filteredAssignedTeachers.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 150, overflowY: "auto" }}>
+            {filteredAssignedTeachers.map((t, i) => {
               // Find which classes this teacher is assigned to
               const assignedClasses = assignments.filter(a => 
                 a.teachers && a.teachers.some(at => at._id === t._id || at.id === t.id)
@@ -757,10 +812,11 @@ function CenterDetailModal({ center, allTeachers = [], onClose, setToast }) {
           </div>
         ) : (
           <div style={{ textAlign: "center", padding: "16px", color: "#9ca3af", fontSize: 12 }}>
-            No teachers assigned to this center yet.
+            No matching teachers found in this center.
           </div>
         )}
       </div>
+      {/* End: Dnyaneshwari Thorat */}
 
       <div style={{
         background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 10,

@@ -1,4 +1,7 @@
 import express from "express";
+// Start: Dnyaneshwari Thorat
+import { isValidPhoneNumber } from "libphonenumber-js";
+// End: Dnyaneshwari Thorat
 import jwt from "jsonwebtoken";
 import http from "http";
 import net from "net";
@@ -12,7 +15,9 @@ import mongoose from "mongoose";
 import { connectDb } from "./db.js";
 import { hashPassword, requireAuth, requireRole, signToken, verifyPassword, validatePasswordAgainstPolicy, createPasswordResetToken, verifyPasswordResetToken } from "./auth.js";
 import { generateOtp, storeOtp, verifyOtp, deleteOtp, OTP_TTL_MINUTES } from "./otp.js";
-import { sendNotification, broadcastNotification, CHANNELS, TEMPLATES } from "./services/notificationService.js";
+// Start: Dnyaneshwari Thorat
+import { sendNotification, broadcastNotification, CHANNELS, TEMPLATES, sendSms, sendWhatsApp } from "./services/notificationService.js";
+// End: Dnyaneshwari Thorat
 import { autoSeed } from "./auto-seed.js";
 import { generateAICourse } from "./services/aiCourseGenerator.js";
 import { generateAILessonPlan } from "./services/aiLessonPlanner.js";
@@ -34,6 +39,7 @@ import { Trainer } from "./models/Trainer.js";
 import { Feedback } from "./models/Feedback.js";
 import { FileAsset } from "./models/FileAsset.js";
 import { ChildAttendanceSession, TeacherAttendanceRecord } from "./models/Attendance.js";
+import { Certificate } from "./models/Certificate.js";
 import { Notification } from "./models/Notification.js";
 import { ReportJob } from "./models/ReportJob.js";
 import ActivityBank from "./models/ActivityBank.js";
@@ -45,7 +51,9 @@ import { PortalSetting } from "./models/PortalSetting.js";
 import { TrainerMessage } from "./models/TrainerMessage.js";
 import { TrainerPayout } from "./models/TrainerPayout.js";
 import { AssessmentResult } from "./models/AssessmentResult.js";
-import { sendBulkEmails, sendEmail, getTwilioConfig } from "./email.js";
+// Start: Dnyaneshwari Thorat
+import { sendBulkEmails, sendEmail, getTwilioConfig, getMessagingConfig } from "./email.js";
+// End: Dnyaneshwari Thorat
 import { initSocket, createAndEmitNotification } from "./socket.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -111,6 +119,61 @@ function normalizePhoneE164(phone, defaultCountryCode = "91") {
   if (cleaned.length > 10) return `+${cleaned}`;
   return cleaned;
 }
+
+// Start: Dnyaneshwari Thorat
+function normalizeStringList(values = []) {
+  return [...new Set(values.map((value) => String(value)).filter(Boolean))];
+}
+
+function countTopicsFromCourse(course) {
+  return (course?.modules || []).reduce((sum, module) => sum + (module.contents?.length || 0), 0);
+}
+
+async function resolveCourseTopicTotal(course) {
+  const courseId = course?._id || course?.id || course;
+  if (!courseId || !mongoose.isValidObjectId(courseId)) {
+    return countTopicsFromCourse(course);
+  }
+
+  const noteCount = await Note.countDocuments({ course: courseId });
+  if (noteCount > 0) return noteCount;
+  return countTopicsFromCourse(course);
+}
+
+async function normalizeCourseAssignmentProgress(assignment) {
+  const plain = typeof assignment?.toObject === "function" ? assignment.toObject() : { ...assignment };
+  const completedContent = normalizeStringList(plain.completedContent || []);
+  const topicTotal = await resolveCourseTopicTotal(plain.course);
+  const rawProgress = Number(plain.progressPercent || 0);
+  const certificateExists = plain.course?._id
+    ? await Certificate.exists({ teacher: plain.teacher, course: plain.course._id, status: "issued" })
+    : false;
+  const progressPercent = topicTotal > 0
+    ? Math.min(100, Math.round((completedContent.length / topicTotal) * 100))
+    : rawProgress;
+
+  const completedStatus = ["approved", "reviewed", "completed"];
+  const isAlreadyCompleted =
+    completedStatus.includes(plain.status) ||
+    plain.completedAt ||
+    plain.assessmentCompletedAt ||
+    rawProgress >= 100 ||
+    Boolean(certificateExists);
+
+  const status = isAlreadyCompleted
+    ? (plain.status === "approved" || plain.status === "reviewed" ? plain.status : "completed")
+    : progressPercent === 100
+      ? "completed"
+      : plain.status;
+
+  return {
+    ...plain,
+    completedContent,
+    progressPercent: isAlreadyCompleted ? 100 : progressPercent,
+    status,
+  };
+}
+// End: Dnyaneshwari Thorat
 
 function mapFormModulesToCourse(modules = []) {
   return (Array.isArray(modules) ? modules : []).map((module, moduleIndex) => ({
@@ -199,18 +262,212 @@ async function ensureDatabaseReady() {
     const adminPassword = process.env.ADMIN_PASSWORD || "Admin@123";
     const existingAdmin = await User.findOne({ email: adminEmail.toLowerCase(), role: "admin" });
 
-    if (!existingAdmin) {
-      await User.create({
-        role: "admin",
-        name: "System Administrator",
-        email: adminEmail,
-        phone: "9999999999",
-        passwordHash: await hashPassword(adminPassword),
-        status: "approved",
-      });
-      console.log(`Initial admin created: ${adminEmail}`);
+      if (!existingAdmin) {
+        await User.create({
+          role: "admin",
+          name: "System Administrator",
+          email: adminEmail,
+          phone: "9999999999",
+          passwordHash: await hashPassword(adminPassword),
+          status: "approved",
+        });
+        console.log(`Initial admin created: ${adminEmail}`);
+      }
     }
-  }
+
+    // Start: Dnyaneshwari Thorat
+    // Helper function to return proper, rich, multi-paragraph academic content for each chapter
+    function getRichChapterContent(chapterTitle, courseTitle) {
+      const contentMap = {
+        "Foundations & Overview": `
+          <h3>1. Introduction to ${courseTitle}</h3>
+          <p>Early childhood development and preschool pedagogies require a clear understanding of foundational concepts. In "${courseTitle}", we look at the core structure that helps educators create a nourishing environment for children. We focus on cognitive, emotional, and motor skill development stages to establish a balanced pathway. Understanding these starting points allows preschool teachers to design age-appropriate activities that stimulate natural curiosity. Through this course, we examine why starting early is crucial for lifelong educational success. Every student has unique growth patterns, and this introduction explains how to identify and respect those individual developmental milestones in daily learning setups.</p>
+          <h3>2. Essential Principles</h3>
+          <p>Research indicates that early years learning is multi-dimensional and complex. By focusing on child-led pacing and developmental tracking, teachers can scaffold education to meet individual requirements. This chapter explores both theoretical foundations and immediate actions for the classroom. We will cover the core principles of active discovery, hands-on engagement, and scaffolded peer interaction. Teachers will study how sensory experiences build neural connections in young minds. We emphasize the necessity of creating a predictable yet stimulating physical layout. By integrating developmental theories, we build a solid base to support cognitive advancement, emotional safety, and healthy social adaptation.</p>
+          <h3>3. Application in Modern Classrooms</h3>
+          <p>Implementing these foundations requires structuring daily routines, setting up thematic learning corners, and continuously monitoring progress. Modern preschool classrooms must be highly dynamic and responsive to a child's psychological needs. Teachers should arrange sensory zones, reading nooks, and collaborative playspaces to prompt independent exploration. Creating smooth transitions between play, dining, and academic tasks prevents behavioral issues. We will detail how to schedule day-to-day timetables to prevent fatigue and support focused attention. Finally, this point discusses standard documentation strategies, enabling educators to log daily learning behaviors to share with coordinators and families.</p>
+        `,
+        "Core Methodologies": `
+          <h3>1. Methodology Framework</h3>
+          <p>Every educational model relies on proven methodologies. Under "${courseTitle}", we examine how structured frameworks guide day-to-day operations and help teachers design goal-oriented plans. We analyze the balance between teacher-led instructions and student-centered self-discovery. Implementing a robust framework ensures that learning objectives align with national preschool curricula. Teachers learn to break down complex tasks into bite-sized, scaffolded lessons that build student confidence. By establishing logical learning progressions, children transition seamlessly from simple recognition to deep comprehension. This framework acts as a daily blueprint, keeping teaching goals consistent, measurable, and highly effective.</p>
+          <h3>2. Key Pedagogical Tools</h3>
+          <p>We investigate tools such as visual charts, Montessori-inspired sensory objects, and story-based learning sequences. Teachers will learn how to select and customize these materials depending on classroom needs. We study how tactile materials (sandpapers, blocks) reinforce spatial intelligence and mathematical logic. Using flashcards and interactive wall displays enhances verbal and vocabulary recall in early years. We explain the methodology behind theme-based teaching bins that combine science, math, and literacy into single play tools. Educators will learn to evaluate the safety, longevity, and pedagogical value of any toy or resource before introducing it to the classroom.</p>
+          <h3>3. Evaluation & Optimization</h3>
+          <p>Continuously evaluate the effectiveness of chosen methodologies. Make adjustments based on children's engagement levels, physical responses, and cooperative play indicators. We review methods to gather objective data on classroom activities to identify what works and what fails. Teachers should conduct weekly peer observations and self-reflections to evaluate instruction style. We discuss how to identify disengaged or overwhelmed students and adjust lesson difficulty accordingly. By adapting teaching speed, vocabulary complexity, and sensory inputs, educators create a highly customized learning space. Continuous optimization ensures the curriculum remains engaging, safe, and academically productive.</p>
+        `,
+        "Interactive Activity Design": `
+          <h3>1. Designing Engaging Activities</h3>
+          <p>Preschoolers learn best by doing. This chapter covers the art of designing immersive activities under "${courseTitle}" that stimulate critical thinking, motor coordination, and curiosity. We focus on integrating multiple sensory dimensions (sight, sound, touch) to maximize retention. Design activities that invite children to explore, formulate hypotheses, and test them during hands-on experiments. We cover how to align play activities with specific language, cognitive, or physical goals. Teachers will study techniques to generate curiosity before starting any activity, ensuring high participation rates. The goal is to make learning an effortless, joy-filled, and memorable experience.</p>
+          <h3>2. Step-by-Step Implementation</h3>
+          <p>Learn how to introduce activities, distribute materials, manage group sizes, and handle safety checks. We focus on low-prep, high-engagement setups using local and recycled resources. We provide clear scripts on how to explain play rules using simple, child-friendly terms. Teachers learn to divide children into cooperative groups to foster teamwork and negotiation skills. We cover safety measures for scissors, glue, and small items that pose choking hazards. Learn to manage time efficiently, allocating appropriate slots for introduction, exploration, clean-up, and discussion. This structured approach prevents chaos and ensures high learning value.</p>
+          <h3>3. Classroom Success Indicators</h3>
+          <p>Track student engagement, level of peer-to-peer collaboration, and problem-solving attempts during active play sessions. We define clear markers of active learning, such as verbal sharing, focus duration, and toy manipulation. Teachers learn to distinguish between constructive play noise and behavioral disruption. We study how to record qualitative feedback using simple checklists during play sessions. Understanding these success indicators helps educators refine future lesson designs and report progress. By assessing how well children apply taught concepts in free play, teachers measure the true impact of their classroom design.</p>
+        `,
+        "Observational Frameworks": `
+          <h3>1. Understanding Observational Tracking</h3>
+          <p>Observations are key to custom learning. In "${courseTitle}", teachers learn to capture qualitative details without interfering with natural play flow. We study the psychology behind child observations and how to remain objective observers. Learn to distinguish between descriptive facts and subjective interpretations of student behavior. We cover the developmental areas that require tracking, including gross motor skills and socio-emotional responses. Teachers learn to spot behavioral patterns that indicate learning struggles or developmental delays. Regular observation helps educators tailor their approaches, ensuring every child receives appropriate guidance and emotional support.</p>
+          <h3>2. Recording Tools & Documentation</h3>
+          <p>We explore tools like anecdotal records, running sheets, check-lists, and photographic portfolios. Learn to write objective descriptions of child behavior, focusing on developmental markers rather than assumptions. We provide templates for recording daily actions during classroom transitions and free-play hours. Teachers will learn how to capture and organize photo evidence of children's creative achievements. We discuss archiving methods to build developmental profiles over the academic year. Maintaining systematic records allows educators to track progress, note growth spurts, and identify areas that need extra attention or professional assessment.</p>
+          <h3>3. Sharing with Guardians</h3>
+          <p>Translating observations into actionable parent-teacher updates to coordinate developmental goals at school and at home. We detail how to present developmental observations to parents during periodic meetings. Teachers learn communication techniques to share behavioral concerns sensitively without causing alarm. We design collaborative action plans that align home habits with classroom strategies. Learn to present portfolios to families to celebrate child growth and build trust. By establishing a transparent observation-sharing channel, educators build a strong support network around the child, ensuring consistent growth outside school hours.</p>
+        `,
+        "Assessment & Feedback Techniques": `
+          <h3>1. Modern Assessment in Early Years</h3>
+          <p>Conventional testing is ineffective for young kids. We study formative assessment techniques under "${courseTitle}" to track milestones and growth areas naturally. We analyze how play-based assessments measure cognitive development without causing student stress. Teachers learn to set up subtle evaluation scenarios during normal daily routines. We detail techniques to evaluate language comprehension, motor dexterity, and peer collaboration skills. By integrating assessment into play, educators gather authentic data on child capabilities. This continuous feedback loop guides curriculum design, ensuring lessons match student readiness.</p>
+          <h3>2. Constructive Feedback Loops</h3>
+          <p>Learn to offer positive, encouraging, and specific feedback that builds confidence. Understand how to guide children to correct their own mistakes during puzzles or counting activities. We focus on praising effort and strategies rather than intelligence. Teachers study questioning techniques that prompt children to rethink incorrect answers independently. We cover verbal and non-verbal cues that support learning and boost confidence. Learn to handle mistakes as essential learning milestones, reducing anxiety and encouraging persistence. This approach fosters a growth mindset, helping children enjoy tackling challenging activities.</p>
+          <h3>3. Individualized Progress Reports</h3>
+          <p>Structuring holistic report cards highlighting physical, cognitive, linguistic, and emotional growth. We move away from traditional grades to descriptive developmental reporting. Teachers learn to write personalized comments that describe child strengths and next steps. We detail how to map developmental indicators against standard early years milestones. Learn to present progress reports in user-friendly formats that parents understand. These reports focus on celebrating individual achievements while identifying areas that need extra support. By creating clear progress summaries, teachers maintain strong partnerships with families.</p>
+        `,
+        "Inclusive Classroom Strategies": `
+          <h3>1. Inclusion and Diversity Basics</h3>
+          <p>Every child has a right to learn. This session covers modifying lesson structures under "${courseTitle}" to accommodate children with diverse learning profiles, language backgrounds, and physical abilities. We examine the core philosophies of inclusive education and universal learning design. Teachers learn to spot learning barriers in their current classroom layouts and teaching styles. We study how to adapt language, lesson speed, and sensory conditions for diverse needs. The focus is on valuing diversity as a classroom strength that enriches all. By fostering an inclusive setting, teachers ensure every student feels safe, valued, and capable.</p>
+          <h3>2. Adaptive Learning Materials</h3>
+          <p>Learn how to modify sensory toys, introduce visual schedules, and design quieter classroom corners for sensory-sensitive children. We provide practical guides to adapt toys using simple, low-cost modifications. Teachers study how visual schedules support children with communication challenges or transition anxiety. We cover how to create sensory breakout zones where overstimulated students can calm down. Learn to select books and materials that represent diverse cultures and abilities. These adaptive resources ensure every child participates in daily lessons, promoting independence and confidence.</p>
+          <h3>3. Creating a Welcoming Culture</h3>
+          <p>Practical routines to teach children empathy, collaboration, and mutual respect from an early age. We design daily class activities that encourage children to welcome and support peers of all backgrounds. Teachers learn to address biased behaviors or comments constructively and immediately. We study storytelling and role-play techniques that model inclusion, empathy, and friendship. Learn to build collaborative games where students rely on each other's strengths to succeed. By cultivating an inclusive atmosphere, educators prepare children to be compassionate, understanding, and socially responsible citizens.</p>
+        `,
+        "Health, Safety & Environment Rules": `
+          <h3>1. Designing Safe Spaces</h3>
+          <p>Safe learning is the primary rule. We study preschool child-proofing, hazard identification, and toy sanitization guidelines relevant to "${courseTitle}". We cover safety standards for toys, furniture, playground gear, and floor mats. Teachers learn to conduct daily safety walks to spot hazards like sharp corners or loose items. We detail the science of germ transmission and the importance of sanitization schedules. Learn to organize classrooms to prevent collisions and falls during active play. Designing spaces with safety in mind reduces accidents, giving parents confidence and peace of mind.</p>
+          <h3>2. Routine Sanitation Practices</h3>
+          <p>Establishing hygiene routines like structured handwashing drills, cleaning cycles for shared surfaces, and first-aid kits maintenance. We provide scripts and songs to teach handwashing to young children. Teachers learn protocols to disinfect shared tables, toys, and restrooms throughout the day. We cover first-aid kit requirements and how to manage minor scrapes or insect bites. Learn to document health incidents and share them with supervisors and parents. By building hygiene into daily routines, educators create a clean, healthy space that limits illness spread.</p>
+          <h3>3. Emergency Readiness</h3>
+          <p>Drafting exit plans, fire-drill routines, and teacher coordination protocols in case of health emergencies. We design visual exit routes that children can follow during fire drills. Teachers learn to practice emergency drills calmly, preventing student panic and confusion. We detail procedures to follow during weather emergencies or lock-down scenarios. Learn to assign emergency roles to staff members, ensuring smooth coordination. By training for emergencies, educators protect children's safety and handle crisis events with professional, calm confidence.</p>
+        `,
+        "Parent & Guardian Collaboration": `
+          <h3>1. Building Parental Partnerships</h3>
+          <p>A child's education is a collaborative effort. We examine strategies to engage families actively in the learning goals of "${courseTitle}". We cover the benefits of home-school alignment on student learning and emotional growth. Teachers learn to invite parents to participate in classroom activities and share unique skills. We study how to set up two-way communication channels, including daily logs and newsletters. Learn to build mutual trust by respecting family backgrounds, home languages, and cultures. These partnerships ensure children receive consistent support, accelerating learning and social growth.</p>
+          <h3>2. Overcoming Communication Barriers</h3>
+          <p>Handling difficult conversations, addressing behavioral concerns with parents sensitively, and hosting active parent-teacher workshops. We teach communication techniques like active listening and positive framing. Teachers learn to share behavioral or learning concerns without making parents defensive. We study how to manage language differences and schedule challenges to reach every family. Learn to design parent workshops that share helpful home-learning tips. Overcoming these barriers ensures consistent communication, aligning goals between school and home for the child's benefit.</p>
+          <h3>3. Homework & Home Activities</h3>
+          <p>Creating simple, play-based parent-child home assignments to reinforce weekly school lessons. We move away from traditional worksheets to interactive family activities. Teachers learn to design home play assignments that use common household items. We study how to explain the learning value of home activities to parents clearly. Learn to create sensory, reading, or nature-play tasks that families enjoy doing together. These activities keep parents informed of school lessons, reinforcing learning in a fun, natural home environment.</p>
+        `,
+        "Professional Development for Teachers": `
+          <h3>1. The Role of the Modern ECCE Educator</h3>
+          <p>Teacher training is a life-long journey. This chapter details professional ethics, career paths, and research in "${courseTitle}". We explore professional standards and ethical guidelines for early childhood teachers. Learn to balance classroom duties with administrative tasks and lesson planning. We study career opportunities in teaching, administration, and curriculum design. Understand the importance of staying informed of new early years research and practices. By embracing professional growth, educators maintain high standards of teaching, improving quality and student outcomes.</p>
+          <h3>2. Reflection & Self-Evaluation</h3>
+          <p>Using teaching journals, peer reviews, and video recordings to analyze and improve classroom delivery style and management. We cover reflective practices that help teachers identify strengths and growth areas. Teachers learn to evaluate their management skills, transition flows, and student interactions. We study peer observation methods to share constructive feedback with colleagues. Learn to use self-reflections to set actionable improvement goals for each term. Regular reflection helps teachers refine their techniques, prevent burnout, and remain passionate, effective educators.</p>
+          <h3>3. Leadership in School Communities</h3>
+          <p>Strategies for experienced teachers to lead projects, guide juniors, and contribute to institutional curriculum standards. We cover mentoring techniques to support new teachers. Learn to lead school events, curriculum reviews, and parent education programs. We study how to advocate for quality early childhood education within your community. Understanding school leadership roles prepares teachers to guide institutional policies and practices. By taking on leadership responsibilities, educators help shape school success and build supportive teaching environments.</p>
+        `,
+        "Final Review & Summary Guide": `
+          <h3>1. Course Synthesis</h3>
+          <p>This final chapter wraps up all the modules studied in "${courseTitle}". We review the primary milestones, methods, and practical toolkits. We summarize key developmental theories and how to apply them. Teachers review interactive design, observation, assessment, and inclusive practices. We emphasize how these topics connect to create a complete learning experience. This synthesis builds teacher confidence in applying these methods. By reviewing the course material, educators solidify their understanding, preparing to use these strategies in their classrooms.</p>
+          <h3>2. Practical Checklist</h3>
+          <p>A quick-reference sheet for teachers to plan their weekly curriculum, organize materials, and perform daily checks. We provide templates for daily, weekly, and monthly planning tasks. Learn to use checklists to verify safety setups, sanitization routines, and activity plans. We cover organizing teaching materials to ensure smooth transition flows. This checklist keeps teachers organized, reducing stress and classroom disruptions. Having clear guidelines helps educators manage time and focus on child engagement.</p>
+          <h3>3. Next Steps & Assessments</h3>
+          <p>Prepare for the course assessment, draft your lesson plans, and apply these methods in your daily classroom routine. We detail the format and expectations of the final assessment. Learn to design lesson plans that demonstrate your understanding of course concepts. We cover how to apply these methods in your classroom, noting outcomes. The focus is on turning course theory into daily teaching habits. Preparing for next steps ensures teachers apply their learning, improving classroom quality and student success.</p>
+        `
+      };
+
+      return contentMap[chapterTitle] || `
+        <p>This chapter covers the essential learning guidelines of "${chapterTitle}" for the course "${courseTitle}".</p>
+        <p>Teachers will study the detailed concepts, review practical implementation examples, and complete classroom observation reports as directed by their trainer.</p>
+      `;
+    }
+
+    // Dynamic 10-chapter generator for any course title
+    function generateChaptersForCourse(courseTitle) {
+      const themes = [
+        { title: "Foundations & Overview", type: "document", desc: "Key principles and concepts." },
+        { title: "Core Methodologies", type: "document", desc: "Primary frameworks and pedagogical structures." },
+        { title: "Interactive Activity Design", type: "document", desc: "Designing engaging classroom exercises." },
+        { title: "Observational Frameworks", type: "document", desc: "Understanding behavior and monitoring development." },
+        { title: "Assessment & Feedback Techniques", type: "document", desc: "Evaluating progress and milestones." },
+        { title: "Inclusive Classroom Strategies", type: "document", desc: "Adapting methods to support diverse student needs." },
+        { title: "Health, Safety & Environment Rules", type: "document", desc: "Preserving student safety and hygiene." },
+        { title: "Parent & Guardian Collaboration", type: "document", desc: "Enabling active parental involvement." },
+        { title: "Professional Development for Teachers", type: "document", desc: "Advancing pedagogical and leadership skills." },
+        { title: "Final Review & Summary Guide", type: "document", desc: "Synthesizing course learnings." }
+      ];
+
+      return [
+        {
+          title: "Module 1: Foundations & Core Methods",
+          order: 1,
+          description: `Core theories, methods, and practical activities for ${courseTitle}.`,
+          contents: themes.slice(0, 5).map((t, idx) => ({
+            title: `Chapter ${idx + 1}: ${t.title}`,
+            type: t.type,
+            description: `${t.desc} for ${courseTitle}.`,
+            detailedLearningContent: getRichChapterContent(t.title, courseTitle),
+            order: idx + 1,
+            isRequired: true
+          }))
+        },
+        {
+          title: "Module 2: Advanced Practice & Assessment",
+          order: 2,
+          description: `Inclusion, safety, communication, and professional development in ${courseTitle}.`,
+          contents: themes.slice(5, 10).map((t, idx) => ({
+            title: `Chapter ${idx + 6}: ${t.title}`,
+            type: t.type,
+            description: `${t.desc} for ${courseTitle}.`,
+            detailedLearningContent: getRichChapterContent(t.title, courseTitle),
+            order: idx + 1,
+            isRequired: true
+          }))
+        }
+      ];
+    }
+
+    // Force update existing courses with rich chapters on startup
+    try {
+      const admin = await User.findOne({ role: "admin" });
+      const adminId = admin ? admin._id : null;
+
+      const coursesToEnrich = [
+        "Child Development & Milestones",
+        "Early Literacy and Language Development",
+        "Play-based Learning Pedagogy",
+        "Classroom Management and Safety",
+        "Special Education & Inclusion Basics",
+        "Creative Arts and Crafts for Early Years",
+        "Introduction to STEM in Preschool",
+        "Observational Methods and Assessment",
+        "Parent-Teacher Communication Guidelines",
+        "Sensory Play and Cognitive Development",
+        "Digital Literacy for Modern Educators",
+        "Preschool Nutrition and Health Basics",
+        "Storytelling and Puppetry Techniques",
+        "Conflict Resolution & Peer Play Guidance"
+      ];
+
+      const courseCount = await Course.countDocuments();
+      if (courseCount === 0) {
+        console.log("No courses found. Seeding default 14 courses into database...");
+        for (const title of coursesToEnrich) {
+          const isCore = [
+            "Child Development & Milestones",
+            "Early Literacy and Language Development",
+            "Play-based Learning Pedagogy",
+            "Classroom Management and Safety"
+          ].includes(title);
+
+          await Course.create({
+            title,
+            category: isCore ? "core" : "elective",
+            isRequired: isCore,
+            status: "published",
+            createdBy: adminId,
+            modules: generateChaptersForCourse(title)
+          });
+        }
+        console.log("Successfully seeded default 14 courses in the database.");
+      } else {
+        for (const title of coursesToEnrich) {
+          await Course.updateOne(
+            { title },
+            { $set: { modules: generateChaptersForCourse(title) } }
+          );
+        }
+        console.log("Successfully enriched existing courses with 7-8 line point descriptions.");
+      }
+    } catch (err) {
+      console.warn("Failed to synchronize default courses on startup:", err.message);
+    }
+    // End: Dnyaneshwari Thorat
 }
 
 const allowedOrigins = [
@@ -355,6 +612,13 @@ app.post("/api/auth/register-teacher", async (req, res, next) => {
     const { name, email, phone, password, qualification, subject, experience, address, center, class: classId, classIds } = req.body;
     
     const normalizedEmail = String(email).toLowerCase().trim(); // ADD THIS
+
+    // Start: Dnyaneshwari Thorat
+    if (!phone || !isValidPhoneNumber(String(phone).trim(), 'IN')) {
+      return res.status(400).json({ message: "Invalid phone number. Must be a valid Indian phone number." });
+    }
+    // End: Dnyaneshwari Thorat
+
     const policyResult = await validatePasswordAgainstPolicy(password);
     if (!policyResult.valid) {
       return res.status(400).json({ message: policyResult.message });
@@ -379,6 +643,43 @@ app.post("/api/auth/register-teacher", async (req, res, next) => {
       teacherProfile: { qualification, subject, experience, address, center, class: classId, classes: assignedClasses },
     });
 
+    // Start: Dnyaneshwari Thorat
+    try {
+      const adminUser = await User.findOne({ role: "admin" });
+      const adminId = adminUser ? adminUser._id : null;
+
+      // Dynamically fetch all published courses from the database
+      const courses = await Course.find({ status: "published" });
+
+      for (const course of courses) {
+        // Unlock if the course is marked as required (e.g. the 4 core courses), else lock it
+        const isLocked = !course.isRequired;
+
+        await CourseAssignment.findOneAndUpdate(
+          { course: course._id, teacher: teacher._id },
+          {
+            course: course._id,
+            teacher: teacher._id,
+            assignedBy: adminId,
+            status: "assigned",
+            progressPercent: 0,
+            locked: isLocked
+          },
+          { upsert: true, new: true }
+        );
+      }
+      console.log(`Successfully assigned ${courses.length} courses dynamically during teacher registration.`);
+      await createAndEmitNotification({
+        recipientId: teacher._id,
+        title: "Courses Allocated! Ã°Å¸â€œÅ¡",
+        body: `Successfully allocated ${courses.length} educational courses to your training profile.`,
+        type: "course",
+      });
+    } catch (assignError) {
+      console.error("Auto course assignment failed during teacher registration:", assignError);
+    }
+    // End: Dnyaneshwari Thorat
+
     res.status(201).json({
       teacher: {
         id: teacher._id,
@@ -401,6 +702,12 @@ app.post("/api/auth/register-mentor", async (req, res, next) => {
   try {
     const { name, email, phone, password, qualification, specialization, experience, address, fellowshipSemester } = req.body;
     
+    // Start: Dnyaneshwari Thorat
+    if (!phone || !isValidPhoneNumber(String(phone).trim(), 'IN')) {
+      return res.status(400).json({ message: "Invalid phone number. Must be a valid Indian phone number." });
+    }
+    // End: Dnyaneshwari Thorat
+
     const policyResult = await validatePasswordAgainstPolicy(password);
     if (!policyResult.valid) {
       return res.status(400).json({ message: policyResult.message });
@@ -520,9 +827,83 @@ app.post("/api/auth/reset-password", async (req, res, next) => {
 
     res.json({ success: true, message: "Password updated successfully" });
   } catch (error) {
-    res.status(400).json({ message: "Reset link is invalid or expired" });
   }
 });
+
+// Start: Dnyaneshwari Thorat
+app.post("/api/auth/send-signup-otp", async (req, res, next) => {
+  try {
+    const email = String(req.body.email || "").toLowerCase().trim();
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({ message: "Email already registered" });
+    }
+
+    const emailOtp = generateOtp();
+    storeOtp(email, emailOtp);
+
+    // Send Email OTP (non-blocking)
+    let sentEmailOk = false;
+    try {
+      const emailResult = await sendEmail({
+        to: email,
+        subject: "SpacECE Portal Ã¢â‚¬â€ Registration Email Verification OTP",
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
+            <h2 style="color:#1e3a8a;margin-top:0;">Verify Your Email Address</h2>
+            <p style="color:#334155;font-size:14px;line-height:1.6;">Thank you for registering at SpacECE Teacher Portal. Use the following OTP to verify your email address:</p>
+            <div style="font-size:36px;font-weight:900;color:#f59e0b;letter-spacing:12px;margin:16px 0;background:#fef3c7;padding:16px;border-radius:10px;text-align:center;">${emailOtp}</div>
+            <p style="color:#9ca3af;font-size:12px;margin:16px 0 0;">This OTP is valid for <strong>${OTP_TTL_MINUTES} minutes</strong>. Please do not share this code.</p>
+          </div>
+        `
+      });
+      sentEmailOk = emailResult.success;
+    } catch (err) {
+      console.error("Signup Email OTP delivery failed:", err);
+    }
+
+    // Log OTP to server console
+    console.log(`[signup-otp] OTP for email ${email} is ${emailOtp}`);
+
+    const mailConf = await PortalSetting.find({ key: { $in: ["smtpHost", "smtpUser"] } });
+    const isMailConfigured = mailConf && mailConf.length >= 2 && mailConf.every(c => c.value);
+
+    res.json({
+      success: true,
+      message: "Verification OTP sent successfully to email.",
+      emailOtp: isMailConfigured ? undefined : emailOtp
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/auth/verify-signup-otp", async (req, res, next) => {
+  try {
+    const email = String(req.body.email || "").toLowerCase().trim();
+    const emailOtp = String(req.body.emailOtp || "").trim();
+
+    if (!email || !emailOtp) {
+      return res.status(400).json({ message: "Email and OTP are required" });
+    }
+
+    const emailVerifyResult = verifyOtp(email, emailOtp);
+    if (!emailVerifyResult.valid) {
+      return res.status(400).json({ message: "Invalid or expired Email OTP" });
+    }
+
+    deleteOtp(email);
+    res.json({ success: true, message: "Email verified successfully." });
+  } catch (error) {
+    next(error);
+  }
+});
+// End: Dnyaneshwari Thorat
 
 // ==========================================
 // OTP-BASED PASSWORD RESET (SHA-256 + In-Memory)
@@ -554,11 +935,11 @@ app.post("/api/auth/forgot-password-otp", async (req, res, next) => {
     // Send OTP via email
     const emailResult = await sendEmail({
       to: user.email,
-      subject: "SpacECE Portal — Password Reset OTP",
+      subject: "SpacECE Portal Ã¢â‚¬â€ Password Reset OTP",
       html: `
         <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
           <div style="text-align:center;margin-bottom:24px;">
-            <h2 style="color:#f59e0b;margin:0;">🔐 Password Reset</h2>
+            <h2 style="color:#f59e0b;margin:0;">Ã°Å¸â€Â Password Reset</h2>
             <p style="color:#6b7280;font-size:14px;margin-top:8px;">SpacECE Teacher Training Portal</p>
           </div>
           <div style="background:white;border-radius:12px;padding:24px;text-align:center;border:2px dashed #fbbf24;">
@@ -570,7 +951,7 @@ app.post("/api/auth/forgot-password-otp", async (req, res, next) => {
           </div>
           <p style="color:#d1d5db;font-size:11px;text-align:center;margin-top:20px;">
             If you didn't request this, please ignore this email.<br/>
-            Sent at ${new Date().toLocaleString("en-IN")} · SpacECE Portal
+            Sent at ${new Date().toLocaleString("en-IN")} Ã‚Â· SpacECE Portal
           </p>
         </div>
       `,
@@ -616,7 +997,7 @@ app.post("/api/auth/verify-otp", async (req, res, next) => {
       return res.status(400).json({ message: messages[result.reason] || "Invalid OTP" });
     }
 
-    // OTP verified — generate a short-lived reset token
+    // OTP verified Ã¢â‚¬â€ generate a short-lived reset token
     const resetToken = createPasswordResetToken(email);
 
     console.log("[otp] verified", JSON.stringify({ email }));
@@ -801,7 +1182,7 @@ app.post("/api/centers", requireAuth, requireRole("admin"), async (req, res, nex
         if (existingUser && existingUser.teacherProfile?.center) {
           const existingCenterId = String(existingUser.teacherProfile.center);
           if (existingCenterId !== String(center._id)) {
-            // Teacher is assigned to a different center — emit a warning
+            // Teacher is assigned to a different center Ã¢â‚¬â€ emit a warning
             assignmentErrors.push({
               teacherId,
               teacherName: existingUser.name,
@@ -889,6 +1270,16 @@ app.patch("/api/admin/teachers/:id/status", requireAuth, requireRole("admin"), a
       { status: req.body.status },
       { new: true }
     ).select("-passwordHash");
+    // Start: Dnyaneshwari Thorat
+    if (teacher && req.body.status === "approved") {
+      await createAndEmitNotification({
+        recipientId: teacher._id,
+        title: "Account Approved & Courses Allocated! Ã°Å¸Å½â€œ",
+        body: "Your teacher portal has been approved. High-quality ECCE training courses have been allocated to your profile.",
+        type: "approval",
+      });
+    }
+    // End: Dnyaneshwari Thorat
 
     res.json({ teacher });
   } catch (error) {
@@ -1202,7 +1593,7 @@ app.patch("/api/teacher/me", requireAuth, requireRole("teacher"), async (req, re
   }
 });
 
-// ── Mentor Me Routes ──
+// Ã¢â€â‚¬Ã¢â€â‚¬ Mentor Me Routes Ã¢â€â‚¬Ã¢â€â‚¬
 app.get("/api/mentor/me", requireAuth, requireRole("mentor"), async (req, res, next) => {
   try {
     const mentor = await User.findById(req.user.id)
@@ -1268,7 +1659,7 @@ app.post("/api/mentor/change-password", requireAuth, requireRole("mentor"), asyn
   }
 });
 
-// ── Teacher Language Preference (persisted to Atlas) ──
+// Ã¢â€â‚¬Ã¢â€â‚¬ Teacher Language Preference (persisted to Atlas) Ã¢â€â‚¬Ã¢â€â‚¬
 app.patch("/api/teacher/me/language", requireAuth, requireRole("teacher"), async (req, res, next) => {
   try {
     const { language } = req.body;
@@ -1283,7 +1674,7 @@ app.patch("/api/teacher/me/language", requireAuth, requireRole("teacher"), async
   }
 });
 
-// ── Teacher Notification Preference (persisted to Atlas) ──
+// Ã¢â€â‚¬Ã¢â€â‚¬ Teacher Notification Preference (persisted to Atlas) Ã¢â€â‚¬Ã¢â€â‚¬
 app.patch("/api/teacher/me/notification-preference", requireAuth, requireRole("teacher"), async (req, res, next) => {
   try {
     const { preferredNotificationChannel } = req.body;
@@ -1298,7 +1689,7 @@ app.patch("/api/teacher/me/notification-preference", requireAuth, requireRole("t
   }
 });
 
-// ── Admin Language Preference (persisted to Atlas User) ──
+// Ã¢â€â‚¬Ã¢â€â‚¬ Admin Language Preference (persisted to Atlas User) Ã¢â€â‚¬Ã¢â€â‚¬
 app.patch("/api/admin/me/language", requireAuth, requireRole("admin"), async (req, res, next) => {
   try {
     const { language } = req.body;
@@ -1315,7 +1706,7 @@ app.patch("/api/admin/me/language", requireAuth, requireRole("admin"), async (re
   }
 });
 
-// ── Admin SMTP Config Save (persisted to Atlas PortalSetting) ──
+// Ã¢â€â‚¬Ã¢â€â‚¬ Admin SMTP Config Save (persisted to Atlas PortalSetting) Ã¢â€â‚¬Ã¢â€â‚¬
 app.post("/api/admin/settings/smtp", requireAuth, requireRole("admin"), async (req, res, next) => {
   try {
     const { smtpHost, smtpPort, smtpUser, smtpPass, fromEmail, fromName } = req.body;
@@ -1340,7 +1731,7 @@ app.post("/api/admin/settings/smtp", requireAuth, requireRole("admin"), async (r
   }
 });
 
-// ── Admin Twilio Config Save (persisted to Atlas PortalSetting) ──
+// Ã¢â€â‚¬Ã¢â€â‚¬ Admin Twilio Config Save (persisted to Atlas PortalSetting) Ã¢â€â‚¬Ã¢â€â‚¬
 app.post("/api/admin/settings/twilio", requireAuth, requireRole("admin"), async (req, res, next) => {
   try {
     const { twilioSid, twilioToken, twilioFrom } = req.body;
@@ -1462,11 +1853,97 @@ app.post("/api/teacher/children", requireAuth, requireRole("teacher"), async (re
   }
 });
 
+// Start: Dnyaneshwari Thorat
+app.post("/api/teacher/children/bulk", requireAuth, requireRole("teacher"), async (req, res, next) => {
+  try {
+    const teacher = await User.findById(req.user.id).select("teacherProfile");
+    const centerId = teacher?.teacherProfile?.center;
+    const defaultClassId = teacher?.teacherProfile?.class;
+    const assignedClassIds = (teacher?.teacherProfile?.classes || []).map(id => id.toString());
+    const allClassIds = [...new Set([defaultClassId?.toString(), ...assignedClassIds].filter(Boolean))];
+
+    const { children = [] } = req.body;
+    if (children.length === 0) {
+      return res.status(400).json({ message: "No children data provided." });
+    }
+
+    const createdChildren = [];
+    for (const childData of children) {
+      const classId = childData.classId || defaultClassId;
+      if (!classId) continue;
+      if (!allClassIds.includes(classId.toString())) continue;
+
+      const resolvedCenter = centerId || childData.centerId;
+      const rollNo = await getNextChildRollNo(classId);
+
+      const newChild = await Child.create({
+        fullName: childData.fullName,
+        age: childData.age || null,
+        gender: childData.gender || "",
+        guardianName: childData.guardianName || "",
+        guardianPhone: childData.guardianPhone || "",
+        center: resolvedCenter,
+        class: classId,
+        rollNo,
+        status: childData.status || "active",
+        createdBy: req.user.id,
+      });
+      createdChildren.push(newChild);
+    }
+
+    res.status(201).json({ children: createdChildren, success: true });
+  } catch (error) {
+    next(error);
+  }
+});
+// End: Dnyaneshwari Thorat
+
+// Start: Dnyaneshwari Thorat
+app.delete("/api/teacher/children/:id", requireAuth, requireRole("teacher"), async (req, res, next) => {
+  try {
+    const teacher = await User.findById(req.user.id).select("teacherProfile");
+    const classIds = teacher?.teacherProfile?.classes || [];
+    const singleClassId = teacher?.teacherProfile?.class;
+    const allClassIds = [...new Set([...classIds.map(id => id.toString()), singleClassId?.toString()].filter(Boolean))];
+
+    const child = await Child.findById(req.params.id);
+    if (!child) {
+      return res.status(404).json({ message: "Child not found." });
+    }
+
+    if (!allClassIds.includes(String(child.class))) {
+      return res.status(403).json({ message: "You are not allowed to delete this child." });
+    }
+
+    await ChildAttendanceSession.updateMany(
+      { class: child.class, "records.child": child._id },
+      { $pull: { records: { child: child._id } } }
+    );
+
+    await ChildAttendanceSession.deleteMany({
+      class: child.class,
+      records: { $size: 0 }
+    });
+
+    await Child.findByIdAndDelete(child._id);
+    res.json({ success: true, deleted: true });
+  } catch (error) {
+    next(error);
+  }
+});
+// End: Dnyaneshwari Thorat
+
 app.get("/api/teacher/progress", requireAuth, requireRole("teacher"), async (req, res, next) => {
   try {
+    // Start: Dnyaneshwari Thorat
     // FIX: get classId from teacher's profile first
     const teacherUser = await User.findById(req.user.id).select("teacherProfile");
     const classId = teacherUser?.teacherProfile?.class;
+
+    const isVisibleCourse = (assignment) => {
+      const title = assignment?.course?.title || "";
+      return !title.toLowerCase().includes("ai testing");
+    };
 
     const [courses, lessons, activities, attendance, totalChildren] = await Promise.all([
       CourseAssignment.find({ teacher: req.user.id }).populate("course"),
@@ -1476,19 +1953,21 @@ app.get("/api/teacher/progress", requireAuth, requireRole("teacher"), async (req
       classId ? Child.countDocuments({ class: classId, status: "active" }) : Promise.resolve(0),
     ]);
 
-    const completedCourses = courses.filter((item) => item.status === "completed" || item.progressPercent === 100).length;
+    const visibleCourses = courses.filter(isVisibleCourse);
+    const normalizedCourses = await Promise.all(visibleCourses.map((course) => normalizeCourseAssignmentProgress(course)));
+    const completedCourses = normalizedCourses.filter((item) => item.status === "completed" || item.status === "approved" || item.status === "reviewed" || item.progressPercent === 100).length;
     const completedLessons = lessons.filter((item) => item.status === "completed" || item.status === "reviewed").length;
     const attendancePresent = attendance.filter((item) => ["present", "late"].includes(item.status)).length;
 
     res.json({
-      courses,
+      courses: normalizedCourses,
       lessons,
       activities,
       summary: {
-        totalCourses: courses.length,
+        totalCourses: normalizedCourses.length,
         completedCourses,
-        courseProgressPercent: courses.length
-          ? Math.round(courses.reduce((sum, item) => sum + (item.progressPercent || 0), 0) / courses.length)
+        courseProgressPercent: normalizedCourses.length
+          ? Math.round(normalizedCourses.reduce((sum, item) => sum + (item.progressPercent || 0), 0) / normalizedCourses.length)
           : 0,
         totalLessons: lessons.length,
         totalChildren,
@@ -1499,6 +1978,7 @@ app.get("/api/teacher/progress", requireAuth, requireRole("teacher"), async (req
         attendanceRate: attendance.length ? Math.round((attendancePresent / attendance.length) * 100) : 0,
       },
     });
+    // End: Dnyaneshwari Thorat
   } catch (error) {
     next(error);
   }
@@ -1654,7 +2134,7 @@ app.patch("/api/centers/:id", requireAuth, requireRole("admin"), async (req, res
           if (existingUser && existingUser.teacherProfile?.center) {
             const existingCenterId = String(existingUser.teacherProfile.center);
             if (existingCenterId !== String(req.params.id)) {
-              // Teacher is assigned to a different center — emit a warning
+              // Teacher is assigned to a different center Ã¢â‚¬â€ emit a warning
               assignmentErrors.push({
                 teacherId,
                 teacherName: existingUser.name,
@@ -1869,7 +2349,7 @@ app.post("/api/centers/:id/validate-assignments", requireAuth, requireRole("admi
     }
     
     res.json({
-      valid: true, // Always valid — this is informational only
+      valid: true, // Always valid Ã¢â‚¬â€ this is informational only
       assignmentSummary,
       multiTeacherClasses,
       unassignedClasses,
@@ -2135,8 +2615,10 @@ app.use("/api/grades", gradesRouter);
 import schedulesRouter from "./routes/schedules.js";
 app.use("/api/schedules", schedulesRouter);
 // Certificates routes
-import certificatesRouter from "./routes/certificates.js";
+// Start: Dnyaneshwari Thorat
+import certificatesRouter, { autoIssueCertificateForAssignment } from "./routes/certificates.js";
 app.use("/api/certificates", certificatesRouter);
+// End: Dnyaneshwari Thorat
 
 app.post("/api/courses/:id/assign", requireAuth, requireRole("admin"), async (req, res, next) => {
   try {
@@ -2161,7 +2643,7 @@ app.post("/api/courses/:id/assign", requireAuth, requireRole("admin"), async (re
       recipientId: teacherId,
       title: "New course assigned",
       body: "A training course has been assigned to your teacher portal.",
-      type: "course_assigned",
+      type: "course",
       metadata: { courseId: req.params.id, assignmentId: assignment._id },
     });
     res.status(201).json({ assignment });
@@ -2268,11 +2750,47 @@ app.patch("/api/teacher/courses/assignments/:id", requireAuth, requireRole("teac
       update.completedAt = new Date();
       update.status = "completed";
     }
+    // Start: Dnyaneshwari Thorat
     const assignment = await CourseAssignment.findOneAndUpdate(
       { _id: req.params.id, teacher: req.user.id },
       update,
       { new: true }
     ).populate("course");
+
+    if (assignment) {
+      const normalized = await normalizeCourseAssignmentProgress(assignment);
+      if (
+        normalized.progressPercent !== assignment.progressPercent ||
+        normalized.status !== assignment.status ||
+        JSON.stringify(normalized.completedContent) !== JSON.stringify(assignment.completedContent || [])
+      ) {
+        assignment.progressPercent = normalized.progressPercent;
+        assignment.status = normalized.status;
+        assignment.completedContent = normalized.completedContent;
+        if (normalized.progressPercent === 100 && !assignment.completedAt) {
+          assignment.completedAt = new Date();
+        }
+        await assignment.save();
+      }
+    }
+
+    if (assignment && assignment.status === "completed" && assignment.assessmentCompletedAt) {
+      try {
+        const cert = await autoIssueCertificateForAssignment(assignment._id);
+        if (cert) {
+          await createAndEmitNotification({
+            recipientId: req.user.id,
+            title: "Certificate Generated! Ã°Å¸Å½â€œ",
+            body: `Congratulations! Your certificate for the course "${assignment.course?.title || "Course"}" has been successfully generated.`,
+            type: "certificate",
+            metadata: { certificateId: cert._id, courseId: assignment.course?._id },
+          });
+        }
+      } catch (certErr) {
+        console.error("Auto certificate generation failed:", certErr);
+      }
+    }
+    // End: Dnyaneshwari Thorat
 
     // Notify admin when teacher submits an assignment
     if (status === "submitted" && assignment) {
@@ -2293,6 +2811,53 @@ app.patch("/api/teacher/courses/assignments/:id", requireAuth, requireRole("teac
     next(error);
   }
 });
+
+// Start: Dnyaneshwari Thorat
+app.post("/api/teacher/courses/assignments/:id/reset", requireAuth, requireRole("teacher"), async (req, res, next) => {
+  try {
+    const assignment = await CourseAssignment.findOne({ _id: req.params.id, teacher: req.user.id }).populate("course");
+    if (!assignment) {
+      return res.status(404).json({ message: "Assignment not found." });
+    }
+
+    const courseId = assignment.course?._id || assignment.course;
+    let certificateDeleted = false;
+    let assessmentResultsDeleted = 0;
+
+    if (courseId) {
+      const cert = await Certificate.findOneAndDelete({ teacher: req.user.id, course: courseId });
+      certificateDeleted = !!cert;
+      const assessmentDeleteRes = await AssessmentResult.deleteMany({ user: req.user.id, courseId });
+      assessmentResultsDeleted = assessmentDeleteRes.deletedCount || 0;
+    }
+
+    assignment.progressPercent = 0;
+    assignment.completedContent = [];
+    assignment.completedAt = undefined;
+    assignment.status = "assigned";
+    assignment.score = null;
+    assignment.grade = "";
+    assignment.assessmentScore = null;
+    assignment.assessmentTotal = null;
+    assignment.assessmentPercentage = null;
+    assignment.assessmentGrade = "";
+    assignment.assessmentForced = false;
+    assignment.assessmentWarnings = 0;
+    assignment.assessmentCompletedAt = undefined;
+    assignment.feedback = "";
+    await assignment.save();
+
+    res.json({
+      assignment,
+      certificateDeleted,
+      assessmentResultsDeleted,
+      message: "Course reset successfully. You can start again from the beginning.",
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+// End: Dnyaneshwari Thorat
 
 app.post("/api/ai/generate-course", requireAuth, async (req, res, next) => {
   try {
@@ -2440,7 +3005,7 @@ app.delete("/api/lesson-plans/:id", requireAuth, requireRole("admin"), async (re
   }
 });
 
-/* ── Lesson Plan Auto-Generation Engine ── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Lesson Plan Auto-Generation Engine Ã¢â€â‚¬Ã¢â€â‚¬ */
 app.post("/api/lesson-plans/auto-generate", requireAuth, requireRole("admin"), async (req, res, next) => {
   try {
     const { courseId, classId, centerId, startDate, durationWeeks, maxActivitiesPerDay = 2 } = req.body;
@@ -2449,7 +3014,7 @@ app.post("/api/lesson-plans/auto-generate", requireAuth, requireRole("admin"), a
     const course = await Course.findById(courseId);
     if (!course) return res.status(404).json({ message: "Course not found." });
 
-    // Flatten all activities from course modules → contents
+    // Flatten all activities from course modules Ã¢â€ â€™ contents
     const allActivities = [];
     (course.modules || []).forEach((mod, mi) => {
       (mod.contents || []).forEach((content, ci) => {
@@ -2534,7 +3099,7 @@ app.post("/api/lesson-plans/auto-generate", requireAuth, requireRole("admin"), a
   }
 });
 
-/* ── Confirm & Publish Auto-Generated Plan ── */
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Confirm & Publish Auto-Generated Plan Ã¢â€â‚¬Ã¢â€â‚¬ */
 app.post("/api/lesson-plans/auto-publish", requireAuth, requireRole("admin"), async (req, res, next) => {
   try {
     const { courseId, classId, centerId, schedule, title } = req.body;
@@ -2552,7 +3117,7 @@ app.post("/api/lesson-plans/auto-publish", requireAuth, requireRole("admin"), as
 
       const plan = await LessonPlan.create({
         course: courseId || undefined,
-        title: title ? `${title} — ${day.date} (${day.dayOfWeek})` : `Auto Plan — ${day.date} (${day.dayOfWeek})`,
+        title: title ? `${title} Ã¢â‚¬â€ ${day.date} (${day.dayOfWeek})` : `Auto Plan Ã¢â‚¬â€ ${day.date} (${day.dayOfWeek})`,
         objectives: objectivesText,
         instructions: instructionsText || activitiesText,
         activities: activitiesText,
@@ -2864,6 +3429,37 @@ app.post("/api/attendance/children", requireAuth, requireRole("teacher"), async 
     next(error);
   }
 });
+
+// Start: Dnyaneshwari Thorat
+app.delete("/api/attendance/children", requireAuth, requireRole("teacher"), async (req, res, next) => {
+  try {
+    const { classId, attendanceDate } = req.query;
+    if (!classId || !attendanceDate) {
+      return res.status(400).json({ message: "classId and attendanceDate are required." });
+    }
+
+    const dateVal = new Date(attendanceDate);
+    if (Number.isNaN(dateVal.getTime())) {
+      return res.status(400).json({ message: "attendanceDate is invalid." });
+    }
+    dateVal.setHours(0, 0, 0, 0);
+
+    const deleted = await ChildAttendanceSession.findOneAndDelete({
+      class: classId,
+      attendanceDate: dateVal,
+      teacher: req.user.id,
+    });
+
+    if (!deleted) {
+      return res.status(404).json({ message: "Attendance record not found." });
+    }
+
+    res.json({ success: true, deleted: true });
+  } catch (error) {
+    next(error);
+  }
+});
+// End: Dnyaneshwari Thorat
 
 app.get("/api/attendance/teachers", requireAuth, async (req, res, next) => {
   try {
@@ -3389,7 +3985,7 @@ app.put("/api/admin/settings", requireAuth, requireRole("admin"), async (req, re
 });
 
 // ==========================================
-// ADMIN SETTINGS — TEST EMAIL
+// ADMIN SETTINGS Ã¢â‚¬â€ TEST EMAIL
 // ==========================================
 app.post("/api/admin/settings/test-email", requireAuth, requireRole("admin"), async (req, res, next) => {
   try {
@@ -3400,14 +3996,14 @@ app.post("/api/admin/settings/test-email", requireAuth, requireRole("admin"), as
 
     const result = await sendEmail({
       to,
-      subject: "✅ SpacECE Portal — Test Email",
+      subject: "Ã¢Å“â€¦ SpacECE Portal Ã¢â‚¬â€ Test Email",
       html: `
         <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:32px;">
-          <h2 style="color:#f59e0b;">🎉 Test Email Successful!</h2>
+          <h2 style="color:#f59e0b;">Ã°Å¸Å½â€° Test Email Successful!</h2>
           <p>This is a test email sent from the <strong>SpacECE Teacher Training Portal</strong>.</p>
           <p>If you received this message, your SMTP configuration is working correctly.</p>
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
-          <p style="font-size:12px;color:#9ca3af;">Sent at ${new Date().toISOString()} · SpacECE Admin Panel</p>
+          <p style="font-size:12px;color:#9ca3af;">Sent at ${new Date().toISOString()} Ã‚Â· SpacECE Admin Panel</p>
         </div>
       `,
     });
@@ -3423,6 +4019,7 @@ app.post("/api/admin/settings/test-email", requireAuth, requireRole("admin"), as
 });
 
 // ==========================================
+// ==========================================
 // ADMIN SETTINGS — TEST SMS
 // ==========================================
 app.post("/api/admin/settings/test-sms", requireAuth, requireRole("admin"), async (req, res, next) => {
@@ -3436,25 +4033,11 @@ app.post("/api/admin/settings/test-sms", requireAuth, requireRole("admin"), asyn
       return res.status(500).json({ success: false, message: "Twilio credentials are not configured." });
     }
     const cleanPhone = normalizePhoneE164(to);
-    const twilioBase = `https://api.twilio.com/2010-04-01/Accounts/${twilioConf.sid}/Messages.json`;
-    try {
-      const resp = await fetch(twilioBase, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Authorization: "Basic " + Buffer.from(`${twilioConf.sid}:${twilioConf.token}`).toString("base64"),
-        },
-        body: new URLSearchParams({ To: cleanPhone, From: twilioConf.from, Body: "SpacECE Portal — Test SMS successful! Your Twilio SMS configuration is working." }).toString(),
-      });
-      const data = await resp.json();
-      if (resp.ok) {
-        return res.json({ success: true, message: `Test SMS sent to ${cleanPhone}.`, sid: data.sid });
-      } else {
-        return res.status(500).json({ success: false, message: data.message || "Twilio SMS failed." });
-      }
-    } catch (err) {
-      return res.status(500).json({ success: false, message: err.message || "Twilio network error." });
+    const result = await sendSms(cleanPhone, "SpacECE Portal — Test SMS successful! Your Twilio SMS configuration is working.");
+    if (result.success) {
+      return res.json({ success: true, message: `Test SMS sent to ${cleanPhone}.`, sid: result.sid || null });
     }
+    return res.status(500).json({ success: false, message: result.error || "Twilio SMS failed." });
   } catch (error) {
     next(error);
   }
@@ -3462,6 +4045,9 @@ app.post("/api/admin/settings/test-sms", requireAuth, requireRole("admin"), asyn
 
 // ==========================================
 // ADMIN SETTINGS — TEST WHATSAPP
+// Dnyaneshwari Thorat — Fixed test-whatsapp endpoint: replaced getTwilioConfig with getMessagingConfig
+// Reason: getTwilioConfig only supports Twilio provider, but sendWhatsApp uses getMessagingConfig
+// Which supports multiple providers (Twilio, Vonage, Fast2SMS)
 // ==========================================
 app.post("/api/admin/settings/test-whatsapp", requireAuth, requireRole("admin"), async (req, res, next) => {
   try {
@@ -3469,38 +4055,28 @@ app.post("/api/admin/settings/test-whatsapp", requireAuth, requireRole("admin"),
     if (!to) {
       return res.status(400).json({ success: false, message: "Phone number is required." });
     }
-    const twilioConf = await getTwilioConfig();
-    if (!twilioConf) {
-      return res.status(500).json({ success: false, message: "Twilio credentials are not configured." });
+    const messagingConf = await getMessagingConfig();
+    if (!messagingConf || !messagingConf.provider) {
+      return res.status(500).json({ success: false, message: "Messaging provider is not configured. Please configure SMS & WhatsApp in Settings." });
+    }
+    const provider = messagingConf.provider;
+    const isConfigured = (provider === "twilio" && messagingConf.twilioSid && messagingConf.twilioToken) ||
+                         (provider === "vonage" && messagingConf.vonageApiKey && messagingConf.vonageApiSecret) ||
+                         (provider === "fast2sms" && messagingConf.fast2smsKey);
+    if (!isConfigured) {
+      return res.status(500).json({ success: false, message: `${provider} credentials are not configured. Please check SMS & WhatsApp settings.` });
     }
     const cleanPhone = normalizePhoneE164(to);
-    const toNumber = `whatsapp:${cleanPhone}`;
-    const fromNumber = `whatsapp:${twilioConf.from}`;
-    const twilioBase = `https://api.twilio.com/2010-04-01/Accounts/${twilioConf.sid}/Messages.json`;
-    try {
-      const resp = await fetch(twilioBase, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Authorization: "Basic " + Buffer.from(`${twilioConf.sid}:${twilioConf.token}`).toString("base64"),
-        },
-        body: new URLSearchParams({ To: toNumber, From: fromNumber, Body: "SpacECE Portal — Test WhatsApp successful! Your Twilio WhatsApp configuration is working." }).toString(),
-      });
-      const data = await resp.json();
-      if (resp.ok) {
-        return res.json({ success: true, message: `Test WhatsApp sent to ${cleanPhone}.`, sid: data.sid });
-      } else {
-        return res.status(500).json({ success: false, message: data.message || "Twilio WhatsApp failed." });
-      }
-    } catch (err) {
-      return res.status(500).json({ success: false, message: err.message || "Twilio network error." });
+    const result = await sendWhatsApp(cleanPhone, "SpacECE Portal — Test WhatsApp successful! Your WhatsApp configuration is working.");
+    if (result.success) {
+      return res.json({ success: true, message: `Test WhatsApp sent to ${cleanPhone} via ${provider}.`, sid: result.sid || null });
     }
+    return res.status(500).json({ success: false, message: result.error || "WhatsApp delivery failed." });
   } catch (error) {
     next(error);
   }
 });
-
-// ==========================================
+// Dnyaneshwari Thorat — end of WhatsApp test endpoint fix
 // ADMIN NOTIFICATIONS
 // ==========================================
 const broadcastRateLimit = { lastBroadcast: null, count: 0, windowStart: null };
@@ -3550,7 +4126,7 @@ app.post("/api/admin/notifications/broadcast", requireAuth, requireRole("admin")
       return res.status(400).json({ message: "Subject and message are required" });
     }
 
-    // ─── RETRY LOGIC ───
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ RETRY LOGIC Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     if (isRetry && originalNotificationId) {
       const originalNotif = await Notification.findById(originalNotificationId).populate("recipient", "_id name email phone status");
       if (!originalNotif) {
@@ -3577,37 +4153,18 @@ app.post("/api/admin/notifications/broadcast", requireAuth, requireRole("admin")
           success = result.success;
           errorMsg = result.error || null;
         }
+      // Start: Dnyaneshwari Thorat
       } else if (channel === "sms" || channel === "whatsapp") {
-        const twilioConf = await getTwilioConfig();
-        if (!twilioConf) {
-          errorMsg = "Twilio credentials are not configured in settings.";
-        } else if (!recipient.phone) {
+        if (!recipient.phone) {
           errorMsg = "Recipient has no phone number";
         } else {
-          const cleanPhone = normalizePhoneE164(recipient.phone);
-          const toNumber = channel === "whatsapp" ? `whatsapp:${cleanPhone}` : cleanPhone;
-          const fromNumber = channel === "whatsapp" ? `whatsapp:${twilioConf.from}` : twilioConf.from;
-          const twilioBase = `https://api.twilio.com/2010-04-01/Accounts/${twilioConf.sid}/Messages.json`;
-
-          try {
-            const resp = await fetch(twilioBase, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                Authorization: "Basic " + Buffer.from(`${twilioConf.sid}:${twilioConf.token}`).toString("base64"),
-              },
-              body: new URLSearchParams({ To: toNumber, From: fromNumber, Body: `${subject}\n\n${body}` }).toString(),
-            });
-            const data = await resp.json();
-            if (resp.ok) {
-              success = true;
-            } else {
-              errorMsg = data.message || "Twilio delivery failed";
-            }
-          } catch (err) {
-            errorMsg = err.message || "Twilio network error";
-          }
+          const result = channel === "whatsapp" 
+            ? await sendWhatsApp(recipient.phone, `${subject}\n\n${body}`)
+            : await sendSms(recipient.phone, `${subject}\n\n${body}`);
+          success = result.success;
+          errorMsg = result.error || null;
         }
+      // End: Dnyaneshwari Thorat
       } else {
         success = true;
       }
@@ -3622,7 +4179,7 @@ app.post("/api/admin/notifications/broadcast", requireAuth, requireRole("admin")
       return res.status(200).json({ notifications: [originalNotif], recipientCount: 1 });
     }
 
-    // ─── REGULAR BROADCAST LOGIC ───
+    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ REGULAR BROADCAST LOGIC Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     let filter = { role: "teacher" };
     if (Array.isArray(teacherIds) && teacherIds.length > 0) {
       filter._id = { $in: teacherIds };
@@ -3637,6 +4194,7 @@ app.post("/api/admin/notifications/broadcast", requireAuth, requireRole("admin")
       return res.status(200).json({ notifications: [], recipientCount: 0 });
     }
 
+    // Start: Dnyaneshwari Thorat
     const meta = { subject, priority: "normal", category: "system" };
     const buildDoc = (recipientId, notifChannel, notifStatus, opts = {}) => ({
       recipient: recipientId,
@@ -3650,85 +4208,72 @@ app.post("/api/admin/notifications/broadcast", requireAuth, requireRole("admin")
       error: opts.error || null,
     });
 
-    let notifications = [];
+    const selectedChannels = channel === "all"
+      ? ["in_app", "email", "sms", "whatsapp"]
+      : [channel];
 
-    // For in_app, immediately insert as delivered
-    if (channel === "in_app" || channel === "all") {
-      const docs = recipients.map((teacher) => buildDoc(teacher._id, "in_app", "delivered"));
-      const created = await Notification.insertMany(docs);
-      notifications.push(...created);
-    }
+    const docs = [];
+    for (const recipient of recipients) {
+      for (const notifChannel of selectedChannels) {
+        if (notifChannel === "in_app") {
+          docs.push(buildDoc(recipient._id, "in_app", "delivered"));
+          continue;
+        }
 
-    // For email, send via SMTP
-    if (channel === "email" || channel === "all") {
-      const emailRecipients = recipients.filter(r => r.email);
-      const emailResults = await sendBulkEmails({
-        recipients: emailRecipients.map((r) => ({ _id: r._id, email: r.email, name: r.name })),
-        subject,
-        body,
-      });
+        if (notifChannel === "email") {
+          if (!recipient.email) {
+            docs.push(buildDoc(recipient._id, "email", "failed", { error: "Recipient has no email address" }));
+            continue;
+          }
 
-      const docs = emailResults.map((result) =>
-        buildDoc(result.recipientId, "email", result.success ? "delivered" : "failed", {
-          error: result.error || null,
-          sentAt: result.success ? now : undefined
-        })
-      );
-      const created = docs.length ? await Notification.insertMany(docs) : [];
-      notifications.push(...created);
-    }
+          const emailResult = await sendEmail({
+            to: recipient.email,
+            subject,
+            html: `
+              <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;padding:24px;background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;">
+                <h2 style="margin:0 0 12px;color:#9a3412;">${subject}</h2>
+                <p style="margin:0 0 16px;color:#44403c;line-height:1.6;">${body.replace(/\n/g, "<br>")}</p>
+                <a href="${process.env.FRONTEND_URL || "http://localhost:5173"}" style="display:inline-block;padding:10px 16px;background:#ea580c;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;">Open Portal</a>
+              </div>
+            `,
+          });
+          docs.push(buildDoc(recipient._id, "email", emailResult.success ? "delivered" : "failed", { error: emailResult.error || null }));
+          continue;
+        }
 
-    // For SMS/WhatsApp, send via Twilio
-    if (channel === "sms" || channel === "whatsapp") {
-      const twilioConf = await getTwilioConfig();
+        if (notifChannel === "sms") {
+          if (!recipient.phone) {
+            docs.push(buildDoc(recipient._id, "sms", "failed", { error: "Recipient has no phone number" }));
+            continue;
+          }
+          const smsResult = await sendSms(recipient.phone, `${subject}\n\n${body}`);
+          docs.push(buildDoc(recipient._id, "sms", smsResult.success ? "delivered" : "failed", { error: smsResult.error || null }));
+          continue;
+        }
 
-      if (!twilioConf) {
-        const docs = recipients.map((teacher) =>
-          buildDoc(teacher._id, channel, "failed", {
-            error: `${channel.toUpperCase()} provider is not configured. Add Twilio credentials in Settings & Roles.`
-          })
-        );
-        const created = docs.length ? await Notification.insertMany(docs) : [];
-        notifications.push(...created);
-      } else {
-        const twilioBase = `https://api.twilio.com/2010-04-01/Accounts/${twilioConf.sid}/Messages.json`;
-        const messageResults = await Promise.allSettled(
-          recipients.map(async (r) => {
-            if (!r.phone) return { recipientId: r._id, success: false, error: "No phone number on record" };
-            const cleanPhone = normalizePhoneE164(r.phone);
-            const toNumber = channel === "whatsapp" ? `whatsapp:${cleanPhone}` : cleanPhone;
-            const fromNumber = channel === "whatsapp" ? `whatsapp:${twilioConf.from}` : twilioConf.from;
-
-            const resp = await fetch(twilioBase, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-                Authorization: "Basic " + Buffer.from(`${twilioConf.sid}:${twilioConf.token}`).toString("base64"),
-              },
-              body: new URLSearchParams({ To: toNumber, From: fromNumber, Body: `${subject}\n\n${body}` }).toString(),
-            });
-            const data = await resp.json();
-            if (!resp.ok) return { recipientId: r._id, success: false, error: data.message || "Twilio error" };
-            return { recipientId: r._id, success: true };
-          })
-        );
-
-        const results = messageResults.map((r, i) =>
-          r.status === "fulfilled" ? r.value : { recipientId: recipients[i]?._id, success: false, error: r.reason?.message }
-        );
-
-        const docs = results.map((result) =>
-          buildDoc(result.recipientId, channel, result.success ? "delivered" : "failed", {
-            error: result.error || null,
-            sentAt: result.success ? now : undefined
-          })
-        );
-        const created = docs.length ? await Notification.insertMany(docs) : [];
-        notifications.push(...created);
+        if (notifChannel === "whatsapp") {
+          if (!recipient.phone) {
+            docs.push(buildDoc(recipient._id, "whatsapp", "failed", { error: "Recipient has no phone number" }));
+            continue;
+          }
+          const waResult = await sendWhatsApp(recipient.phone, `${subject}\n\n${body}`);
+          docs.push(buildDoc(recipient._id, "whatsapp", waResult.success ? "delivered" : "failed", { error: waResult.error || null }));
+        }
       }
     }
 
-    res.status(201).json({ notifications, recipientCount: recipients.length });
+    const notifications = docs.length ? await Notification.insertMany(docs) : [];
+    const delivered = notifications.filter((item) => item.status === "delivered").length;
+    const failed = notifications.filter((item) => item.status === "failed").length;
+
+    res.status(201).json({
+      notifications,
+      recipientCount: recipients.length,
+      delivered,
+      failed,
+      channels: selectedChannels,
+    });
+    // End: Dnyaneshwari Thorat
   } catch (error) {
     next(error);
   }
@@ -3974,9 +4519,9 @@ app.get("/api/automation/status", requireAuth, requireRole("admin"), async (req,
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════
-// PHASE 1: USER MANAGEMENT — Auto Password, Bulk CSV Import, Restore
-// ═══════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// PHASE 1: USER MANAGEMENT Ã¢â‚¬â€ Auto Password, Bulk CSV Import, Restore
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 function generateRandomPassword(length = 12) {
   const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -4046,9 +4591,9 @@ app.patch("/api/admin/users/:id/restore", requireAuth, requireRole("admin"), asy
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // PHASE 1: COURSE PUBLISHING WORKFLOW
-// ═══════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.post("/api/courses/:id/publish", requireAuth, requireRole("admin"), async (req, res, next) => {
   try {
@@ -4087,9 +4632,9 @@ app.post("/api/courses/:id/review", requireAuth, requireRole("admin"), async (re
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // PHASE 1: SCHEDULE CONFLICT DETECTION
-// ═══════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.post("/api/schedules/check-conflicts", requireAuth, async (req, res, next) => {
   try {
@@ -4107,9 +4652,9 @@ app.post("/api/schedules/check-conflicts", requireAuth, async (req, res, next) =
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // PHASE 1: SYSTEM HEALTH
-// ═══════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.get("/api/admin/system-health", requireAuth, requireRole("admin"), async (_req, res, next) => {
   try {
@@ -4140,9 +4685,9 @@ app.get("/api/admin/system-health", requireAuth, requireRole("admin"), async (_r
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 // PHASE 1: ADMIN PROFILE
-// ═══════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.get("/api/admin/profile", requireAuth, requireRole("admin"), async (req, res, next) => {
   try {
@@ -4193,9 +4738,9 @@ app.post("/api/admin/profile/change-password", requireAuth, requireRole("admin")
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════
-// PHASE 2: NOTIFICATION ENGINE — Auto-triggers, History, Deadlines
-// ═══════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// PHASE 2: NOTIFICATION ENGINE Ã¢â‚¬â€ Auto-triggers, History, Deadlines
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 app.get("/api/admin/notifications/history", requireAuth, requireRole("admin"), async (req, res, next) => {
   try {
@@ -4276,9 +4821,9 @@ app.post("/api/teacher/deadline-reminders", requireAuth, requireRole("teacher"),
   }
 });
 
-// ═══════════════════════════════════════════════════════════════════
-// PHASE 3: AI/ML — Sentiment Analysis, Risk Flags, Chatbot, Auto-grade
-// ═══════════════════════════════════════════════════════════════════
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// PHASE 3: AI/ML Ã¢â‚¬â€ Sentiment Analysis, Risk Flags, Chatbot, Auto-grade
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 const SENTIMENT_POSITIVE = ["great","excellent","amazing","wonderful","fantastic","good","love","happy","thank","best","awesome","perfect","nice","helpful","well done","keep up","impressed","outstanding","superb","brilliant","beautiful","creative","effective","engaging","inspiring","professional","quality","remarkable","satisfying","successful"];
 const SENTIMENT_NEGATIVE = ["bad","terrible","awful","poor","worst","hate","angry","disappointed","frustrated","useless","boring","difficult","confusing","delayed","late","missing","incomplete","wrong","broken","failed","failure","problem","issue","complaint","unfair","stress","tired","overwhelmed","stressed","struggling"];
@@ -4622,25 +5167,105 @@ app.get("/api/ai/courses", requireAuth, async (req, res, next) => {
   }
 });
 
+// Start: Dnyaneshwari Thorat
+// Direct Gemini AI Assessment Generator
+async function generateAssessmentWithGemini(course) {
+  const geminiApiKey = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
+  if (!geminiApiKey || /^YOUR_(OPENAI|GEMINI)/i.test(geminiApiKey) || /placeholder/i.test(geminiApiKey)) {
+    console.log("No valid Gemini API key found, skipping direct AI assessment generation.");
+    return null;
+  }
+
+  const prompt = `You are an expert preschool teacher trainer.
+Generate a proctored assessment for the course "${course.title}".
+Based on the course syllabus:
+${JSON.stringify(course.modules || [])}
+
+Generate exactly 10 Multiple Choice Questions (MCQs).
+Return ONLY a valid JSON array of objects. Do not include markdown code block formatting (like \`\`\`json).
+Each object MUST have:
+- id: a unique string like "q1", "q2"..."q10"
+- q: the question text (clear, professional, related to ECCE / teacher training)
+- opts: an array of exactly 4 options (strings)
+- ans: index of the correct answer in the opts array (0, 1, 2, or 3)
+
+Example format:
+[
+  { "id": "q1", "q": "What is ...?", "opts": ["A", "B", "C", "D"], "ans": 1 }
+]`;
+
+  try {
+    const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": geminiApiKey
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }]
+      })
+    });
+
+    // Start: Dnyaneshwari Thorat
+    if (!response.ok) {
+      console.warn("Direct Gemini AI assessment generation unavailable (Invalid or unauthorized API key).");
+      return null;
+    }
+    // End: Dnyaneshwari Thorat
+
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) return null;
+
+    const cleanText = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    const questions = JSON.parse(cleanText);
+    return { questions };
+  } catch (err) {
+    console.error("Failed to generate AI assessment with Gemini:", err);
+    return null;
+  }
+}
+
 app.get("/api/courses/:id/assessment", requireAuth, async (req, res, next) => {
   try {
-    let response = await fetch(`${COURSE_GENERATOR_SERVICE_URL}/api/v1/courses/${req.params.id}/assessment`);
+    const course = await Course.findById(req.params.id).lean();
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    // Try generating directly via Gemini API first (completely dynamic AI generation based on syllabus)
+    const aiAssessment = await generateAssessmentWithGemini(course);
+    if (aiAssessment && aiAssessment.questions && aiAssessment.questions.length > 0) {
+      console.log(`Successfully generated dynamic AI assessment for "${course.title}" using Gemini.`);
+      return res.json({ assessment: aiAssessment });
+    }
+
+    let response;
+    try {
+      response = await fetch(`${COURSE_GENERATOR_SERVICE_URL}/api/v1/courses/${req.params.id}/assessment`);
+    } catch (fetchErr) {
+      console.warn("Course Generator Service offline, returning empty assessment to trigger local fallback:", fetchErr.message);
+      return res.json({ assessment: null });
+    }
+
     if (!response.ok) {
       if (response.status === 404) {
-        const course = await Course.findById(req.params.id).lean();
-        if (!course) {
-          return res.status(404).json({ message: "Course not found" });
+        try {
+          const genRes = await fetch(`${COURSE_GENERATOR_SERVICE_URL}/api/v1/courses/${req.params.id}/generate_assessment`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(course)
+          });
+          if (!genRes.ok) {
+            const errorText = await genRes.text();
+            throw new Error(`Failed to generate assessment: ${genRes.status} ${errorText}`);
+          }
+          response = genRes;
+        } catch (genErr) {
+          console.warn("Failed to contact generator service for generation, using fallback:", genErr.message);
+          return res.json({ assessment: null });
         }
-        const genRes = await fetch(`${COURSE_GENERATOR_SERVICE_URL}/api/v1/courses/${req.params.id}/generate_assessment`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(course)
-        });
-        if (!genRes.ok) {
-          const errorText = await genRes.text();
-          throw new Error(`Failed to generate assessment: ${genRes.status} ${errorText}`);
-        }
-        response = genRes;
       } else {
         const errorText = await response.text();
         throw new Error(`Python service failed: ${response.status} ${errorText}`);
@@ -4652,6 +5277,7 @@ app.get("/api/courses/:id/assessment", requireAuth, async (req, res, next) => {
     next(error);
   }
 });
+// End: Dnyaneshwari Thorat
 
 await connectDb();
 await ensureDatabaseReady();

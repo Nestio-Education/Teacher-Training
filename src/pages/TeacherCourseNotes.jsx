@@ -15,11 +15,28 @@ import { getCourseNotes } from "../services/api";
      teacher to take that course's Assessment.
 ══════════════════════════════════════════════════════════════ */
 
-function isTopicRead(assignment, topicId) {
-  return assignment?.completedContent?.includes(topicId) || false;
+// Start: Dnyaneshwari Thorat
+function normalizeId(value) {
+  if (value === null || value === undefined) return "";
+  return String(value);
 }
 
-export default function TeacherCourseNotes({ assignments = [], onMarkDone, onGoToAssessment }) {
+// Start: Dnyaneshwari Thorat
+function isCompletedAssignment(assignment) {
+  return assignment?.status === "completed" ||
+    assignment?.status === "approved" ||
+    assignment?.status === "reviewed" ||
+    assignment?.progressPercent === 100;
+}
+
+function isTopicRead(assignment, topicId) {
+  if (isCompletedAssignment(assignment)) return true;
+  const normalizedTopicId = normalizeId(topicId);
+  return (assignment?.completedContent || []).map(normalizeId).includes(normalizedTopicId);
+}
+// End: Dnyaneshwari Thorat
+
+export default function TeacherCourseNotes({ assignments = [], onMarkDone, onGoToAssessment, onRestartCourse }) {
   const [activeAssignmentId, setActiveAssignmentId] = useState(null);
   const [activeTopicIdx, setActiveTopicIdx] = useState(0);
 
@@ -38,22 +55,24 @@ export default function TeacherCourseNotes({ assignments = [], onMarkDone, onGoT
       getCourseNotes(courseId)
         .then((res) => {
           let topics = (res.notes || []).map((n) => ({
-            _id: n._id || n.id,
+            _id: normalizeId(n._id || n.id),
             title: n.title,
             notes: n.content,
           }));
           
+          // Start: Dnyaneshwari Thorat
           if (topics.length === 0 && a.course && a.course.modules) {
             a.course.modules.forEach(mod => {
               (mod.contents || []).forEach(content => {
                 topics.push({
-                  _id: content._id,
+                  _id: normalizeId(content._id),
                   title: content.title,
-                  notes: content.notes || content.description,
+                  notes: content.detailedLearningContent || content.notes || content.description,
                 });
               });
             });
           }
+          // End: Dnyaneshwari Thorat
           
           setNotesByCourseId((prev) => ({ ...prev, [courseId]: { loading: false, topics } }));
         })
@@ -72,7 +91,8 @@ export default function TeacherCourseNotes({ assignments = [], onMarkDone, onGoT
 
   const markTopicRead = (assignment, topicId) => {
     if (!assignment || isTopicRead(assignment, topicId)) return;
-    const completedContent = [...(assignment.completedContent || []), topicId];
+    // Start: Dnyaneshwari Thorat
+    const completedContent = [...(assignment.completedContent || []).map(normalizeId), normalizeId(topicId)];
     const allTopics = notesByCourseId[getCourseId(assignment)]?.topics || [];
     const progressPercent = allTopics.length > 0 ? Math.round((completedContent.length / allTopics.length) * 100) : 0;
     onMarkDone && onMarkDone(assignment._id, {
@@ -80,6 +100,7 @@ export default function TeacherCourseNotes({ assignments = [], onMarkDone, onGoT
       progressPercent,
       status: progressPercent === 100 ? "completed" : "in_progress",
     });
+    // End: Dnyaneshwari Thorat
   };
 
   /* ── Course list view ── */
@@ -105,17 +126,24 @@ export default function TeacherCourseNotes({ assignments = [], onMarkDone, onGoT
               const entry = notesByCourseId[courseId];
               const allTopics = entry?.topics || [];
               const notesLoading = entry?.loading;
-              const done = allTopics.filter((t) => isTopicRead(c, t._id)).length;
-              const progress = allTopics.length ? Math.round((done / allTopics.length) * 100) : (c.progressPercent || 0);
+              const done = isCompletedAssignment(c) ? allTopics.length : allTopics.filter((t) => isTopicRead(c, t._id)).length;
+              const progress = isCompletedAssignment(c)
+                ? 100
+                : allTopics.length ? Math.round((done / allTopics.length) * 100) : (c.progressPercent || 0);
+              const isLocked = c.locked === true;
               return (
-                <div key={c._id} style={{ background: "white", borderRadius: 16, padding: "22px 24px", border: "1px solid #f1f5f9", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", borderLeft: "4px solid #f59e0b" }}>
+                <div key={c._id} style={{ background: "white", borderRadius: 16, padding: "22px 24px", border: "1px solid #f1f5f9", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", borderLeft: isLocked ? "4px solid #94a3b8" : "4px solid #f59e0b" }}>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
                     <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-                      <div style={{ fontSize: 36 }}>📖</div>
+                      <div style={{ fontSize: 36 }}>{isLocked ? "🔒" : "📖"}</div>
                       <div>
-                        <h3 style={{ fontSize: 16, fontWeight: 800, color: "#1c1917", margin: "0 0 6px" }}>{c.course?.title}</h3>
+                        <h3 style={{ fontSize: 16, fontWeight: 800, color: isLocked ? "#64748b" : "#1c1917", margin: "0 0 6px" }}>{c.course?.title}</h3>
                         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                          <StatusBadge status={c.status} />
+                          {isLocked ? (
+                            <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, color: "#ef4444", background: "#fee2e2" }}>🔒 Locked</span>
+                          ) : (
+                            <StatusBadge status={c.status} />
+                          )}
                           <span style={{ fontSize: 11, color: "#9ca3af" }}>📅 Due: {c.dueDate ? new Date(c.dueDate).toLocaleDateString() : "No due date"}</span>
                           <span style={{ fontSize: 11, color: "#6b7280" }}>
                             📖 {notesLoading ? "Loading…" : `${done}/${allTopics.length} topics read`}
@@ -124,25 +152,44 @@ export default function TeacherCourseNotes({ assignments = [], onMarkDone, onGoT
                       </div>
                     </div>
                     <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <div style={{ fontSize: 28, fontWeight: 900, color: "#f59e0b" }}>{progress}%</div>
+                      <div style={{ fontSize: 28, fontWeight: 900, color: isLocked ? "#94a3b8" : "#f59e0b" }}>{progress}%</div>
                       <div style={{ fontSize: 11, color: "#9ca3af" }}>Complete</div>
                     </div>
                   </div>
                   <div style={{ height: 8, background: "#f3f4f6", borderRadius: 4, overflow: "hidden", marginBottom: 12 }}>
-                    <div style={{ height: "100%", width: `${progress}%`, background: "linear-gradient(90deg,#f59e0b,#d97706)", borderRadius: 4, transition: "width 0.8s ease" }} />
+                    <div style={{ height: "100%", width: `${progress}%`, background: isLocked ? "#cbd5e1" : "linear-gradient(90deg,#f59e0b,#d97706)", borderRadius: 4, transition: "width 0.8s ease" }} />
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span style={{ fontSize: 12, color: "#6b7280" }}>📚 {allTopics.length} topics total</span>
                     <div style={{ display: "flex", gap: 8 }}>
-                      {progress === 100 && allTopics.length > 0 && onGoToAssessment && (
+                      {progress === 100 && allTopics.length > 0 && onGoToAssessment && !isLocked && (
                         <button onClick={() => onGoToAssessment(c)} style={{ ...S.exportBtn, borderColor: "#10b981", color: "#059669" }}>📝 Take Assessment</button>
                       )}
-                      <button
-                        onClick={() => { setActiveAssignmentId(c._id); setActiveTopicIdx(0); }}
-                        style={{ ...S.primaryBtn, padding: "8px 20px", fontSize: 12 }}
-                      >
-                        {progress > 0 ? "Continue Reading →" : "Start Reading →"}
-                      </button>
+                      {/* Start: Dnyaneshwari Thorat */}
+                      {onRestartCourse && !isLocked && (progress > 0 || isCompletedAssignment(c)) && (
+                        <button
+                          onClick={() => onRestartCourse(c)}
+                          style={{ ...S.exportBtn, borderColor: "#dc2626", color: "#dc2626" }}
+                        >
+                          🔄 Restart Course
+                        </button>
+                      )}
+                      {/* End: Dnyaneshwari Thorat */}
+                      {isLocked ? (
+                        <button
+                          disabled
+                          style={{ ...S.primaryBtn, padding: "8px 20px", fontSize: 12, background: "#cbd5e1", color: "#64748b", cursor: "not-allowed", border: "1px solid #cbd5e1" }}
+                        >
+                          🔒 Locked Course
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => { setActiveAssignmentId(c._id); setActiveTopicIdx(0); }}
+                          style={{ ...S.primaryBtn, padding: "8px 20px", fontSize: 12 }}
+                        >
+                          {progress > 0 ? "Continue Reading →" : "Start Reading →"}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -156,8 +203,10 @@ export default function TeacherCourseNotes({ assignments = [], onMarkDone, onGoT
 
   /* ── Notes reader view ── */
   const notesLoading = activeCourseId ? notesByCourseId[activeCourseId]?.loading : false;
-  const readCount = topics.filter((t) => isTopicRead(activeAssignment, t._id)).length;
-  const overallProg = topics.length ? Math.round((readCount / topics.length) * 100) : 0;
+  const readCount = isCompletedAssignment(activeAssignment) ? topics.length : topics.filter((t) => isTopicRead(activeAssignment, t._id)).length;
+  const overallProg = isCompletedAssignment(activeAssignment)
+    ? 100
+    : topics.length ? Math.round((readCount / topics.length) * 100) : 0;
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
@@ -212,9 +261,12 @@ export default function TeacherCourseNotes({ assignments = [], onMarkDone, onGoT
             <div style={{ padding: "24px 28px" }}>
               <div style={{ fontSize: 11, color: "#9ca3af", fontWeight: 700, marginBottom: 6 }}>TOPIC {activeTopicIdx + 1} OF {topics.length}</div>
               <div style={{ fontSize: 19, fontWeight: 900, color: "#1c1917", marginBottom: 18 }}>{activeTopic.title}</div>
-              <div style={{ fontSize: 14, color: "#374151", lineHeight: 1.9, whiteSpace: "pre-line", marginBottom: 24 }}>
-                {activeTopic.notes || <span style={{ color: "#9ca3af", fontStyle: "italic" }}>No content was added for this note.</span>}
-              </div>
+              {/* Start: Dnyaneshwari Thorat */}
+              <div 
+                style={{ fontSize: 14, color: "#374151", lineHeight: 1.9, marginBottom: 24 }}
+                dangerouslySetInnerHTML={{ __html: activeTopic.notes || '<span style="color: #9ca3af; font-style: italic;">No content was added for this note.</span>' }}
+              />
+              {/* End: Dnyaneshwari Thorat */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 16, borderTop: "1px solid #f1f5f9" }}>
                 <button
                   disabled={activeTopicIdx === 0}

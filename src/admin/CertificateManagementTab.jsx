@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { Modal, S, StatCard, StatusBadge, Toast } from "../components/Shared";
-import { getAdminCertificates, generateCertificate, revokeCertificate, getCourseAssignments, getAdminTeachers, getCourses, downloadCertificatePdf } from "../services/api";
+// Start: Dnyaneshwari Thorat
+import { getAdminCertificates, generateCertificate, revokeCertificate, getCourseAssignments, getAdminTeachers, getCourses, downloadCertificatePdf, viewCertificatePdf } from "../services/api";
+// End: Dnyaneshwari Thorat
 
 export default function CertificateManagementTab({ setToast }) {
   const [certificates, setCertificates] = useState([]);
@@ -169,21 +171,29 @@ export default function CertificateManagementTab({ setToast }) {
 
                   <StatusBadge status={cert.status} />
 
+                  {/* Start: Dnyaneshwari Thorat */}
                   <div style={{ display: "flex", gap: 6 }}>
                     {cert.status === "issued" && (
                       <>
                         <button
-  onClick={() => downloadCertificatePdf(cert._id, `Certificate-${cert.certificateNumber}.pdf`)}
-  style={{ ...S.tblBtn, color: "#2563eb", borderColor: "#bfdbfe" }}
->
-  📥 Download PDF
-</button>
+                          onClick={() => viewCertificatePdf(cert._id)}
+                          style={{ ...S.tblBtn, color: "#d97706", borderColor: "#fde68a" }}
+                        >
+                          👁️ View
+                        </button>
+                        <button
+                          onClick={() => downloadCertificatePdf(cert._id, `Certificate-${cert.certificateNumber}.pdf`)}
+                          style={{ ...S.tblBtn, color: "#2563eb", borderColor: "#bfdbfe" }}
+                        >
+                          📥 Download
+                        </button>
                         <button onClick={() => handleRevoke(cert._id)} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5" }}>
                           🚫 Revoke
                         </button>
                       </>
                     )}
                   </div>
+                  {/* End: Dnyaneshwari Thorat */}
                 </div>
                 {cert.metadata?.googleFormUrl && (
                   <div style={{ marginTop: 8, fontSize: 11, color: "#2563eb" }}>

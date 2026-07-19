@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
+// Start: Dnyaneshwari Thorat
+import { isValidPhoneNumber } from "libphonenumber-js";
+// End: Dnyaneshwari Thorat
 import { Logo, Toast, Particles, S, globalCSS } from "../components/Shared";
-import { loginUser, registerTeacher, registerMentor, requestPasswordReset, resetPassword, verifyPasswordResetToken, requestPasswordResetOtp, verifyPasswordOtp } from "../services/api";
+// Start: Dnyaneshwari Thorat
+import { loginUser, registerTeacher, registerMentor, requestPasswordReset, resetPassword, verifyPasswordResetToken, requestPasswordResetOtp, verifyPasswordOtp, sendSignupOtp, verifySignupOtp } from "../services/api";
+// End: Dnyaneshwari Thorat
 
 /* ── Animated illustration (UNCHANGED — original animation kept as-is) ── */
 function LoginIllustration() {
@@ -582,11 +587,16 @@ function ResetPasswordForm({ token, onDone }) {
 }
 
 /* ── Register Form ── */
+// Start: Dnyaneshwari Thorat
 function RegisterForm({ onBack }) {
   const [role, setRole]         = useState("teacher"); // teacher | mentor | fellow
   const [form, setForm]         = useState({ name: "", email: "", phone: "", address: "", subject: "", photo: "", password: "", confirmPassword: "" });
   const [showPass, setShowPass] = useState(false);
   const [toast, setToast]       = useState({ msg: "", type: "" });
+  const [step, setStep]         = useState("form"); // form | otp
+  const [emailOtp, setEmailOtp] = useState("");
+  const [emailOtpDev, setEmailOtpDev] = useState("");
+  const [verifying, setVerifying] = useState(false);
 
   const handlePhotoUpload = (e) => {
     const file = e.target.files[0];
@@ -598,7 +608,7 @@ function RegisterForm({ onBack }) {
     reader.readAsDataURL(file);
   };
 
-  const handleRegister = (e) => {
+  const handleRegisterClick = (e) => {
     e.preventDefault();
     const { name, email, phone, address, subject, password, confirmPassword } = form;
     if (!name || !email || !phone || !address || !subject || !password || !confirmPassword) {
@@ -608,9 +618,16 @@ function RegisterForm({ onBack }) {
 
     const emailRegex = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
     if (!emailRegex.test(email.trim())) {
-      setToast({ msg: "Please enter a valid email address (e.g. teacher@school.com)", type: "error" });
+      setToast({ msg: "Please enter a valid email address.", type: "error" });
       return;
     }
+
+    // Start: Dnyaneshwari Thorat
+    if (!isValidPhoneNumber(phone.trim(), 'IN')) {
+      setToast({ msg: "Please enter a valid Indian mobile number.", type: "error" });
+      return;
+    }
+    // End: Dnyaneshwari Thorat
 
     if (password !== confirmPassword) {
       setToast({ msg: "Passwords do not match.", type: "error" });
@@ -621,53 +638,110 @@ function RegisterForm({ onBack }) {
       return;
     }
 
-    if (role === "teacher") {
-      registerTeacher({
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-        phone,
-        password,
-        qualification: "B.Ed",
-        subject,
-        experience: "2 years",
-        address,
+    setVerifying(true);
+    sendSignupOtp(email.trim().toLowerCase())
+      .then((data) => {
+        setToast({ msg: "Verification OTP generated!", type: "success" });
+        if (data.emailOtp) {
+          setEmailOtpDev(data.emailOtp);
+        }
+        setStep("otp");
       })
-        .then(() => {
-          setToast({ msg: "Registration submitted! Awaiting admin approval.", type: "success" });
-          setTimeout(onBack, 2000);
-        })
-        .catch((err) => {
-          setToast({ msg: err.message || "Failed to submit registration.", type: "error" });
-        });
-    } else {
-      // Mentor and Fellow both register through the mentor endpoint,
-      // distinguished by the `role` field so the backend/admin dashboard can tell them apart.
-      registerMentor({
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-        phone,
-        password,
-        qualification: "Graduate",
-        specialization: subject,
-        experience: "2 years",
-        address,
-        fellowshipSemester: role === "fellow" ? 1 : undefined,
-        role, // "mentor" or "fellow"
+      .catch((err) => {
+        setToast({ msg: err.message || "Failed to send verification code.", type: "error" });
       })
-        .then(() => {
-          const msg = role === "fellow"
-            ? "Registration successful! You can sign in now."
-            : "Registration submitted! Awaiting admin approval.";
-          setToast({ msg, type: "success" });
-          setTimeout(onBack, 2000);
-        })
-        .catch((err) => {
-          setToast({ msg: err.message || "Failed to submit registration.", type: "error" });
-        });
+      .finally(() => setVerifying(false));
+  };
+
+  const handleVerifyAndSubmit = (e) => {
+    e.preventDefault();
+    if (emailOtp.length !== 6) {
+      setToast({ msg: "Please enter the complete 6-digit email OTP.", type: "error" });
+      return;
     }
+
+    const { name, email, phone, address, subject, password } = form;
+    setVerifying(true);
+
+    verifySignupOtp(email.trim().toLowerCase(), emailOtp)
+      .then(() => {
+        if (role === "teacher") {
+          return registerTeacher({
+            name: name.trim(),
+            email: email.trim().toLowerCase(),
+            phone: phone.trim(),
+            password,
+            qualification: "B.Ed",
+            subject,
+            experience: "2 years",
+            address,
+          });
+        } else {
+          return registerMentor({
+            name: name.trim(),
+            email: email.trim().toLowerCase(),
+            phone: phone.trim(),
+            password,
+            qualification: "Graduate",
+            specialization: subject,
+            experience: "2 years",
+            address,
+            fellowshipSemester: role === "fellow" ? 1 : undefined,
+            role,
+          });
+        }
+      })
+      .then(() => {
+        const successMsg = role === "fellow"
+          ? "Registration successful! You can sign in now."
+          : "Registration submitted! Awaiting admin approval.";
+        setToast({ msg: successMsg, type: "success" });
+        setTimeout(onBack, 2000);
+      })
+      .catch((err) => {
+        setToast({ msg: err.message || "Failed to submit registration.", type: "error" });
+      })
+      .finally(() => setVerifying(false));
   };
 
   const roleLabel = role === "teacher" ? "Teacher" : role === "mentor" ? "Mentor" : "Fellow";
+
+  if (step === "otp") {
+    return (
+      <>
+        <Toast msg={toast.msg} type={toast.type} onClose={() => setToast({ msg: "", type: "" })} />
+        <Logo size={100} />
+        <div style={{ textAlign: "center", marginBottom: 14 }}>
+          <span style={ls.badge}>Verify Email</span>
+          <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>
+            Enter the 6-digit verification code sent to <b>{form.email}</b>
+          </p>
+        </div>
+
+        <form onSubmit={handleVerifyAndSubmit}>
+          <div style={{ marginBottom: 15 }}>
+            <label style={{ ...ci.label, display: "block", textAlign: "center", marginBottom: 6 }}>Email Verification Code</label>
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              <OtpInput length={6} value={emailOtp} onChange={setEmailOtp} disabled={verifying} />
+            </div>
+            {emailOtpDev && (
+              <p style={{ fontSize: 10, color: "#10b981", textAlign: "center", marginTop: 10, fontWeight: 700 }}>
+                💡 Dev Mode: Email OTP is <b>{emailOtpDev}</b>
+              </p>
+            )}
+          </div>
+
+          <button type="submit" disabled={verifying} style={{ ...S.primaryBtn, width: "100%", padding: "9px", fontSize: 13, opacity: verifying ? 0.7 : 1 }}>
+            {verifying ? "Verifying..." : "Verify & Complete Registration"}
+          </button>
+        </form>
+        <p style={{ textAlign: "center", fontSize: 11, color: "#9ca3af", marginTop: 12, marginBottom: 0 }}>
+          {/* End: Dnyaneshwari Thorat */}
+          <span onClick={() => setStep("form")} style={{ color: "#d97706", fontWeight: 700, cursor: "pointer" }}>← Edit Registration Info</span>
+        </p>
+      </>
+    );
+  }
 
   return (
     <>
@@ -691,7 +765,7 @@ function RegisterForm({ onBack }) {
         </select>
       </div>
 
-      <form onSubmit={handleRegister}>
+      <form onSubmit={handleRegisterClick}>
         <div style={{ display: "flex", gap: 10 }}>
           <div style={{ flex: 1, ...ci.mb }}>
             <label style={ci.label}>Full Name</label>
@@ -710,7 +784,7 @@ function RegisterForm({ onBack }) {
         </div>
         {[
           { key: "email", label: "Email Address *", icon: "📧", type: "email", ph: "teacher@school.edu" },
-          { key: "phone", label: "Phone *", icon: "📱", type: "tel", ph: "+91 98765 43210" },
+          { key: "phone", label: "Phone (10-Digit Mobile) *", icon: "📱", type: "tel", ph: "9876543210" },
         ].map(f => (
           <div key={f.key} style={ci.mb}>
             <label style={ci.label}>{f.label}</label>
@@ -731,6 +805,11 @@ function RegisterForm({ onBack }) {
             {f.key === "email" && form.email && (
               <p style={{ fontSize: 10, fontWeight: 600, marginTop: 3, marginBottom: 0, color: /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(form.email) ? "#10b981" : "#ef4444" }}>
                 {/^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(form.email) ? "✅ Valid email address" : "❌ Invalid email — use format: name@domain.com"}
+              </p>
+            )}
+            {f.key === "phone" && form.phone && (
+              <p style={{ fontSize: 10, fontWeight: 600, marginTop: 3, marginBottom: 0, color: /^[6-9]\d{9}$/.test(form.phone.trim()) ? "#10b981" : "#ef4444" }}>
+                {/^[6-9]\d{9}$/.test(form.phone.trim()) ? "✅ Valid 10-digit Indian phone number" : "❌ Invalid phone — must be a 10-digit number starting with 6-9"}
               </p>
             )}
           </div>
@@ -769,7 +848,9 @@ function RegisterForm({ onBack }) {
               onChange={e => setForm({ ...form, confirmPassword: e.target.value })} placeholder="Re-enter password" />
           </div>
         </div>
-        <button type="submit" style={{ ...S.primaryBtn, width: "100%", padding: "9px", fontSize: 13 }}>Submit Registration →</button>
+        <button type="submit" disabled={verifying} style={{ ...S.primaryBtn, width: "100%", padding: "9px", fontSize: 13, opacity: verifying ? 0.7 : 1 }}>
+          {verifying ? "Sending Verification..." : "Submit Registration →"}
+        </button>
       </form>
       <p style={{ textAlign: "center", fontSize: 11, color: "#9ca3af", marginTop: 12, marginBottom: 0 }}>
         Already registered?{" "}
@@ -778,6 +859,7 @@ function RegisterForm({ onBack }) {
     </>
   );
 }
+// End: Dnyaneshwari Thorat
 
 /* ── Main LoginPage Export ── */
 export default function LoginPage({ onLogin }) {

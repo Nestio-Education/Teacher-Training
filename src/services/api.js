@@ -74,6 +74,22 @@ export function verifyPasswordOtp(email, otp) {
   });
 }
 
+// Start: Dnyaneshwari Thorat
+export function sendSignupOtp(email) {
+  return request("/api/auth/send-signup-otp", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function verifySignupOtp(email, emailOtp) {
+  return request("/api/auth/verify-signup-otp", {
+    method: "POST",
+    body: JSON.stringify({ email, emailOtp }),
+  });
+}
+// End: Dnyaneshwari Thorat
+
 export function getStoredSession() {
   const token = localStorage.getItem("spaceece_auth_token");
   const rawUser = localStorage.getItem("spaceece_user");
@@ -196,6 +212,23 @@ export function createTeacherChild(childData) {
     body: JSON.stringify(childData)
   });
 }
+
+// Start: Dnyaneshwari Thorat
+export function createTeacherChildrenBulk(childrenList) {
+  return request("/api/teacher/children/bulk", {
+    method: "POST",
+    body: JSON.stringify({ children: childrenList })
+  });
+}
+// End: Dnyaneshwari Thorat
+
+// Start: Dnyaneshwari Thorat
+export function deleteTeacherChild(id) {
+  return request(`/api/teacher/children/${id}`, {
+    method: "DELETE"
+  });
+}
+// End: Dnyaneshwari Thorat
 
 export function updateChild(id, childData) {
   return request(`/api/admin/children/${id}`, {
@@ -471,6 +504,14 @@ export function updateCourseAssignmentProgress(assignmentId, payload) {
   });
 }
 
+// Start: Dnyaneshwari Thorat
+export function resetCourseAssignmentProgress(assignmentId) {
+  return request(`/api/teacher/courses/assignments/${assignmentId}/reset`, {
+    method: "POST"
+  });
+}
+// End: Dnyaneshwari Thorat
+
 export function getCourseNotes(courseId) {
   return request(`/api/courses/${courseId}/notes`);
 }
@@ -612,6 +653,15 @@ export function saveChildAttendance(payload) {
     body: JSON.stringify(payload)
   });
 }
+
+// Start: Dnyaneshwari Thorat
+export function deleteChildAttendance(params = {}) {
+  const searchParams = new URLSearchParams(params);
+  return request(`/api/attendance/children?${searchParams.toString()}`, {
+    method: "DELETE"
+  });
+}
+// End: Dnyaneshwari Thorat
 
 export function getTeacherAttendance(params = {}) {
   const searchParams = new URLSearchParams(params);
@@ -1054,6 +1104,22 @@ export async function downloadCertificatePdf(certificateId, filenameHint) {
   a.remove();
   window.URL.revokeObjectURL(url);
 }
+
+// Start: Dnyaneshwari Thorat
+export async function viewCertificatePdf(certificateId) {
+  const token = localStorage.getItem("spaceece_auth_token");
+  const res = await fetch(`${API_BASE_URL}/api/certificates/${certificateId}/pdf?view=true`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || "Failed to view certificate");
+  }
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  window.open(url, "_blank");
+}
+// End: Dnyaneshwari Thorat
 // ── Activity Bank API ──
 export function createActivityBank(data) {
   return request("/api/daily-task-automation/activities", {

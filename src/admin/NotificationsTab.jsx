@@ -16,6 +16,7 @@ const CHANNEL_CONFIG = {
   email: { icon: "📧", label: "Email", color: "#0ea5e9", bg: "#cffafe" },
   sms: { icon: "💬", label: "SMS", color: "#10b981", bg: "#d1fae5" },
   whatsapp: { icon: "🟢", label: "WhatsApp", color: "#25d366", bg: "#dcfce7" },
+  all: { icon: "🌐", label: "All channels", color: "#f59e0b", bg: "#fef3c7" },
 };
 
 export default function NotificationsTab({ teachers = [], setToast }) {
@@ -111,7 +112,7 @@ export default function NotificationsTab({ teachers = [], setToast }) {
       if (!keepForm) clearForm();
 
       setToast?.({
-        msg: `Notification sent to ${data?.recipientCount || 0} teachers.`,
+        msg: `Notification sent to ${data?.recipientCount || 0} teachers via ${data?.channels?.join(", ") || channel}.`,
         type: "success",
       });
 
@@ -342,12 +343,18 @@ export default function NotificationsTab({ teachers = [], setToast }) {
 
           <div style={{ marginBottom: 12 }}>
             <label style={S.label}>Channel</label>
+            {/* Start: Dnyaneshwari Thorat */}
             <select value={channel} onChange={(e) => setChannel(e.target.value)} style={{ ...S.input, marginBottom: 8, background: "white" }}>
+              <option value="all">🌐 All channels</option>
               <option value="in_app">📱 In-app notification</option>
               <option value="email">📧 Email (requires SMTP config)</option>
               <option value="sms">💬 SMS (requires Twilio config)</option>
               <option value="whatsapp">🟢 WhatsApp (requires Twilio config)</option>
             </select>
+            <div style={{ fontSize: 11, color: "#6b7280", lineHeight: 1.5 }}>
+              Choose <b>All channels</b> to send the same notification through in-app, email, SMS, and WhatsApp together.
+            </div>
+            {/* End: Dnyaneshwari Thorat */}
           </div>
 
           <div style={{ marginBottom: 12, fontSize: 12, color: "#64748b" }}>
