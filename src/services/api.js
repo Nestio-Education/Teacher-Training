@@ -600,6 +600,33 @@ export function reviewActivity(id, reviewData) {
   });
 }
 
+
+// AI Activity APIs (Lesson Planner)
+export function getAIActivities(params = {}) {
+  const searchParams = new URLSearchParams(params);
+  return request(`/api/ai-activities?${searchParams.toString()}`);
+}
+
+export function saveAIActivity(activityData) {
+  return request("/api/ai-activities", {
+    method: "POST",
+    body: JSON.stringify(activityData)
+  });
+}
+
+export function updateAIActivityStatus(id, status) {
+  return request(`/api/ai-activities/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status })
+  });
+}
+
+export function deleteAIActivity(id) {
+  return request(`/api/ai-activities/${id}`, {
+    method: "DELETE"
+  });
+}
+
 // Attendance APIs
 export function getChildAttendance(params = {}) {
   const searchParams = new URLSearchParams(params);

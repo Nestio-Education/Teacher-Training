@@ -15,6 +15,7 @@ import ReportsTab from "../admin/ReportsTab";
 import NotificationsTab from "../admin/NotificationsTab";
 import SettingsTab from "../admin/SettingsTab";
 import FeedbackManagementTab from "../admin/FeedbackManagementTab";
+import LessonPlannerTab from "./LessonPlannerTab";
 //import ScheduleManagementTab from "../admin/ScheduleManagementTab";
 //import CertificateManagementTab from "../admin/CertificateManagementTab";
 //import AutomationTab from "../admin/AutomationTab";
@@ -94,6 +95,8 @@ export default function AdminDashboard({ user, onLogout }) {
     { key: "curriculum", label: "Course Management", icon: "\uD83D\uDCDA" },
     { key: "activities", label: "Activity Monitoring", icon: "\uD83D\uDCF8" },
     { key: "lessonplans", label: "Lesson Plans", icon: "\uD83D\uDCCB" },
+    { key: "planner", label: "AI Lesson Planner", icon: "\u270F\uFE0F" },
+
     { key: "children", label: "Children & Classes", icon: "\uD83D\uDC76" },
     { key:"trainers",     label:"Trainer Management",icon:"\uD83C\uDF93" },
     { key:"assignments",  label:"Assignment Review", icon:"📝", badge:assignments.filter(a=>a.status==="pending").length },
@@ -134,6 +137,7 @@ export default function AdminDashboard({ user, onLogout }) {
       case "lessonplans": return <LessonPlanManagementTab setToast={setToast} />;
       case "children": return <ChildrenManagementTab setToast={setToast}/>;
       case "trainers": return <TrainerManagementTab batches={[]} setToast={setToast}/>;
+      case "planner": return <LessonPlannerTab setToast={setToast} user={user} />;
        case "assignments":  return <AssignmentReviewTab assignments={assignments} setAssignments={setAssignments} setToast={setToast} teachers={teachers} user={user}/>;
       case "attendance":   return <AttendanceTab teachers={teachers} sessions={[]}/>;
       case "reports":      return <ReportsTab teachers={teachers} courses={courses} batches={[]}/>;
