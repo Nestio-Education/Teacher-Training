@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Logo, Toast, Badge, StatusBadge, StatCard, SectionCard, S, globalCSS } from "../components/Shared";
 import { t, setLanguage, getLanguageList, getCurrentLanguage, LANG_CHANGE_EVENT } from "../services/i18n";
 import { updateTeacherNotificationPreference } from "../services/api";
@@ -14,6 +14,7 @@ import {
   markNotificationRead,
   askTeacherChatbot,
   updateCourseAssignmentProgress,
+  resetCourseAssignmentProgress,
   updateTeacherMe,
   getTeacherMe,
   uploadFile,
@@ -26,7 +27,12 @@ import {
   createTeacherChild,
   getTeacherClasses
 } from "../services/api";
-import { downloadCertificatePdf } from "../services/api";
+// Start: Dnyaneshwari Thorat
+import { downloadCertificatePdf, viewCertificatePdf } from "../services/api";
+// Start: Dnyaneshwari Thorat
+import { onSocketEvent } from "../services/socket";
+// End: Dnyaneshwari Thorat
+// End: Dnyaneshwari Thorat
 
 /* Resolve a profile photo path to a full URL */
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
@@ -93,9 +99,26 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
   const attColor   = attendance>=85 ? "#10b981" : attendance>=70 ? "#f59e0b" : "#ef4444";
   const photoUrl = getTeacherPhotoUrl(user);
 
+  // Start: Dnyaneshwari Thorat
+  const isVisibleCourse = (item) => {
+    const title = item?.course?.title || item?.title || "";
+    return !title.toLowerCase().includes("ai testing");
+  };
+
+  const isFinishedCourse = (item) =>
+    item?.status === "completed" ||
+    item?.status === "approved" ||
+    item?.progressPercent === 100;
+
+  const visibleAssignments = assignments.filter(isVisibleCourse);
+  const activeAssignments = visibleAssignments.filter((item) => !isFinishedCourse(item));
+  const featuredAssignments = visibleAssignments.slice(0, 5);
+  const featuredCourseProgress = visibleAssignments.slice(0, 3);
+  // End: Dnyaneshwari Thorat
+
   const certificatesCount = courses.filter(c => c.status === "completed" || c.progressPercent === 100).length;
-  const pendingTasksCount = assignments.filter(a => a.status === "assigned" || a.status === "revision").length;
-  const gradedAssignments = assignments.filter(a => a.score !== null && a.score !== undefined);
+  const pendingTasksCount = activeAssignments.filter(a => a.status === "assigned" || a.status === "revision").length;
+  const gradedAssignments = visibleAssignments.filter(a => a.score !== null && a.score !== undefined);
   const averageScore = gradedAssignments.length ? Math.round(gradedAssignments.reduce((sum, a) => sum + Number(a.score || 0), 0) / gradedAssignments.length) : 0;
   const centerName = user.teacherProfile?.center
     ? [user.teacherProfile.center.name, user.teacherProfile.center.city].filter(Boolean).join(", ")
@@ -202,10 +225,9 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
           const d = l.lessonPlan?.scheduleDate ? new Date(l.lessonPlan.scheduleDate).toISOString().split("T")[0] : "";
           return d === today;
         });
-        const todayAssignments = assignments.filter(a => {
-          if (a.status === "completed" || a.status === "approved") return false;
-          return true;
-        }).slice(0, 5);
+        // Start: Dnyaneshwari Thorat
+        const todayAssignments = featuredAssignments;
+        // End: Dnyaneshwari Thorat
         if (todayLessons.length === 0 && todayAssignments.length === 0) return null;
         return (
           <div style={{ background: "linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%)", borderRadius: 16, border: "1px solid #fcd34d", padding: 20, marginBottom: 20 }}>
@@ -231,12 +253,16 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
               )}
               {todayAssignments.length > 0 && (
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#92400e", marginBottom: 8 }}>📝 Pending Tasks ({todayAssignments.length})</div>
+                  {/* Start: Dnyaneshwari Thorat */}
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#92400e", marginBottom: 8 }}>📘 Assigned Courses ({todayAssignments.length})</div>
+                  {/* End: Dnyaneshwari Thorat */}
                   {todayAssignments.map((a, i) => (
                     <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: "white", borderRadius: 8, marginBottom: 6, border: "1px solid #fde68a" }}>
                       <div style={{ width: 6, height: 6, borderRadius: "50%", background: a.status === "revision" ? "#ef4444" : "#f59e0b", flexShrink: 0 }} />
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: "#1c1917" }}>{(a.title || a.course?.title || "Task").substring(0, 30)}</div>
+                        {/* Start: Dnyaneshwari Thorat */}
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "#1c1917" }}>{(a.course?.title || a.title || "Task").substring(0, 30)}</div>
+                        {/* End: Dnyaneshwari Thorat */}
                       </div>
                       <StatusBadge status={a.status} />
                     </div>
@@ -265,7 +291,9 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
           {courses.length === 0 ? (
             <div style={{ padding: 20, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>No assigned courses yet.</div>
           ) : (
-            courses.slice(0, 3).map((c, i) => {
+            // Start: Dnyaneshwari Thorat
+            featuredCourseProgress.map((c, i) => {
+            // End: Dnyaneshwari Thorat
               const progress = c.progressPercent || 0;
               return (
                 <div key={i} style={{ marginBottom: 14 }}>
@@ -676,14 +704,24 @@ function CertificatesTab({ assignments = [], certificates: certs = [] }) {
                 {isRealCert && <Badge children={item.status === "issued" ? "Issued" : item.status} color="#7c3aed" bg="#ede9fe"/>}
               </div>
               <div style={{ fontSize: 11, color: "#6b7280" }}>Credential ID: {certId}</div>
+              {/* Start: Dnyaneshwari Thorat */}
               {isRealCert && (
-  <button
-    onClick={() => downloadCertificatePdf(item._id, `Certificate-${item.certificateNumber}.pdf`)}
-    style={{ marginTop: 12, width: "100%", padding: "8px 0", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "white", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
-  >
-    ⬇ Download Certificate
-  </button>
-)}
+                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                  <button
+                    onClick={() => viewCertificatePdf(item._id)}
+                    style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "1px solid #d97706", background: "white", color: "#d97706", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+                  >
+                    👁️ View Certificate
+                  </button>
+                  <button
+                    onClick={() => downloadCertificatePdf(item._id, `Certificate-${item.certificateNumber}.pdf`)}
+                    style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "white", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+                  >
+                    ⬇️ Download
+                  </button>
+                </div>
+              )}
+              {/* End: Dnyaneshwari Thorat */}
             </div>
           );
         })}
@@ -1249,7 +1287,29 @@ function ProfileTab({ user, onWorkingCenterChange, onUserUpdate }) {
 }
 
 function NotificationsTab({ notifications = [], onMarkRead, onMarkAllRead }) {
-  const icons = { session: "📹", assignment: "📝", approval: "✅", certificate: "🏆", course: "📚" };
+  // Start: Dnyaneshwari Thorat
+  const icons = {
+    // course-related
+    course: "📚", course_assigned: "📚", course_allocated: "📚",
+    // certificate
+    certificate: "🏆", certificate_issued: "🏆", certificate_generated: "🏆",
+    // lesson / session
+    session: "📹", lesson: "📖", lesson_assigned: "📖",
+    // assignment / task
+    assignment: "📝", task: "📝", daily_task: "📝",
+    // approvals
+    approval: "✅", approved: "✅", status: "✅",
+    // attendance
+    attendance: "📋", attendance_alert: "⚠️",
+    // general
+    info: "ℹ️", warning: "⚠️", alert: "🔔", system: "⚙️",
+  };
+  const getIcon = (type) => {
+    if (!type) return "🔔";
+    const lower = String(type).toLowerCase();
+    return icons[lower] || "🔔";
+  };
+  // End: Dnyaneshwari Thorat
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
@@ -1268,7 +1328,7 @@ function NotificationsTab({ notifications = [], onMarkRead, onMarkAllRead }) {
         ) : (
           notifications.map(n=>(
             <div key={n.id} onClick={()=>!n.read && onMarkRead(n.id)} style={{ background: n.read?"white":"#fffbeb", borderRadius: 14, padding: "14px 18px", border: `1px solid ${n.read?"#f1f5f9":"#fbbf24"}`, display: "flex", alignItems: "center", gap: 14, cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", borderLeft: `4px solid ${n.read?"#e5e7eb":"#f59e0b"}` }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: n.read?"#f3f4f6":"#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{icons[n.type] || "🔔"}</div>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: n.read?"#f3f4f6":"#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{getIcon(n.type)}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: n.read?500:700, color: "#1c1917" }}>{n.msg}</div>
                 <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>{n.time}</div>
@@ -1487,7 +1547,14 @@ export default function TeacherDashboard({ user, onLogout }) {
         getTeacherClasses(),
       ]);
       if (progressRes) {
-        setCourses(progressRes.courses || []);
+        // Start: Dnyaneshwari Thorat
+        const filteredCourses = (progressRes.courses || []).filter(c => {
+          if (!c.course) return false;
+          const title = c.course.title || "";
+          return !title.toLowerCase().includes("ai testing");
+        });
+        setCourses(filteredCourses);
+        // End: Dnyaneshwari Thorat
         setLessons(progressRes.lessons || []);
         setActivities(progressRes.activities || []);
         setSummary(progressRes.summary || {});
@@ -1537,6 +1604,27 @@ export default function TeacherDashboard({ user, onLogout }) {
     refreshCoreData().finally(() => setLoading(false));
   }, [user]);
 
+  // Start: Dnyaneshwari Thorat
+  useEffect(() => {
+    const unsubscribe = onSocketEvent("notification:new", (newNotif) => {
+      let timeVal = "Just now";
+      const mapped = {
+        id: newNotif._id,
+        type: newNotif.type || "info",
+        msg: newNotif.body ? `${newNotif.title}: ${newNotif.body}` : newNotif.title || "",
+        time: timeVal,
+        read: newNotif.read
+      };
+      setNotifications((prev) => [mapped, ...prev]);
+      setToast({ msg: `🔔 ${newNotif.title}`, type: "info" });
+    });
+
+    return () => {
+      if (typeof unsubscribe === "function") unsubscribe();
+    };
+  }, []);
+  // End: Dnyaneshwari Thorat
+
   useEffect(() => {
     if (selectedChildClassId) {
       getTeacherChildren(selectedChildClassId)
@@ -1566,6 +1654,22 @@ export default function TeacherDashboard({ user, onLogout }) {
     setToast({ msg: "Assignment submitted successfully! 📤", type: "success" });
     refreshCoreData();
   };
+
+  // Start: Dnyaneshwari Thorat
+  const handleRestartCourse = async (assignment) => {
+    if (!assignment?._id) return;
+    const title = assignment?.course?.title || assignment?.title || "this course";
+    if (!window.confirm(`Restart ${title}? This will remove the certificate and reset course progress back to 0%.`)) return;
+    try {
+      await resetCourseAssignmentProgress(assignment._id);
+      setToast({ msg: `Course restarted: ${title}`, type: "success" });
+      await refreshCoreData();
+    } catch (err) {
+      console.error("Failed to reset course:", err);
+      setToast({ msg: err.message || "Failed to restart course.", type: "error" });
+    }
+  };
+  // End: Dnyaneshwari Thorat
 
   const handleMarkNotifRead = async (notifId) => {
     try {
@@ -1668,6 +1772,7 @@ export default function TeacherDashboard({ user, onLogout }) {
             assignments={courses}
             onMarkDone={handleMarkDone}
             onGoToAssessment={() => handleTabSwitch("assessment")}
+            onRestartCourse={handleRestartCourse}
           />
         );
       case "assessment":

@@ -4,7 +4,7 @@ import AdminDashboard   from "./pages/AdminDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
 import MentorDashboard  from "./mentor/MentorDashboard";
 import { getStoredSession, storeSession, clearSession } from "./services/api";
-import { LANG_CHANGE_EVENT, setLanguage } from "./services/i18n";
+import { LANG_CHANGE_EVENT, setLanguage, startDOMTranslation, stopDOMTranslation } from "./services/i18n";
 import { SocketProvider } from "./context/SocketContext";
 
 export default function App() {
@@ -28,6 +28,13 @@ export default function App() {
     window.addEventListener(LANG_CHANGE_EVENT, handler);
     return () => window.removeEventListener(LANG_CHANGE_EVENT, handler);
   }, []);
+
+  // Start: Dnyaneshwari Thorat
+  useEffect(() => {
+    startDOMTranslation();
+    return () => stopDOMTranslation();
+  }, [langKey]);
+  // End: Dnyaneshwari Thorat
 
   const handleLogin = (session) => {
     const user = session.user || session;

@@ -288,10 +288,15 @@ router.get("/:id/pdf", requireAuth, async (req, res, next) => {
     const pdfBuffer = Buffer.from(pdfUint8);
     await browser.close();
 
+    // Start: Dnyaneshwari Thorat
+    const isView = req.query.view === "true";
     res.set({
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="Certificate-${cert.certificateNumber}.pdf"`,
+      "Content-Disposition": isView 
+        ? "inline"
+        : `attachment; filename="Certificate-${cert.certificateNumber}.pdf"`,
     });
+    // End: Dnyaneshwari Thorat
     res.send(pdfBuffer);
   } catch (err) {
     next(err);
