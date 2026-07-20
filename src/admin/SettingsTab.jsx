@@ -27,7 +27,10 @@ export default function SettingsTab({ setToast }) {
     smtpHost: "", smtpPort: 587, smtpUser: "", smtpPass: "", fromEmail: "", fromName: "",
   });
   const [twilioConfig, setTwilioConfig] = useState({
+    messagingProvider: "twilio",
     twilioSid: "", twilioToken: "", twilioFrom: "",
+    vonageApiKey: "", vonageApiSecret: "", vonageFrom: "SpacECE",
+    fast2smsKey: ""
   });
   const [passwordPolicy, setPasswordPolicy] = useState({
     minLength: 8,
@@ -81,9 +84,14 @@ export default function SettingsTab({ setToast }) {
             fromName: serverSettings.fromName || prev.fromName,
           }));
           setTwilioConfig((prev) => ({
+            messagingProvider: serverSettings.messagingProvider || prev.messagingProvider || "twilio",
             twilioSid: serverSettings.twilioSid || prev.twilioSid,
             twilioToken: serverSettings.twilioToken || prev.twilioToken,
             twilioFrom: serverSettings.twilioFrom || prev.twilioFrom,
+            vonageApiKey: serverSettings.vonageApiKey || prev.vonageApiKey,
+            vonageApiSecret: serverSettings.vonageApiSecret || prev.vonageApiSecret,
+            vonageFrom: serverSettings.vonageFrom || prev.vonageFrom,
+            fast2smsKey: serverSettings.fast2smsKey || prev.fast2smsKey,
           }));
           setPasswordPolicy((prev) => ({
             minLength: safeNum(serverSettings.minLength, prev.minLength),
@@ -213,9 +221,14 @@ export default function SettingsTab({ setToast }) {
         smtpPass: emailConfig.smtpPass,
         fromEmail: emailConfig.fromEmail,
         fromName: emailConfig.fromName,
+        messagingProvider: twilioConfig.messagingProvider,
         twilioSid: twilioConfig.twilioSid,
         twilioToken: twilioConfig.twilioToken,
         twilioFrom: twilioConfig.twilioFrom,
+        vonageApiKey: twilioConfig.vonageApiKey,
+        vonageApiSecret: twilioConfig.vonageApiSecret,
+        vonageFrom: twilioConfig.vonageFrom,
+        fast2smsKey: twilioConfig.fast2smsKey,
         gradeAPlus: gradingConfig.gradeAPlus,
         gradeA: gradingConfig.gradeA,
         gradeBPlus: gradingConfig.gradeBPlus,
@@ -554,26 +567,74 @@ export default function SettingsTab({ setToast }) {
 
           {/* SMS / WhatsApp Configuration */}
           {activeSection === "messaging" && (
-            <SectionCard title="💬 SMS & WhatsApp (Twilio) Configuration">
+            <SectionCard title="💬 Messaging Channel Configuration">
               <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 16, lineHeight: 1.5 }}>
-                Configure Twilio credentials to send real SMS and WhatsApp messages to registered teacher phone numbers.
+                Configure the messaging gateway to send verification codes (OTPs) and notifications to registered teacher phone numbers.
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                <div>
-                  <label style={S.label}>Twilio Account SID</label>
-                  <input type="text" style={S.input} placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxx" value={twilioConfig.twilioSid} onChange={(e) => { setTwilioConfig((p) => ({ ...p, twilioSid: e.target.value })); markDirty(); }} />
-                </div>
-                <div>
-                  <label style={S.label}>Twilio Auth Token</label>
-                  <input type="password" style={S.input} placeholder="••••••••••••••••••••••••••••" value={twilioConfig.twilioToken} onChange={(e) => { setTwilioConfig((p) => ({ ...p, twilioToken: e.target.value })); markDirty(); }} />
-                </div>
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <label style={S.label}>Twilio From Number</label>
-                  <input type="text" style={S.input} placeholder="+1234567890 (for WhatsApp: whatsapp:+1234567890)" value={twilioConfig.twilioFrom} onChange={(e) => { setTwilioConfig((p) => ({ ...p, twilioFrom: e.target.value })); markDirty(); }} />
-                </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={S.label}>Select Messaging Provider</label>
+                <select 
+                  style={{ ...S.input, background: "white" }} 
+                  value={twilioConfig.messagingProvider} 
+                  onChange={(e) => { setTwilioConfig((p) => ({ ...p, messagingProvider: e.target.value })); markDirty(); }}
+                >
+                  <option value="twilio">Twilio (SMS & WhatsApp)</option>
+                  <option value="vonage">Vonage / Nexmo (SMS)</option>
+                  <option value="fast2sms">Fast2SMS (SMS — Ideal for India)</option>
+                </select>
               </div>
+
+              {/* Twilio Options */}
+              {twilioConfig.messagingProvider === "twilio" && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label style={S.label}>Twilio Account SID</label>
+                    <input type="text" style={S.input} placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxx" value={twilioConfig.twilioSid} onChange={(e) => { setTwilioConfig((p) => ({ ...p, twilioSid: e.target.value })); markDirty(); }} />
+                  </div>
+                  <div>
+                    <label style={S.label}>Twilio Auth Token</label>
+                    <input type="password" style={S.input} placeholder="••••••••••••••••••••••••••••" value={twilioConfig.twilioToken} onChange={(e) => { setTwilioConfig((p) => ({ ...p, twilioToken: e.target.value })); markDirty(); }} />
+                  </div>
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <label style={S.label}>Twilio From Number</label>
+                    <input type="text" style={S.input} placeholder="+1234567890 (for WhatsApp: whatsapp:+1234567890)" value={twilioConfig.twilioFrom} onChange={(e) => { setTwilioConfig((p) => ({ ...p, twilioFrom: e.target.value })); markDirty(); }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Vonage Options */}
+              {twilioConfig.messagingProvider === "vonage" && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label style={S.label}>Vonage API Key</label>
+                    <input type="text" style={S.input} placeholder="apiKey" value={twilioConfig.vonageApiKey} onChange={(e) => { setTwilioConfig((p) => ({ ...p, vonageApiKey: e.target.value })); markDirty(); }} />
+                  </div>
+                  <div>
+                    <label style={S.label}>Vonage API Secret</label>
+                    <input type="password" style={S.input} placeholder="apiSecret" value={twilioConfig.vonageApiSecret} onChange={(e) => { setTwilioConfig((p) => ({ ...p, vonageApiSecret: e.target.value })); markDirty(); }} />
+                  </div>
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <label style={S.label}>Sender SenderID / Name</label>
+                    <input type="text" style={S.input} placeholder="e.g. SpacECE" value={twilioConfig.vonageFrom} onChange={(e) => { setTwilioConfig((p) => ({ ...p, vonageFrom: e.target.value })); markDirty(); }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Fast2SMS Options */}
+              {twilioConfig.messagingProvider === "fast2sms" && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label style={S.label}>Fast2SMS Authorization API Key</label>
+                    <input type="password" style={S.input} placeholder="Enter Authorization Key..." value={twilioConfig.fast2smsKey} onChange={(e) => { setTwilioConfig((p) => ({ ...p, fast2smsKey: e.target.value })); markDirty(); }} />
+                  </div>
+                </div>
+              )}
+
               <div style={{ background: "#fef3c7", padding: "12px 16px", borderRadius: 10, border: "1px solid #fbbf24", fontSize: 12, color: "#92400e" }}>
-                Get credentials from <a href="https://console.twilio.com" target="_blank" rel="noopener noreferrer" style={{ color: "#2563eb" }}>Twilio Console</a>. For WhatsApp, enable the WhatsApp sandbox and use <code>whatsapp:+14155238886</code> as the from number.
+                {twilioConfig.messagingProvider === "twilio" && "Get Twilio credentials from Twilio Console. For WhatsApp, ensure sandbox is enabled."}
+                {twilioConfig.messagingProvider === "vonage" && "Configure Vonage API Key/Secret. SMS will be delivered internationally."}
+                {twilioConfig.messagingProvider === "fast2sms" && "Configure Fast2SMS API key. High delivery rates for Indian mobile numbers."}
               </div>
             </SectionCard>
           )}

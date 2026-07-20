@@ -57,11 +57,18 @@ export async function autoSeed() {
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
+  // Start: Dnyaneshwari Thorat
   const teacherInputs = [
     { name: "Dnyaneshwari Thorat", email: "dnyaneshwarit27@gmail.com", phone: "8605689467", subject: "Pre-Primary", qualification: "Graduate" },
     { name: "Gauri Thorat", email: "dnyaneshwarithrt@gmail.com", phone: "8605689467", subject: "Montessori", qualification: "Graduate" },
-    { name: "Abhishek Thorat", email: "thoratdnyanu@gmail.com", phone: "8605689467", subject: "ECCE", qualification: "Graduate" },
   ];
+
+  // Clean up any other teachers from the database
+  await User.deleteMany({
+    role: "teacher",
+    email: { $nin: ["dnyaneshwarit27@gmail.com", "dnyaneshwarithrt@gmail.com"] }
+  });
+  // End: Dnyaneshwari Thorat
 
   const teachers = [];
   for (const input of teacherInputs) {
@@ -148,21 +155,20 @@ export async function autoSeed() {
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
-  await CourseAssignment.bulkWrite(
-    teachers.map((teacher) => ({
-      updateOne: {
-        filter: { course: course._id, teacher: teacher._id },
-        update: {
-          course: course._id,
-          teacher: teacher._id,
-          assignedBy: admin._id,
-          progressPercent: 0,
-          status: "assigned",
-        },
-        upsert: true,
-      },
-    }))
-  );
+  // Start: Dnyaneshwari Thorat
+  for (const teacher of teachers) {
+    const existing = await CourseAssignment.findOne({ course: course._id, teacher: teacher._id });
+    if (!existing) {
+      await CourseAssignment.create({
+        course: course._id,
+        teacher: teacher._id,
+        assignedBy: admin._id,
+        progressPercent: 0,
+        status: "assigned",
+      });
+    }
+  }
+  // End: Dnyaneshwari Thorat
 
   const lesson = await LessonPlan.findOneAndUpdate(
     { title: "Number Patterns", course: course._id },
