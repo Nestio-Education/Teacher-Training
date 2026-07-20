@@ -104,7 +104,7 @@ function OtpInput({ length = 6, value, onChange, disabled }) {
   };
 
   return (
-    <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+    <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
       {inputs.map(i => (
         <input
           key={i}
@@ -118,8 +118,8 @@ function OtpInput({ length = 6, value, onChange, disabled }) {
           onPaste={handlePaste}
           disabled={disabled}
           style={{
-            width: 48, height: 56, textAlign: "center", fontSize: 22, fontWeight: 800,
-            border: "2px solid", borderRadius: 12, outline: "none", fontFamily: "monospace",
+            width: 34, height: 40, textAlign: "center", fontSize: 16, fontWeight: 800,
+            border: "2px solid", borderRadius: 8, outline: "none", fontFamily: "monospace",
             borderColor: value[i] ? "#f59e0b" : "#e5e7eb",
             background: value[i] ? "#fef3c7" : "white",
             color: "#92400e",
