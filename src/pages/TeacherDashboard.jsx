@@ -1719,7 +1719,7 @@ export default function TeacherDashboard({ user, onLogout }) {
     { key: "children_att",  label: "Daily Attendance",    icon: "📋" },
     { key: "geotag",        label: "Geotag Attendance",   icon: "📍" },
     { key: "training",      label: "Training & Lessons",  icon: "🎓" },
-    { key: "lesson_planner", label: "Lesson Planner", icon: "🗓️" },
+    { key: "planner",       label: "AI Lesson Planner", icon: "✏️" },
     { key: "courses",       label: "My Courses",          icon: "📚" },
     { key: "assessment",    label: "Assessments",         icon: "📝" },
     //{ key: "schedule",      label: "Schedule",            icon: "📅" },
@@ -1737,7 +1737,7 @@ export default function TeacherDashboard({ user, onLogout }) {
   // Every other page shows an "Under Construction" placeholder instead.
   // "courses" and "assessment" are now notes/assessment based (no video) —
   // both are fully wired, so they're included here.
-  const WORKING_TABS = new Set(["overview", "children_att", "geotag", "profile", "training", "courses", "assessment", "certificates", "notifications", "feedback","lesson_planner"]);
+  const WORKING_TABS = new Set(["overview", "children_att", "geotag", "profile", "planner",  "training", "courses", "assessment", "certificates", "notifications", "feedback",""]);
 
   const renderContent = () => {
     if (loading) {
@@ -1765,7 +1765,7 @@ export default function TeacherDashboard({ user, onLogout }) {
       case "children_att":  return <AttendanceManager user={enrichedUser}/>;
       case "geotag":        return <GeotagAttendance user={enrichedUser}/>;
       case "training":      return <TrainingAndClassroomManager user={enrichedUser}/>;
-      case "lesson_planner": return <LessonPlannerTab user={enrichedUser} />;
+      case "planner":       return <LessonPlannerTab setToast={setToast} user={enrichedUser}/>;
       case "courses":
         return (
           <TeacherCourseNotes
