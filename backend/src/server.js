@@ -4668,7 +4668,7 @@ app.post("/api/teacher/reports/draft-ai", requireAuth, requireRole("teacher"), a
 
     // ── 1. GEMINI API CALL ──
     if (isGeminiConfigured) {
-      const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+      const model = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
       
       const prompt = `You are an AI assistant for Early Childhood Education (ECE) teachers.
