@@ -1287,7 +1287,29 @@ function ProfileTab({ user, onWorkingCenterChange, onUserUpdate }) {
 }
 
 function NotificationsTab({ notifications = [], onMarkRead, onMarkAllRead }) {
-  const icons = { session: "📹", assignment: "📝", approval: "✅", certificate: "🏆", course: "📚" };
+  // Start: Dnyaneshwari Thorat
+  const icons = {
+    // course-related
+    course: "📚", course_assigned: "📚", course_allocated: "📚",
+    // certificate
+    certificate: "🏆", certificate_issued: "🏆", certificate_generated: "🏆",
+    // lesson / session
+    session: "📹", lesson: "📖", lesson_assigned: "📖",
+    // assignment / task
+    assignment: "📝", task: "📝", daily_task: "📝",
+    // approvals
+    approval: "✅", approved: "✅", status: "✅",
+    // attendance
+    attendance: "📋", attendance_alert: "⚠️",
+    // general
+    info: "ℹ️", warning: "⚠️", alert: "🔔", system: "⚙️",
+  };
+  const getIcon = (type) => {
+    if (!type) return "🔔";
+    const lower = String(type).toLowerCase();
+    return icons[lower] || "🔔";
+  };
+  // End: Dnyaneshwari Thorat
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
@@ -1306,7 +1328,7 @@ function NotificationsTab({ notifications = [], onMarkRead, onMarkAllRead }) {
         ) : (
           notifications.map(n=>(
             <div key={n.id} onClick={()=>!n.read && onMarkRead(n.id)} style={{ background: n.read?"white":"#fffbeb", borderRadius: 14, padding: "14px 18px", border: `1px solid ${n.read?"#f1f5f9":"#fbbf24"}`, display: "flex", alignItems: "center", gap: 14, cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", borderLeft: `4px solid ${n.read?"#e5e7eb":"#f59e0b"}` }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: n.read?"#f3f4f6":"#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{icons[n.type] || "🔔"}</div>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: n.read?"#f3f4f6":"#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{getIcon(n.type)}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: n.read?500:700, color: "#1c1917" }}>{n.msg}</div>
                 <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>{n.time}</div>

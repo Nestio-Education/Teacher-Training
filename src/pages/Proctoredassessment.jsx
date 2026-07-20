@@ -466,15 +466,38 @@ export default function ProctoredAssessment({ assignments = [] }) {
     const percentage = totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0;
     const grade = percentage >= 90 ? "A+" : percentage >= 80 ? "A" : percentage >= 70 ? "B" : percentage >= 60 ? "C" : percentage >= 50 ? "D" : "F";
 
+    // Start: Dnyaneshwari Thorat
+    let strengths = ["Completed the AI assessment"];
+    let improvements = [];
+    let recommendation = "Review the course materials.";
+
+    if (percentage >= 90) {
+      strengths = ["Excellent mastery of the subject matter", "Highly consistent performance", "Strong conceptual retention"];
+      improvements = ["Keep updating knowledge with advanced ECE research"];
+      recommendation = "Fantastic! You have shown exemplary understanding of this course.";
+    } else if (percentage >= 80) {
+      strengths = ["Solid understanding of early childhood pedagogical concepts", "Strong critical thinking in ECE scenarios"];
+      improvements = ["Fine-tune minor conceptual gaps in early years development", "Review incorrect responses in the assessment details"];
+      recommendation = "Great job! A little extra reading on child-centric pedagogy will make your skills flawless.";
+    } else if (percentage >= 60) {
+      strengths = ["Basic understanding of core early childhood theories", "Willingness to apply positive discipline & safety techniques"];
+      improvements = ["Strengthen knowledge in child growth milestones", "Review classroom management strategies and observational methods"];
+      recommendation = "Good effort! We recommend revising the module slides and reading notes before practical implementation.";
+    } else {
+      strengths = ["Initiated early childhood teacher training path", "Completed the assessment attempt"];
+      improvements = ["Core pedagogical concepts require deep revision", "Need to focus on learning outcomes and instructional strategies", "Review all wrong answers and re-read the module materials"];
+      recommendation = "We suggest restarting the course or taking time to thoroughly study each module's detailed notes before attempting the assessment again.";
+    }
+
     const finalResult = {
       score: score,
       total: totalQuestions,
       percentage: percentage,
       grade: grade,
       performance: `You scored ${score}/${totalQuestions} (${percentage}%) on "${courseTitle}".`,
-      strengths: ["Completed the AI assessment"],
-      improvements: [],
-      recommendation: percentage >= 70 ? "Great work!" : "Review the course materials.",
+      strengths,
+      improvements,
+      recommendation,
       forced,
       warnings: warnRef.current,
       answers,

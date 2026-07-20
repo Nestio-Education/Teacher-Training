@@ -54,17 +54,14 @@ export default function TeacherCourseNotes({ assignments = [], onMarkDone, onGoT
       setNotesByCourseId((prev) => ({ ...prev, [courseId]: { loading: true, topics: [] } }));
       getCourseNotes(courseId)
         .then((res) => {
-          let topics = (res.notes || []).map((n) => ({
-            _id: normalizeId(n._id || n.id),
-            title: n.title,
-            notes: n.content,
-          }));
-          
           // Start: Dnyaneshwari Thorat
-          if (topics.length === 0 && a.course && a.course.modules) {
+          // Always prefer module contents (10 topics) as the source of truth.
+          // Admin-authored notes are merged IN ADDITION to module topics.
+          let moduleTopics = [];
+          if (a.course && a.course.modules) {
             a.course.modules.forEach(mod => {
               (mod.contents || []).forEach(content => {
-                topics.push({
+                moduleTopics.push({
                   _id: normalizeId(content._id),
                   title: content.title,
                   notes: content.detailedLearningContent || content.notes || content.description,
@@ -72,8 +69,21 @@ export default function TeacherCourseNotes({ assignments = [], onMarkDone, onGoT
               });
             });
           }
+
+          // Merge any admin-authored notes that are not already covered by module topics
+          const adminNotes = (res.notes || []).map(n => ({
+            _id: normalizeId(n._id || n.id),
+            title: n.title,
+            notes: n.content,
+          }));
+          const moduleIds = new Set(moduleTopics.map(t => t._id));
+          const extraNotes = adminNotes.filter(n => !moduleIds.has(n._id));
+
+          const topics = moduleTopics.length > 0
+            ? [...moduleTopics, ...extraNotes]
+            : adminNotes;   // fallback if no modules at all
           // End: Dnyaneshwari Thorat
-          
+
           setNotesByCourseId((prev) => ({ ...prev, [courseId]: { loading: false, topics } }));
         })
         .catch((err) => {

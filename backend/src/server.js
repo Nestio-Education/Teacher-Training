@@ -467,6 +467,33 @@ async function ensureDatabaseReady() {
     } catch (err) {
       console.warn("Failed to synchronize default courses on startup:", err.message);
     }
+
+    // Start: Dnyaneshwari Thorat — Unlock first-4-courses migration
+    // For any teacher whose first 4 assignments are still locked (due to the
+    // previous isRequired-based logic), unlock them now.
+    try {
+      const allTeachers = await User.find({ role: "teacher" }).select("_id").lean();
+      let fixedCount = 0;
+      for (const t of allTeachers) {
+        const teacherAssignments = await CourseAssignment.find({ teacher: t._id })
+          .sort({ createdAt: 1 })
+          .select("_id locked")
+          .lean();
+        for (let i = 0; i < Math.min(4, teacherAssignments.length); i++) {
+          const a = teacherAssignments[i];
+          if (a.locked) {
+            await CourseAssignment.findByIdAndUpdate(a._id, { locked: false });
+            fixedCount++;
+          }
+        }
+      }
+      if (fixedCount > 0) {
+        console.log(`[migration] Unlocked ${fixedCount} course assignments (first-4 rule applied to existing teachers).`);
+      }
+    } catch (migErr) {
+      console.warn("First-4-unlock migration encountered an error:", migErr.message);
+    }
+    // End: Dnyaneshwari Thorat — Unlock first-4-courses migration
     // End: Dnyaneshwari Thorat
 }
 
@@ -651,9 +678,11 @@ app.post("/api/auth/register-teacher", async (req, res, next) => {
       // Dynamically fetch all published courses from the database
       const courses = await Course.find({ status: "published" });
 
-      for (const course of courses) {
-        // Unlock if the course is marked as required (e.g. the 4 core courses), else lock it
-        const isLocked = !course.isRequired;
+      for (let i = 0; i < courses.length; i++) {
+        const course = courses[i];
+        // The first 4 courses are always unlocked for new teachers.
+        // Remaining courses stay locked until the admin explicitly unlocks them.
+        const isLocked = i >= 4 && !course.isRequired;
 
         await CourseAssignment.findOneAndUpdate(
           { course: course._id, teacher: teacher._id },
@@ -671,8 +700,8 @@ app.post("/api/auth/register-teacher", async (req, res, next) => {
       console.log(`Successfully assigned ${courses.length} courses dynamically during teacher registration.`);
       await createAndEmitNotification({
         recipientId: teacher._id,
-        title: "Courses Allocated! Ã°Å¸â€œÅ¡",
-        body: `Successfully allocated ${courses.length} educational courses to your training profile.`,
+        title: "Courses Allocated!",
+        body: `Successfully allocated ${courses.length} educational courses to your training profile. Your first 4 courses are ready to start!`,
         type: "course",
       });
     } catch (assignError) {
@@ -852,7 +881,9 @@ app.post("/api/auth/send-signup-otp", async (req, res, next) => {
     try {
       const emailResult = await sendEmail({
         to: email,
-        subject: "SpacECE Portal Ã¢â‚¬â€ Registration Email Verification OTP",
+        // Start: Dnyaneshwari Thorat
+        subject: "SpacECE Portal - Registration Email Verification OTP",
+        // End: Dnyaneshwari Thorat
         html: `
           <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
             <h2 style="color:#1e3a8a;margin-top:0;">Verify Your Email Address</h2>
@@ -933,13 +964,14 @@ app.post("/api/auth/forgot-password-otp", async (req, res, next) => {
     storeOtp(email, otp);
 
     // Send OTP via email
+    // Start: Dnyaneshwari Thorat
     const emailResult = await sendEmail({
       to: user.email,
-      subject: "SpacECE Portal Ã¢â‚¬â€ Password Reset OTP",
+      subject: "SpacECE Portal - Password Reset OTP",
       html: `
         <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
           <div style="text-align:center;margin-bottom:24px;">
-            <h2 style="color:#f59e0b;margin:0;">Ã°Å¸â€Â Password Reset</h2>
+            <h2 style="color:#f59e0b;margin:0;">🔐 Password Reset</h2>
             <p style="color:#6b7280;font-size:14px;margin-top:8px;">SpacECE Teacher Training Portal</p>
           </div>
           <div style="background:white;border-radius:12px;padding:24px;text-align:center;border:2px dashed #fbbf24;">
@@ -951,11 +983,12 @@ app.post("/api/auth/forgot-password-otp", async (req, res, next) => {
           </div>
           <p style="color:#d1d5db;font-size:11px;text-align:center;margin-top:20px;">
             If you didn't request this, please ignore this email.<br/>
-            Sent at ${new Date().toLocaleString("en-IN")} Ã‚Â· SpacECE Portal
+            Sent at ${new Date().toLocaleString("en-IN")} · SpacECE Portal
           </p>
         </div>
-      `,
+      `
     });
+    // End: Dnyaneshwari Thorat
 
     console.log("[otp] generated_and_sent", JSON.stringify({
       email,
@@ -1274,7 +1307,7 @@ app.patch("/api/admin/teachers/:id/status", requireAuth, requireRole("admin"), a
     if (teacher && req.body.status === "approved") {
       await createAndEmitNotification({
         recipientId: teacher._id,
-        title: "Account Approved & Courses Allocated! Ã°Å¸Å½â€œ",
+        title: "Account Approved & Courses Allocated! 🎉",
         body: "Your teacher portal has been approved. High-quality ECCE training courses have been allocated to your profile.",
         type: "approval",
       });
@@ -2774,13 +2807,21 @@ app.patch("/api/teacher/courses/assignments/:id", requireAuth, requireRole("teac
       }
     }
 
-    if (assignment && assignment.status === "completed" && assignment.assessmentCompletedAt) {
+    // Start: Dnyaneshwari Thorat
+    if (assignment && (assignment.status === "completed" || assignment.assessmentCompletedAt)) {
       try {
+        if (assignment.status !== "completed") {
+          assignment.status = "completed";
+          if (!assignment.completedAt) {
+            assignment.completedAt = new Date();
+          }
+          await assignment.save();
+        }
         const cert = await autoIssueCertificateForAssignment(assignment._id);
         if (cert) {
           await createAndEmitNotification({
             recipientId: req.user.id,
-            title: "Certificate Generated! Ã°Å¸Å½â€œ",
+            title: "Certificate Generated! 🎓",
             body: `Congratulations! Your certificate for the course "${assignment.course?.title || "Course"}" has been successfully generated.`,
             type: "certificate",
             metadata: { certificateId: cert._id, courseId: assignment.course?._id },
