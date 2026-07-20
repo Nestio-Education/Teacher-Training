@@ -400,11 +400,40 @@ function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
   const [description, setDescription] = useState("");
   const [photos, setPhotos] = useState([]);
   const [docFiles, setDocFiles] = useState([]);
+  const [roughNotes, setRoughNotes] = useState("");
+  const [isDrafting, setIsDrafting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   const userCenter = user?.teacherProfile?.center?._id || user?.teacherProfile?.center?.id || user?.teacherProfile?.center || "";
   const userClass = (user?.teacherProfile?.classes || [])[0]?._id || (user?.teacherProfile?.classes || [])[0]?.id || (user?.teacherProfile?.classes || [])[0] || "";
+
+  const handleDraftWithAI = async () => {
+    if (!roughNotes.trim()) return;
+    setIsDrafting(true);
+    setError("");
+    try {
+      const response = await fetch("http://localhost:5000/api/teacher/reports/draft-ai", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("spaceece_auth_token")}`
+        },
+        body: JSON.stringify({ roughNotes })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setDescription(data.text || data.topic);
+        setRoughNotes("");
+      } else {
+        setError(data.detail || data.message || "Failed to generate AI draft.");
+      }
+    } catch (err) {
+      setError("Error connecting to server. Make sure the backend is running.");
+    } finally {
+      setIsDrafting(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -472,6 +501,31 @@ function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
 
         <div style={{ padding: "10px 14px", background: "#fffbeb", borderRadius: 10, border: "1px solid #fde68a", marginBottom: 16, fontSize: 12, color: "#92400e", lineHeight: 1.5 }}>
           ⚠️ Please provide proof of completion. Upload activity photos, documents, and a written description of what was accomplished.
+        </div>
+
+        {/* AI Drafting Assistant Notepad */}
+        <div style={{ marginBottom: 16, padding: 12, background: "#fffbeb", border: "1px dashed #fbbf24", borderRadius: 10 }}>
+          <label style={{ ...S.label, color: "#92400e", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>AI Drafting Assistant ✨</span>
+            <button 
+              type="button"
+              onClick={handleDraftWithAI} 
+              disabled={isDrafting || !roughNotes.trim()}
+              style={{ 
+                border: "none", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 800, cursor: "pointer",
+                background: roughNotes.trim() ? "#d97706" : "#cbd5e1",
+                color: "white", transition: "all 0.2s"
+              }}
+            >
+              {isDrafting ? "Structuring..." : "Draft with AI ✨"}
+            </button>
+          </label>
+          <textarea
+            style={{ ...S.input, height: 50, resize: "none", background: "white", border: "1px solid #fcd34d", marginTop: 6 }}
+            value={roughNotes}
+            onChange={(e) => setRoughNotes(e.target.value)}
+            placeholder="Type rough, messy notes here (e.g. 'Raj subtracted correctly with blocks. Priya was sharing pencil.')"
+          />
         </div>
 
         <label style={S.label}>Activity Description / Summary *</label>
