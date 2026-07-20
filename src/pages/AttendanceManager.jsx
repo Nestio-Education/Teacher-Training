@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import { SectionCard, S, Badge } from "../components/Shared";
 import { getTeacherMe, getTeacherChildren, getChildAttendance, saveChildAttendance, deleteChildAttendance, deleteTeacherChild, createTeacherChild, getTeacherClasses, createTeacherChildrenBulk } from "../services/api";
 import * as XLSX from "xlsx";
+// Prajwal start
+import ChildDashboardModal from "./ChildDashboardModal";
+// Prajwal end
 // End: Dnyaneshwari Thorat
 
 const EMAILJS_SERVICE_ID  = "service_ckzt1le";
@@ -27,6 +30,9 @@ export default function AttendanceManager({ user }) {
   const [bulkText, setBulkText] = useState("");
   const [excelStudents, setExcelStudents] = useState([]);
   // End: Dnyaneshwari Thorat
+  // Prajwal start
+  const [viewChild, setViewChild] = useState(null);
+  // Prajwal end
   const [newStudentName, setNewStudentName] = useState("");
   const [newStudentAge, setNewStudentAge] = useState("");
   const [newStudentGender, setNewStudentGender] = useState("");
@@ -792,24 +798,28 @@ export default function AttendanceManager({ user }) {
                         >
                           Absent
                         </button>
+                        {/* Prajwal start — Leave button replaced with View button.
+                            Clicking it opens the Child Dashboard (Child Profile /
+                            Child Assessment / Activity Suggestions) per Module 1 spec. */}
                         <button
                           type="button"
-                          onClick={() => handleStatusToggle(st.id, "L")}
+                          onClick={() => setViewChild(st)}
                           style={{
                             flex: 1,
                             padding: "6px 0",
                             borderRadius: 8,
                             border: "none",
-                            background: status === "L" ? "#eab308" : "#f1f5f9",
-                            color: status === "L" ? "white" : "#64748b",
+                            background: "#f1f5f9",
+                            color: "#64748b",
                             fontWeight: 700,
                             fontSize: 12,
                             cursor: "pointer",
                             transition: "all 0.15s"
                           }}
                         >
-                          Leave
+                          View
                         </button>
+                        {/* Prajwal end */}
                       </div>
                     </div>
                   );
@@ -1037,6 +1047,12 @@ export default function AttendanceManager({ user }) {
           </div>
         </div>
       )}
+
+      {/* Prajwal start — Child Dashboard modal (View button) */}
+      {viewChild && (
+        <ChildDashboardModal child={viewChild} onClose={() => setViewChild(null)} />
+      )}
+      {/* Prajwal end */}
     </div>
   );
 }

@@ -43,6 +43,7 @@ import { Certificate } from "./models/Certificate.js";
 import { Notification } from "./models/Notification.js";
 import { ReportJob } from "./models/ReportJob.js";
 import ActivityBank from "./models/ActivityBank.js";
+import AIActivity from "./models/AIActivity.js";
 import AutomationTeacher from "./models/AutomationTeacher.js";
 import DailyTaskAssignment from "./models/DailyTaskAssignment.js";
 import TeacherNotification from "./models/TeacherNotification.js";
