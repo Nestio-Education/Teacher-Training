@@ -912,7 +912,7 @@ export default function TrainingAndClassroomManager({ user }) {
         setReportError(data.detail || data.message || "Failed to generate AI draft.");
       }
     } catch (err) {
-      setReportError("Error connecting to server. Make sure the backend is running.");
+      setReportError(err.message || "Error connecting to server. Make sure the backend is running.");
     } finally {
       setIsTabDrafting(false);
     }
