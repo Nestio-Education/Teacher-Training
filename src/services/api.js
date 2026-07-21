@@ -452,6 +452,11 @@ export function getCourses() {
   return request("/api/courses");
 }
 
+export function getParentModules(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/api/parent-modules${qs ? `?${qs}` : ""}`);
+}
+
 export function createCourse(courseData) {
   return request("/api/courses", {
     method: "POST",

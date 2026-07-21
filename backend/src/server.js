@@ -43,6 +43,7 @@ import { Certificate } from "./models/Certificate.js";
 import { Notification } from "./models/Notification.js";
 import { ReportJob } from "./models/ReportJob.js";
 import ActivityBank from "./models/ActivityBank.js";
+import AIActivity from "./models/AIActivity.js";
 import AutomationTeacher from "./models/AutomationTeacher.js";
 import DailyTaskAssignment from "./models/DailyTaskAssignment.js";
 import TeacherNotification from "./models/TeacherNotification.js";
@@ -68,6 +69,7 @@ const databaseModels = [
    TeacherNotification,
    TaskReplacementLog,
    ActivitySubmission,
+   AIActivity,
    Center,
    ChildAttendanceSession,
    Child,
@@ -3413,6 +3415,96 @@ app.patch("/api/activities/:id", requireAuth, requireRole("admin"), async (req, 
   }
 });
 
+
+// ==========================================
+// AI ACTIVITIES (Lesson Planner)
+// ==========================================
+app.get("/api/ai-activities", requireAuth, async (req, res, next) => {
+  try {
+    const filter = req.user.role === "admin" ? {} : { teacher: req.user.id };
+    const activities = await AIActivity.find(filter)
+      .populate("teacher", "name email role")
+      .sort({ createdAt: -1 });
+    res.json({ activities });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/ai-activities", requireAuth, async (req, res, next) => {
+  try {
+    const { topic, ageGroup, duration, objective, activities, materials, provider, generatedAt } = req.body;
+    
+    if (!topic || !ageGroup || !duration || !objective || !activities) {
+      return res.status(400).json({ message: "Topic, ageGroup, duration, objective, and activities are required." });
+    }
+    
+    const aiActivity = await AIActivity.create({
+      teacher: req.user.id,
+      topic,
+      ageGroup,
+      duration,
+      objective,
+      activities,
+      materials: materials || [],
+      provider: provider || "local",
+      generatedAt: generatedAt || new Date(),
+      savedAt: new Date(),
+      status: "pending"
+    });
+    
+    const populated = await AIActivity.findById(aiActivity._id).populate("teacher", "name email role");
+    res.status(201).json({ activity: populated });
+  } catch (error) {
+    console.error("[AI Activity] Error creating activity:", error);
+    console.error("[AI Activity] Error details:", { name: error.name, message: error.message, code: error.code });
+    next(error);
+  }
+});
+
+app.patch("/api/ai-activities/:id", requireAuth, async (req, res, next) => {
+  try {
+    const { status } = req.body;
+    if (status && !["pending", "completed"].includes(status)) {
+      return res.status(400).json({ message: "Status must be 'pending' or 'completed'." });
+    }
+    const updateData = {};
+    if (status) {
+      updateData.status = status;
+      updateData.completedAt = status === "completed" ? new Date() : null;
+    }
+    const filter = req.user.role === "admin" 
+      ? { _id: req.params.id } 
+      : { _id: req.params.id, teacher: req.user.id };
+    const activity = await AIActivity.findOneAndUpdate(
+      filter,
+      updateData,
+      { new: true }
+    ).populate("teacher", "name email role");
+    if (!activity) {
+      return res.status(404).json({ message: "AI activity not found." });
+    }
+    res.json({ activity });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/ai-activities/:id", requireAuth, async (req, res, next) => {
+  try {
+    const filter = req.user.role === "admin" 
+      ? { _id: req.params.id } 
+      : { _id: req.params.id, teacher: req.user.id };
+    const activity = await AIActivity.findOneAndDelete(filter);
+    if (!activity) {
+      return res.status(404).json({ message: "AI activity not found." });
+    }
+    res.json({ message: "AI activity deleted successfully." });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ==========================================
 // ATTENDANCE (CHILDREN & TEACHERS)
 // ==========================================
@@ -5319,6 +5411,10 @@ app.get("/api/courses/:id/assessment", requireAuth, async (req, res, next) => {
   }
 });
 // End: Dnyaneshwari Thorat
+
+// Snehal: added parent capacity building modules route
+import parentModulesRouter from "./routes/parentModules.js";
+app.use("/api/parent-modules", parentModulesRouter);
 
 await connectDb();
 await ensureDatabaseReady();
