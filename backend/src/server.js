@@ -5416,6 +5416,10 @@ app.get("/api/courses/:id/assessment", requireAuth, async (req, res, next) => {
 import parentModulesRouter from "./routes/parentModules.js";
 app.use("/api/parent-modules", parentModulesRouter);
 
+// Snehal change: session assignment tracking (status/feedback) route
+import parentSessionAssignmentsRouter from "./routes/parentSessionAssignments.js";
+app.use("/api/parent-session-assignments", parentSessionAssignmentsRouter);
+
 await connectDb();
 await ensureDatabaseReady();
 

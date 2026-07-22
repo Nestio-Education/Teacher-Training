@@ -4,10 +4,12 @@
 
 import mongoose from "mongoose";
 
+// Start: Snehal change — added translations field so Mongoose doesn't strip embedded translation data
 const activitySchema = new mongoose.Schema({
   time: String,
   activity: String,
   keyFocus: String,
+  translations: { type: mongoose.Schema.Types.Mixed },
 }, { _id: false });
 
 const sessionSchema = new mongoose.Schema({
@@ -16,7 +18,9 @@ const sessionSchema = new mongoose.Schema({
   objective: String,
   activities: [activitySchema],
   homePractice: String,
+  translations: { type: mongoose.Schema.Types.Mixed },
 }, { _id: false });
+// End: Snehal change
 
 const parentModuleSchema = new mongoose.Schema({
   moduleNumber: { type: Number, required: true },
@@ -26,8 +30,13 @@ const parentModuleSchema = new mongoose.Schema({
   duration: String,
   year: { type: Number, default: 1 },
   objective: String,
+  // Start: Snehal change
+  titleTranslations: { hi: String, mr: String },
+  objectiveTranslations: { hi: String, mr: String },
+  // End: Snehal change
   outcomes: [String],
   sessions: [sessionSchema],
+  translations: { type: mongoose.Schema.Types.Mixed, default: {} },
   is_active: { type: Boolean, default: true },
 }, { timestamps: true });
 
