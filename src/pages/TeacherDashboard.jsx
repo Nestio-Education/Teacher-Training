@@ -1992,7 +1992,7 @@ export default function TeacherDashboard({ user, onLogout }) {
     { key: "children_att",  label: "Daily Attendance",    icon: "📋" },
     { key: "geotag",        label: "Geotag Attendance",   icon: "📍" },
     { key: "training",      label: "Training & Lessons",  icon: "🎓" },
-    { key: "lesson_planner", label: "Lesson Planner", icon: "🗓️" },
+    { key: "planner",       label: "AI Lesson Planner", icon: "✏️" },
     { key: "courses",       label: "My Courses",          icon: "📚" },
     { key: "parent_capacity", label: "Parent Capacity Building", icon: "👪" },
     { key: "assessment",    label: "Assessments",         icon: "📝" },
@@ -2039,7 +2039,7 @@ export default function TeacherDashboard({ user, onLogout }) {
       case "children_att":  return <AttendanceManager user={enrichedUser}/>;
       case "geotag":        return <GeotagAttendance user={enrichedUser}/>;
       case "training":      return <TrainingAndClassroomManager user={enrichedUser}/>;
-      case "lesson_planner": return <LessonPlannerTab user={enrichedUser} />;
+      case "planner":       return <LessonPlannerTab setToast={setToast} user={enrichedUser}/>;
       case "courses":
         return (
           <TeacherCourseNotes
