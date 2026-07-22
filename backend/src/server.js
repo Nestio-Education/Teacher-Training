@@ -5412,6 +5412,10 @@ app.get("/api/courses/:id/assessment", requireAuth, async (req, res, next) => {
 });
 // End: Dnyaneshwari Thorat
 
+// Snehal: added parent capacity building modules route
+import parentModulesRouter from "./routes/parentModules.js";
+app.use("/api/parent-modules", parentModulesRouter);
+
 await connectDb();
 await ensureDatabaseReady();
 
