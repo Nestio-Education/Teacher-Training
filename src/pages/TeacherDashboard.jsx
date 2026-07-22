@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { Logo, Toast, Badge, StatusBadge, StatCard, SectionCard, S, globalCSS } from "../components/Shared";
 import { t, setLanguage, getLanguageList, getCurrentLanguage, LANG_CHANGE_EVENT } from "../services/i18n";
-import { updateTeacherNotificationPreference, getParentModules } from "../services/api";
+// Start: Snehal change
+import { updateTeacherNotificationPreference, getParentModules, getParentSessionAssignments, submitParentSessionFeedback } from "../services/api";
+// End: Snehal change
 import AttendanceManager from "./AttendanceManager";
 import TrainingAndClassroomManager from "./TrainingAndClassroomManager";
 import GeotagAttendance from "./GeotagAttendance";
@@ -1500,36 +1502,50 @@ function TeacherFeedbackTab({ user, setToast }) {
     </div>
   );
 }
+// Snehal change: real sessions + status tracking + feedback connected to backend
 /* ═══════════════════════════════════════════
    PARENT CAPACITY BUILDING TAB
 ═══════════════════════════════════════════ */
 function ParentCapacityBuildingTab({ user, setToast }) {
-  // NEW: module dropdown + real session cards
   const [modules, setModules] = useState([]);
   const [selectedModuleId, setSelectedModuleId] = useState("");
-  const [sessionLang, setSessionLang] = useState("en"); // NEW
+  const [sessionLang, setSessionLang] = useState("en");
 
   useEffect(() => {
     getParentModules({ lang: sessionLang })
       .then(res => {
         const list = res?.modules || [];
         setModules(list);
-        if (list.length) setSelectedModuleId(list[0]._id);
+        if (list.length) setSelectedModuleId(prev => prev || list[0]._id);
       })
       .catch(() => setToast?.({ msg: "Failed to load modules.", type: "error" }));
   }, [sessionLang]);
 
   const selectedModule = modules.find(m => m._id === selectedModuleId);
 
-  // Snehal change
-  // TODO: replace dummy sessions with API data once backend endpoint is ready
-  const [sessions, setSessions] = useState([
-    { id: 1, title: "Home Learning Environment Basics", description: "Helping parents set up a learning-friendly space at home.", objectives: "Increase parent awareness of home learning practices.", assignedDate: "2026-07-10", dueDate: "2026-07-25", status: "Pending" },
-    { id: 2, title: "Nutrition & Early Development", description: "Session on nutrition's role in early childhood development.", objectives: "Educate parents on age-appropriate nutrition.", assignedDate: "2026-07-05", dueDate: "2026-07-20", status: "In Progress" },
-    { id: 3, title: "Positive Discipline Techniques", description: "Non-punitive discipline strategies for parents.", objectives: "Reduce harsh discipline, improve parent-child bonding.", assignedDate: "2026-06-28", dueDate: "2026-07-15", status: "Completed" },
-  ]);
+  // Snehal change: real per-teacher session status, fetched from backend
+  const [sessionAssignments, setSessionAssignments] = useState([]);
+  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
+
+  const loadAssignments = () => {
+    if (!selectedModuleId) return;
+    setAssignmentsLoading(true);
+    getParentSessionAssignments(selectedModuleId)
+      .then(res => setSessionAssignments(res?.assignments || []))
+      .catch(() => setToast?.({ msg: "Failed to load session status.", type: "error" }))
+      .finally(() => setAssignmentsLoading(false));
+  };
+
+  useEffect(() => {
+    loadAssignments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedModuleId]);
+
+  const getAssignment = (sessionNumber) =>
+    sessionAssignments.find(a => a.sessionNumber === sessionNumber);
 
   const [selectedSession, setSelectedSession] = useState(null);
+  const [selectedAssignment, setSelectedAssignment] = useState(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   const [sessionDetails, setSessionDetails] = useState({ date: "", duration: "", venue: "", parentsPresent: "" });
@@ -1540,17 +1556,27 @@ function ParentCapacityBuildingTab({ user, setToast }) {
   });
   const [submitting, setSubmitting] = useState(false);
 
+  // Snehal change: photo + attendance sheet upload state
+  const [photoFile, setPhotoFile] = useState(null);
+  const [attendanceFile, setAttendanceFile] = useState(null);
+  const photoInputRef = useRef(null);
+  const attendanceInputRef = useRef(null);
+
   const statusColor = (status) => {
     if (status === "Completed") return { c: "#059669", bg: "#d1fae5" };
     if (status === "In Progress") return { c: "#2563eb", bg: "#dbeafe" };
     return { c: "#d97706", bg: "#fef3c7" };
   };
 
-  const openFeedback = (session) => {
-    setSelectedSession(session);
+  const openFeedback = (sess) => {
+    const assignment = getAssignment(sess.sessionNumber);
+    setSelectedSession(sess);
+    setSelectedAssignment(assignment);
     setSessionDetails({ date: new Date().toISOString().split("T")[0], duration: "", venue: "", parentsPresent: "" });
     setParticipants([{ parentName: "", childName: "", contact: "", attendance: "Present" }]);
     setFeedback({ parentParticipation: 0, parentEngagement: 0, understandingLevel: "Good", questionsAsked: "", challengesFaced: "", suggestions: "", overallRating: 0, remarks: "" });
+    setPhotoFile(null);
+    setAttendanceFile(null);
     setFeedbackOpen(true);
   };
 
@@ -1564,20 +1590,42 @@ function ParentCapacityBuildingTab({ user, setToast }) {
     setParticipants(updated);
   };
 
+  // Snehal change: real submit — uploads files, then saves feedback + marks Completed
   const handleSubmitFeedback = async () => {
     if (!feedback.overallRating) {
       setToast?.({ msg: "Please give an overall session rating.", type: "error" });
       return;
     }
+    if (!selectedAssignment?._id) {
+      setToast?.({ msg: "Session assignment not found. Please refresh and try again.", type: "error" });
+      return;
+    }
     setSubmitting(true);
     try {
-      // Snehal change
-      // TODO: replace with real API call once backend endpoint is ready
-      // await submitParentSessionFeedback(selectedSession.id, { sessionDetails, participants, feedback });
-      setSessions(prev => prev.map(s => s.id === selectedSession.id ? { ...s, status: "Completed" } : s));
+      let photoUploadId, attendanceSheetUploadId;
+
+      if (photoFile) {
+        const photoRes = await uploadFile(photoFile);
+        photoUploadId = photoRes?.asset?._id;
+      }
+      if (attendanceFile) {
+        const attRes = await uploadFile(attendanceFile);
+        attendanceSheetUploadId = attRes?.asset?._id;
+      }
+
+      await submitParentSessionFeedback(selectedAssignment._id, {
+        sessionDetails,
+        participants,
+        feedback,
+        photoUploadId,
+        attendanceSheetUploadId
+      });
+
       setToast?.({ msg: "Feedback submitted successfully!", type: "success" });
       setFeedbackOpen(false);
       setSelectedSession(null);
+      setSelectedAssignment(null);
+      loadAssignments();
     } catch (err) {
       setToast?.({ msg: err.message || "Failed to submit feedback.", type: "error" });
     } finally {
@@ -1593,31 +1641,14 @@ function ParentCapacityBuildingTab({ user, setToast }) {
     </div>
   );
 
-  const pendingCount = sessions.filter(s => s.status === "Pending").length;
-  const inProgressCount = sessions.filter(s => s.status === "In Progress").length;
-  const completedCount = sessions.filter(s => s.status === "Completed").length;
-
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
       <h1 style={S.pageTitle}>Parent Capacity Building</h1>
       <p style={S.pageSub}>Sessions assigned to you by the admin</p>
 
-  <div style={{ marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-     <select
-          style={{
-            ...S.input,
-            maxWidth: 340,
-            border: "1.5px solid #e2e8f0",
-            borderRadius: 10,
-            padding: "10px 14px",
-            background: "white",
-            fontWeight: 600,
-            fontSize: 13,
-            color: "#1c1917",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-            cursor: "pointer",
-            outline: "none"
-          }}
+      <div style={{ marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <select
+          style={{ ...S.input, maxWidth: 340, border: "1.5px solid #e2e8f0", borderRadius: 10, padding: "10px 14px", background: "white", fontWeight: 600, fontSize: 13, color: "#1c1917", boxShadow: "0 1px 3px rgba(0,0,0,0.04)", cursor: "pointer", outline: "none" }}
           value={selectedModuleId}
           onChange={e => setSelectedModuleId(e.target.value)}
         >
@@ -1627,20 +1658,7 @@ function ParentCapacityBuildingTab({ user, setToast }) {
         </select>
 
         <select
-          style={{
-            ...S.input,
-            maxWidth: 160,
-            border: "1.5px solid #e2e8f0",
-            borderRadius: 10,
-            padding: "10px 14px",
-            background: "white",
-            fontWeight: 600,
-            fontSize: 13,
-            color: "#1c1917",
-            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-            cursor: "pointer",
-            outline: "none"
-          }}
+          style={{ ...S.input, maxWidth: 160, border: "1.5px solid #e2e8f0", borderRadius: 10, padding: "10px 14px", background: "white", fontWeight: 600, fontSize: 13, color: "#1c1917", boxShadow: "0 1px 3px rgba(0,0,0,0.04)", cursor: "pointer", outline: "none" }}
           value={sessionLang}
           onChange={e => setSessionLang(e.target.value)}
         >
@@ -1649,40 +1667,68 @@ function ParentCapacityBuildingTab({ user, setToast }) {
           <option value="mr">मराठी</option>
         </select>
       </div>
+
       {selectedModule && (
-        <SectionCard title={`${selectedModule.title} — Sessions`}>
+        <SectionCard title="">
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {selectedModule.sessions.map(sess => (
-              <div key={sess.sessionNumber} style={{ background: "white", border: "1px solid #f1f5f9", borderRadius: 14, padding: "16px 20px", borderLeft: "4px solid #3b82f6" }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "#1c1917" }}>Session {sess.sessionNumber}: {sess.title}</div>
-                <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>{sess.objective}</div>
-                <table style={{ width: "100%", marginTop: 10, borderCollapse: "collapse", fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ background: "#fef3c7", textAlign: "left" }}>
-                      <th style={{ padding: "6px 8px" }}>Time</th>
-                      <th style={{ padding: "6px 8px" }}>Activity</th>
-                      <th style={{ padding: "6px 8px" }}>Key Focus</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sess.activities.map((a, i) => (
-                      <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                        <td style={{ padding: "6px 8px" }}>{a.time}</td>
-                        <td style={{ padding: "6px 8px" }}>{a.activity}</td>
-                        <td style={{ padding: "6px 8px" }}>{a.keyFocus}</td>
+            {selectedModule.sessions.map(sess => {
+              // Snehal change: pull real status for this session
+              const assignment = getAssignment(sess.sessionNumber);
+              const status = assignment?.status || "Pending";
+              const sc = statusColor(status);
+              return (
+                <div key={sess.sessionNumber} style={{ background: "white", border: "1px solid #f1f5f9", borderRadius: 14, padding: "16px 20px", borderLeft: "4px solid #3b82f6" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#1c1917" }}>Session {sess.sessionNumber}: {sess.title}</div>
+                      <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>{sess.objective}</div>
+                    </div>
+                    <Badge children={status} color={sc.c} bg={sc.bg} />
+                  </div>
+
+                  <table style={{ width: "100%", marginTop: 10, borderCollapse: "collapse", fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: "#fef3c7", textAlign: "left" }}>
+                        <th style={{ padding: "6px 8px" }}>Time</th>
+                        <th style={{ padding: "6px 8px" }}>Activity</th>
+                        <th style={{ padding: "6px 8px" }}>Key Focus</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {sess.homePractice && (
-                  <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 8 }}>Home Practice: {sess.homePractice}</div>
-                )}
-              </div>
-            ))}
+                    </thead>
+                    <tbody>
+                      {sess.activities.map((a, i) => (
+                        <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                          <td style={{ padding: "6px 8px" }}>{a.time}</td>
+                          <td style={{ padding: "6px 8px" }}>{a.activity}</td>
+                          <td style={{ padding: "6px 8px" }}>{a.keyFocus}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {sess.homePractice && (
+                    <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 8 }}>Home Practice: {sess.homePractice}</div>
+                  )}
+
+                  {/* Snehal change: Mark as Completed / Start Session button */}
+                  <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+                    {status === "Completed" ? (
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#059669" }}>✓ Session Completed</span>
+                    ) : (
+                      <button
+                        onClick={() => openFeedback(sess)}
+                        disabled={assignmentsLoading}
+                        style={{ ...S.primaryBtn, padding: "8px 16px", fontSize: 12 }}
+                      >
+                        Mark as Completed
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </SectionCard>
       )}
-       
+
       {feedbackOpen && selectedSession && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999, backdropFilter: "blur(4px)" }}>
           <div style={{ background: "white", borderRadius: 20, padding: "28px", width: "100%", maxWidth: 600, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
@@ -1724,6 +1770,33 @@ function ParentCapacityBuildingTab({ user, setToast }) {
               </div>
             ))}
             <button onClick={handleAddParticipant} style={{ ...S.exportBtn, marginBottom: 20 }}>+ Add Participant</button>
+
+            {/* Snehal change: Photo + Attendance Sheet upload */}
+            <h4 style={{ fontSize: 13, fontWeight: 800, color: "#1c1917", marginBottom: 10 }}>Uploads</h4>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+              <div>
+                <label style={S.label}>Session Photo</label>
+                <input type="file" ref={photoInputRef} accept="image/*" style={{ display: "none" }}
+                  onChange={e => setPhotoFile(e.target.files?.[0] || null)} />
+                <div onClick={() => photoInputRef.current?.click()} style={{ border: "2px dashed #fbbf24", borderRadius: 10, padding: "14px", textAlign: "center", cursor: "pointer", background: "#fffbeb" }}>
+                  <div style={{ fontSize: 20 }}>📷</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: photoFile ? "#059669" : "#92400e" }}>
+                    {photoFile ? photoFile.name : "Upload photo"}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label style={S.label}>Attendance Sheet</label>
+                <input type="file" ref={attendanceInputRef} accept="image/*,.pdf" style={{ display: "none" }}
+                  onChange={e => setAttendanceFile(e.target.files?.[0] || null)} />
+                <div onClick={() => attendanceInputRef.current?.click()} style={{ border: "2px dashed #fbbf24", borderRadius: 10, padding: "14px", textAlign: "center", cursor: "pointer", background: "#fffbeb" }}>
+                  <div style={{ fontSize: 20 }}>📋</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: attendanceFile ? "#059669" : "#92400e" }}>
+                    {attendanceFile ? attendanceFile.name : "Upload attendance sheet"}
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <h4 style={{ fontSize: 13, fontWeight: 800, color: "#1c1917", marginBottom: 10 }}>Teacher Feedback</h4>
             <div style={{ marginBottom: 12 }}>
