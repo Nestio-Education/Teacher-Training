@@ -452,6 +452,20 @@ export function getCourses() {
   return request("/api/courses");
 }
 
+export function getParentModules(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/api/parent-modules${qs ? `?${qs}` : ""}`);
+}
+// Snehal change
+export function getParentSessionAssignments(moduleId) {
+  return request(`/api/parent-session-assignments?moduleId=${moduleId}`);
+}
+export function submitParentSessionFeedback(assignmentId, data) {
+  return request(`/api/parent-session-assignments/${assignmentId}/feedback`, {
+    method: "POST",
+    body: JSON.stringify(data)
+  });
+}
 export function createCourse(courseData) {
   return request("/api/courses", {
     method: "POST",

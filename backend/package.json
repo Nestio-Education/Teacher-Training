@@ -11,6 +11,7 @@
     "db:admin": "node src/create-admin.js"
   },
   "dependencies": {
+    "@vitalets/google-translate-api": "^9.2.1",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
