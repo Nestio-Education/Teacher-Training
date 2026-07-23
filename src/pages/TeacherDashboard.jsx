@@ -26,7 +26,7 @@ import {
   updateTeacherLanguage,
   getTeacherCertificates,
   getTeacherChildren,
-  createTeacherChild,
+  deleteCourseAssignment,
   getTeacherClasses
 } from "../services/api";
 // Start: Dnyaneshwari Thorat
@@ -118,7 +118,7 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
   const featuredCourseProgress = visibleAssignments.slice(0, 3);
   // End: Dnyaneshwari Thorat
 
-  const certificatesCount = courses.filter(c => c.status === "completed" || c.progressPercent === 100).length;
+  const certificatesCount = courses.filter(c => (c.status === "completed" || c.progressPercent === 100) && c.score !== null && c.score !== undefined).length;
   const pendingTasksCount = activeAssignments.filter(a => a.status === "assigned" || a.status === "revision").length;
   const gradedAssignments = visibleAssignments.filter(a => a.score !== null && a.score !== undefined);
   const averageScore = gradedAssignments.length ? Math.round(gradedAssignments.reduce((sum, a) => sum + Number(a.score || 0), 0) / gradedAssignments.length) : 0;
@@ -346,7 +346,7 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
                   <div style={{ fontSize: 10, color: "#9ca3af" }}>Due: {a.dueDate ? new Date(a.dueDate).toLocaleDateString() : "No due date"}</div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  {a.score !== null && a.score !== undefined && <span style={{ fontSize: 11, fontWeight: 800, color: "#10b981" }}>{a.score}/100</span>}
+                  {a.score !== null && a.score !== undefined && <span style={{ fontSize: 11, fontWeight: 800, color: "#10b981" }}>{a.score}/{a.assessmentTotal !== undefined && a.assessmentTotal !== null ? a.assessmentTotal : 100}</span>}
                   <StatusBadge status={a.status}/>
                 </div>
               </div>
@@ -483,7 +483,12 @@ function GradesTab({ assignments = [] }) {
                 <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 5 }}>{t("Reviewed:")} {formatTeacherDate(item.reviewedAt || item.updatedAt || item.createdAt)}</div>
               </div>
               <div style={{ minWidth: 92, textAlign: "right" }}>
-                <div style={{ fontSize: 24, fontWeight: 900, color: Number(item.score) >= 75 ? "#10b981" : Number(item.score) >= 60 ? "#f59e0b" : "#ef4444" }}>{item.score}/100</div>
+                {(() => {
+                  const total = item.assessmentTotal !== undefined && item.assessmentTotal !== null ? item.assessmentTotal : 100;
+                  const scorePercent = total > 0 ? (Number(item.score) / total) * 100 : 0;
+                  const scoreColor = scorePercent >= 75 ? "#10b981" : scorePercent >= 60 ? "#f59e0b" : "#ef4444";
+                  return <div style={{ fontSize: 24, fontWeight: 900, color: scoreColor }}>{item.score}/{total}</div>;
+                })()}
                 <StatusBadge status={item.status}/>
               </div>
             </div>
@@ -609,7 +614,7 @@ function AssignmentsTab({ assignments = [], onSubmitAssignment }) {
                   <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{a.course?.title} · Due: {a.dueDate ? new Date(a.dueDate).toLocaleDateString() : "No deadline"}</div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  {a.score !== null && a.score !== undefined && <span style={{ fontSize: 16, fontWeight: 800, color: "#10b981" }}>{a.score}/100</span>}
+                  {a.score !== null && a.score !== undefined && <span style={{ fontSize: 16, fontWeight: 800, color: "#10b981" }}>{a.score}/{a.assessmentTotal !== undefined && a.assessmentTotal !== null ? a.assessmentTotal : 100}</span>}
                   <StatusBadge status={a.status}/>
                   {(a.status==="revision"||a.status==="assigned"||a.status==="pending") &&
                     <button
@@ -679,8 +684,12 @@ function AssignmentsTab({ assignments = [], onSubmitAssignment }) {
 }
 
 function CertificatesTab({ assignments = [], certificates: certs = [] }) {
-  const displayCerts = certs.length > 0 ? certs : 
-    assignments.filter((item) => item.status === "completed" || item.progressPercent === 100 || item.status === "approved");
+  const displayCerts = certs.length > 0 
+    ? certs.filter((c) => c.score !== null && c.score !== undefined)
+    : assignments.filter((item) => 
+        (item.status === "completed" || item.progressPercent === 100 || item.status === "approved") && 
+        item.score !== null && item.score !== undefined
+      );
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
@@ -701,7 +710,10 @@ function CertificatesTab({ assignments = [], certificates: certs = [] }) {
               <div style={{ fontSize: 15, fontWeight: 800, color: "#1c1917", marginBottom: 8, lineHeight: 1.4 }}>{courseTitle}</div>
               <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
                 {isRealCert && item.grade && <Badge children={`Grade: ${item.grade}`} color="#059669" bg="#d1fae5"/>}
-                {item.score !== null && item.score !== undefined && <Badge children={`Score: ${item.score}/100`} color="#059669" bg="#d1fae5"/>}
+                {item.score !== null && item.score !== undefined && (() => {
+                  const certTotal = item.assessmentTotal !== undefined && item.assessmentTotal !== null ? item.assessmentTotal : (item.assignment?.assessmentTotal !== undefined && item.assignment?.assessmentTotal !== null ? item.assignment.assessmentTotal : (item.score <= 10 ? 10 : 100));
+                  return <Badge children={`Score: ${item.score}/${certTotal}`} color="#059669" bg="#d1fae5"/>;
+                })()}
                 <Badge children={issuedDate ? new Date(issuedDate).toLocaleDateString("en-IN") : "Date pending"} color="#d97706" bg="#fef3c7"/>
                 {isRealCert && <Badge children={item.status === "issued" ? "Issued" : item.status} color="#7c3aed" bg="#ede9fe"/>}
               </div>
@@ -2001,7 +2013,6 @@ export default function TeacherDashboard({ user, onLogout }) {
     refreshCoreData();
   };
 
-  // Start: Dnyaneshwari Thorat
   const handleRestartCourse = async (assignment) => {
     if (!assignment?._id) return;
     const title = assignment?.course?.title || assignment?.title || "this course";
@@ -2013,6 +2024,20 @@ export default function TeacherDashboard({ user, onLogout }) {
     } catch (err) {
       console.error("Failed to reset course:", err);
       setToast({ msg: err.message || "Failed to restart course.", type: "error" });
+    }
+  };
+
+  const handleRemoveCourse = async (assignment) => {
+    if (!assignment?._id) return;
+    const title = assignment?.course?.title || assignment?.title || "this course";
+    if (!window.confirm(`Are you sure you want to remove "${title}" from your courses?`)) return;
+    try {
+      await deleteCourseAssignment(assignment._id);
+      setToast({ msg: `Course removed: ${title}`, type: "success" });
+      await refreshCoreData();
+    } catch (err) {
+      console.error("Failed to remove course:", err);
+      setToast({ msg: err.message || "Failed to remove course.", type: "error" });
     }
   };
   // End: Dnyaneshwari Thorat
@@ -2109,7 +2134,7 @@ export default function TeacherDashboard({ user, onLogout }) {
 
     switch(activeTab) {
       case "overview":      return <OverviewTab user={enrichedUser} setActiveTab={handleTabSwitch} courses={courses} assignments={courses} lessons={lessons} activities={activities} summary={summary}/>;
-      case "children_att":  return <AttendanceManager user={enrichedUser}/>;
+      case "children_att":  return <AttendanceManager user={enrichedUser} onRosterChange={refreshCoreData}/>;
       case "geotag":        return <GeotagAttendance user={enrichedUser}/>;
       case "training":      return <TrainingAndClassroomManager user={enrichedUser}/>;
       case "planner":       return <LessonPlannerTab setToast={setToast} user={enrichedUser}/>;
@@ -2120,6 +2145,7 @@ export default function TeacherDashboard({ user, onLogout }) {
             onMarkDone={handleMarkDone}
             onGoToAssessment={() => handleTabSwitch("assessment")}
             onRestartCourse={handleRestartCourse}
+            onRemoveCourse={handleRemoveCourse}
           />
         );
       case "assessment":

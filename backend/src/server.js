@@ -28,6 +28,9 @@ import { Center } from "./models/Center.js";
 import { ClassModel } from "./models/Class.js";
 import { ClassLog } from "./models/ClassLog.js";
 import { Child } from "./models/Child.js";
+// Start: Dnyaneshwari Thorat
+import { ChildAssessment } from "./models/ChildAssessment.js";
+// End: Dnyaneshwari Thorat
 import { Course } from "./models/Course.js";
 import { CourseAssignment } from "./models/CourseAssignment.js";
 import { Note } from "./models/Note.js";
@@ -72,6 +75,9 @@ const databaseModels = [
    AIActivity,
    Center,
    ChildAttendanceSession,
+   // Start: Dnyaneshwari Thorat
+   ChildAssessment,
+   // End: Dnyaneshwari Thorat
    Child,
    ClassLog,
    ClassModel,
@@ -1835,6 +1841,90 @@ app.get("/api/teacher/children", requireAuth, requireRole("teacher"), async (req
   }
 });
 
+// Start: Dnyaneshwari Thorat
+app.get("/api/teacher/children/:id/assessments", requireAuth, requireRole("teacher"), async (req, res, next) => {
+  try {
+    const childId = req.params.id;
+    requireObjectId(childId, "childId");
+
+    const list = await ChildAssessment.find({ child: childId });
+    
+    const stageMap = {};
+    list.forEach(item => {
+      stageMap[item.stage] = {
+        answers: Object.fromEntries(item.answers || new Map()),
+        overallStatus: item.overallStatus,
+        otherStatusText: item.otherStatusText,
+        recommendation: item.recommendation,
+        nextAssessmentDate: item.nextAssessmentDate,
+        assessmentDate: item.assessmentDate,
+        sectionScores: item.sectionScores,
+        savedAt: item.updatedAt
+      };
+    });
+
+    res.json(stageMap);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/teacher/children/:id/assessments", requireAuth, requireRole("teacher"), async (req, res, next) => {
+  try {
+    const childId = req.params.id;
+    requireObjectId(childId, "childId");
+
+    const {
+      stage,
+      answers,
+      overallStatus,
+      otherStatusText,
+      recommendation,
+      nextAssessmentDate,
+      assessmentDate,
+      sectionScores
+    } = req.body;
+
+    if (!stage || !["Baseline", "Midline", "Endline"].includes(stage)) {
+      return res.status(400).json({ message: "Invalid stage. Must be Baseline, Midline, or Endline." });
+    }
+
+    const doc = await ChildAssessment.findOneAndUpdate(
+      { child: childId, stage },
+      {
+        $set: {
+          answers: answers || {},
+          overallStatus: overallStatus || "",
+          otherStatusText: otherStatusText || "",
+          recommendation: recommendation || "",
+          nextAssessmentDate: nextAssessmentDate || null,
+          assessmentDate: assessmentDate || null,
+          sectionScores: sectionScores || []
+        }
+      },
+      { new: true, upsert: true }
+    );
+
+    res.json({
+      success: true,
+      assessment: {
+        stage: doc.stage,
+        answers: Object.fromEntries(doc.answers || new Map()),
+        overallStatus: doc.overallStatus,
+        otherStatusText: doc.otherStatusText,
+        recommendation: doc.recommendation,
+        nextAssessmentDate: doc.nextAssessmentDate,
+        assessmentDate: doc.assessmentDate,
+        sectionScores: doc.sectionScores,
+        savedAt: doc.updatedAt
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+// End: Dnyaneshwari Thorat
+
 async function getNextChildRollNo(classId) {
   let nextNumber = await Child.countDocuments({ class: classId }) + 1;
 
@@ -1973,7 +2063,7 @@ app.get("/api/teacher/progress", requireAuth, requireRole("teacher"), async (req
     // Start: Dnyaneshwari Thorat
     // FIX: get classId from teacher's profile first
     const teacherUser = await User.findById(req.user.id).select("teacherProfile");
-    const classId = teacherUser?.teacherProfile?.class;
+    const classIds = teacherUser?.teacherProfile?.classes || [];
 
     const isVisibleCourse = (assignment) => {
       const title = assignment?.course?.title || "";
@@ -1985,7 +2075,7 @@ app.get("/api/teacher/progress", requireAuth, requireRole("teacher"), async (req
       LessonPlanAssignment.find({ teacher: req.user.id }).populate("lessonPlan", "title scheduleDate"),
       ActivitySubmission.find({ teacher: req.user.id }).sort({ activityDate: -1 }),
       TeacherAttendanceRecord.find({ teacher: req.user.id }).sort({ attendanceDate: -1 }),
-      classId ? Child.countDocuments({ class: classId, status: "active" }) : Promise.resolve(0),
+      classIds.length > 0 ? Child.countDocuments({ class: { $in: classIds }, status: "active" }) : Promise.resolve(0),
     ]);
 
     const visibleCourses = courses.filter(isVisibleCourse);
@@ -2896,6 +2986,27 @@ app.post("/api/teacher/courses/assignments/:id/reset", requireAuth, requireRole(
       assessmentResultsDeleted,
       message: "Course reset successfully. You can start again from the beginning.",
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/teacher/courses/assignments/:id", requireAuth, requireRole("teacher"), async (req, res, next) => {
+  try {
+    const assignment = await CourseAssignment.findOneAndDelete({
+      _id: req.params.id,
+      teacher: req.user.id
+    });
+    if (!assignment) {
+      return res.status(404).json({ message: "Course assignment not found." });
+    }
+    // Also delete any associated certificates and assessment results for this course
+    const courseId = assignment.course;
+    if (courseId) {
+      await Certificate.findOneAndDelete({ teacher: req.user.id, course: courseId });
+      await AssessmentResult.deleteMany({ user: req.user.id, courseId });
+    }
+    res.json({ success: true, message: "Course removed successfully." });
   } catch (error) {
     next(error);
   }

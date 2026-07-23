@@ -36,7 +36,7 @@ function isTopicRead(assignment, topicId) {
 }
 // End: Dnyaneshwari Thorat
 
-export default function TeacherCourseNotes({ assignments = [], onMarkDone, onGoToAssessment, onRestartCourse }) {
+export default function TeacherCourseNotes({ assignments = [], onMarkDone, onGoToAssessment, onRestartCourse, onRemoveCourse }) {
   const [activeAssignmentId, setActiveAssignmentId] = useState(null);
   const [activeTopicIdx, setActiveTopicIdx] = useState(0);
 
@@ -182,6 +182,14 @@ export default function TeacherCourseNotes({ assignments = [], onMarkDone, onGoT
                           style={{ ...S.exportBtn, borderColor: "#dc2626", color: "#dc2626" }}
                         >
                           🔄 Restart Course
+                        </button>
+                      )}
+                      {onRemoveCourse && !isLocked && (
+                        <button
+                          onClick={() => onRemoveCourse(c)}
+                          style={{ ...S.exportBtn, borderColor: "#ef4444", color: "#ef4444" }}
+                        >
+                          🗑️ Remove Course
                         </button>
                       )}
                       {/* End: Dnyaneshwari Thorat */}
