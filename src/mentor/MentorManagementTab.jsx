@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { AttendanceBar, Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
-import { getAdminMentors, updateMentorStatus, updateMentorProfile, registerMentor, deleteMentor, getCenters, getClasses } from "../services/api";
+import { getAdminMentors, updateMentorStatus, updateMentorProfile, registerMentor, deleteMentor, getCenters, getClasses, blockMentor, unblockMentor, sendDirectMessageToMentor } from "../services/api";
 import { t } from "../services/i18n";
 
 // Reuse same base URL pattern as ActivityMonitoringTab

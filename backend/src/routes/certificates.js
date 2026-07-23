@@ -14,6 +14,25 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const logoBase64 = fs.readFileSync(path.join(__dirname, "../assets/logo.png")).toString("base64");
 const logoDataUri = `data:image/png;base64,${logoBase64}`;
 
+function calculateGrade(score, maxScore, fallbackGrade) {
+  let initial = fallbackGrade;
+  if (initial === "F") initial = "Fail";
+  if (initial === "D") initial = "Pass";
+  
+  if (initial && ["A+", "A", "B+", "B", "C", "Pass", "Fail"].includes(initial)) {
+    return initial;
+  }
+  
+  if (score === null || score === undefined) return "Pass";
+  const total = maxScore !== undefined && maxScore !== null ? maxScore : 100;
+  const pct = total > 0 ? (score / total) * 100 : 0;
+  if (pct >= 90) return "A+";
+  if (pct >= 80) return "A";
+  if (pct >= 70) return "B+";
+  if (pct >= 60) return "B";
+  return "Pass";
+}
+
 export async function autoIssueCertificateForAssignment(assignmentId) {
   const assignment = await CourseAssignment.findById(assignmentId)
     .populate("course", "title")
@@ -21,24 +40,28 @@ export async function autoIssueCertificateForAssignment(assignmentId) {
 
   if (!assignment || !assignment.course || !assignment.teacher) return null;
 
+  const score = assignment.score;
+  const grade = calculateGrade(
+    score, 
+    assignment.assessmentTotal, 
+    assignment.grade || assignment.assessmentGrade
+  );
+
   const existing = await Certificate.findOne({
     teacher: assignment.teacher._id,
     course: assignment.course._id,
   });
-  if (existing) return existing;
+  if (existing) {
+    if (score !== null && score !== undefined && (existing.score === null || existing.score === undefined)) {
+      existing.score = score;
+      existing.grade = grade;
+      await existing.save();
+    }
+    return existing;
+  }
 
   const count = await Certificate.countDocuments();
   const certNumber = `SPC-${String(count + 1).padStart(5, "0")}-${String(Date.now()).slice(-4)}`;
-
-  let grade = "Pass";
-  const score = assignment.score;
-  if (score !== null && score !== undefined) {
-    if (score >= 90) grade = "A+";
-    else if (score >= 80) grade = "A";
-    else if (score >= 70) grade = "B+";
-    else if (score >= 60) grade = "B";
-    else grade = "Pass";
-  }
 
   try {
     const certificate = await Certificate.create({
@@ -65,6 +88,7 @@ router.get("/teacher", requireAuth, requireRole("teacher"), async (req, res, nex
     const certs = await Certificate.find({ teacher: req.user.id })
       .populate("course", "title duration category")
       .populate("issuedBy", "name")
+      .populate("assignment", "assessmentTotal score")
       .sort({ issuedAt: -1 });
     res.json({ certificates: certs });
   } catch (err) {
@@ -110,11 +134,12 @@ router.post("/generate", requireAuth, requireRole("admin"), async (req, res, nex
     // Compute grade if not provided
     let finalGrade = grade || "Pass";
     if (score !== undefined && !grade) {
-      if (score >= 90) finalGrade = "A+";
-      else if (score >= 80) finalGrade = "A";
-      else if (score >= 70) finalGrade = "B+";
-      else if (score >= 60) finalGrade = "B";
-      else finalGrade = "Pass";
+      let maxScore = 100;
+      if (assignmentId) {
+        const asg = await CourseAssignment.findById(assignmentId).select("assessmentTotal");
+        if (asg && asg.assessmentTotal) maxScore = asg.assessmentTotal;
+      }
+      finalGrade = calculateGrade(score, maxScore);
     }
 
     const certificate = await Certificate.create({
@@ -167,6 +192,12 @@ router.post("/auto-generate/:assignmentId", requireAuth, requireRole("admin"), a
     const count = await Certificate.countDocuments();
     const certNumber = `SPC-${String(count + 1).padStart(5, "0")}-${String(Date.now()).slice(-4)}`;
 
+    const grade = calculateGrade(
+      assignment.score, 
+      assignment.assessmentTotal, 
+      assignment.grade || assignment.assessmentGrade
+    );
+
     const certificate = await Certificate.create({
       certificateNumber: certNumber,
       teacher: assignment.teacher._id,
@@ -174,6 +205,7 @@ router.post("/auto-generate/:assignmentId", requireAuth, requireRole("admin"), a
       assignment: assignment._id,
       issuedBy: req.user.id,
       score: assignment.score || undefined,
+      grade,
       status: "issued",
       issuedAt: new Date(),
     });

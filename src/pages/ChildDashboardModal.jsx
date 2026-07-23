@@ -1,6 +1,9 @@
 // Prajwal start
 import { useState, useEffect } from "react";
 import { SectionCard, S, Badge, StatusBadge } from "../components/Shared";
+// Start: Dnyaneshwari Thorat
+import { getChildAssessments, saveChildAssessment } from "../services/api";
+// End: Dnyaneshwari Thorat
 
 /* ─────────────────────────────────────────
    Child Dashboard — Module 1
@@ -631,7 +634,7 @@ function SectionPieChart({ data }) {
   );
 }
 
-function ChildAssessmentTab({ child }) {
+function ChildAssessmentTab({ child, onAssessmentSaved }) {
   const [stage, setStage] = useState("Baseline");
   const [savedAssessments, setSavedAssessments] = useState({});
   const [answers, setAnswers] = useState({});
@@ -642,18 +645,25 @@ function ChildAssessmentTab({ child }) {
   const [nextAssessmentDate, setNextAssessmentDate] = useState("");
   const [assessmentDate, setAssessmentDate] = useState("");
   const [savedMsg, setSavedMsg] = useState("");
+  const [showValidation, setShowValidation] = useState(false);
+  // Start: Dnyaneshwari Thorat
+  const [loading, setLoading] = useState(false);
 
-  const storageKey = `assessment_${child?.id}`;
-
-  // Load any previously saved assessments for this child (stand-in for a real API call)
+  // Load any previously saved assessments for this child from the backend database
   useEffect(() => {
     if (!child) return;
-    try {
-      const raw = localStorage.getItem(storageKey);
-      setSavedAssessments(raw ? JSON.parse(raw) : {});
-    } catch {
-      setSavedAssessments({});
-    }
+    setLoading(true);
+    getChildAssessments(child.id)
+      .then((data) => {
+        setSavedAssessments(data || {});
+      })
+      .catch((err) => {
+        console.error("Error loading child assessments:", err);
+        setSavedAssessments({});
+      })
+      .finally(() => {
+        setLoading(false);
+      });
     setStage("Baseline");
   }, [child]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -664,8 +674,8 @@ function ChildAssessmentTab({ child }) {
     setOverallStatus(rec?.overallStatus || "");
     setOtherStatusText(rec?.otherStatusText || "");
     setRecommendation(rec?.recommendation || "");
-    setNextAssessmentDate(rec?.nextAssessmentDate || "");
-    setAssessmentDate(rec?.assessmentDate || "");
+    setNextAssessmentDate(rec?.nextAssessmentDate ? new Date(rec.nextAssessmentDate).toISOString().split("T")[0] : "");
+    setAssessmentDate(rec?.assessmentDate ? new Date(rec.assessmentDate).toISOString().split("T")[0] : "");
   }, [stage, savedAssessments]);
 
   const totalItems = SECTIONS.reduce((sum, s) => sum + s.items.length, 0);
@@ -678,27 +688,56 @@ function ChildAssessmentTab({ child }) {
   const toggleActivities = (id) => setOpenActivities((p) => ({ ...p, [id]: !p[id] }));
   const setAnswer = (id, value) => setAnswers((p) => ({ ...p, [id]: value }));
 
+  const allItemIds = SECTIONS.flatMap((s) => s.items.map((it) => it.id));
+  const unansweredIds = allItemIds.filter((id) => !answers[id]);
+
   const handleSaveAssessment = () => {
+    // Validate: all questions must be answered
+    if (unansweredIds.length > 0 || !assessmentDate || !overallStatus) {
+      setShowValidation(true);
+      setSavedMsg("");
+      // Scroll to first unanswered item
+      const firstMissing = unansweredIds[0] || (!assessmentDate ? "assessment-date" : "");
+      const el = document.getElementById(`item-${firstMissing}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    setShowValidation(false);
     const sectionScores = computeSectionScores(answers);
     const record = {
+      stage,
       answers,
       overallStatus,
       otherStatusText,
       recommendation,
-      nextAssessmentDate,
-      assessmentDate,
+      nextAssessmentDate: nextAssessmentDate || null,
+      assessmentDate: assessmentDate || null,
       sectionScores,
-      savedAt: Date.now(),
     };
-    const updated = { ...savedAssessments, [stage]: record };
-    setSavedAssessments(updated);
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-    } catch {}
-    // TODO(backend): POST record to /children/:id/assessments once the endpoint exists
-    setSavedMsg(`${stage} assessment saved!`);
-    setTimeout(() => setSavedMsg(""), 3000);
+
+    setLoading(true);
+    saveChildAssessment(child.id, record)
+      .then((res) => {
+        if (res && res.success && res.assessment) {
+          const updated = { ...savedAssessments, [stage]: res.assessment };
+          setSavedAssessments(updated);
+          setSavedMsg(`${stage} assessment saved!`);
+          if (onAssessmentSaved) {
+            onAssessmentSaved();
+          }
+          setTimeout(() => setSavedMsg(""), 3000);
+        }
+      })
+      .catch((err) => {
+        console.error("Error saving child assessment:", err);
+        setSavedMsg("Failed to save assessment");
+        setTimeout(() => setSavedMsg(""), 3000);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   };
+  // End: Dnyaneshwari Thorat
 
   const currentSectionScores = savedAssessments[stage]?.sectionScores || computeSectionScores({});
 
@@ -718,20 +757,29 @@ function ChildAssessmentTab({ child }) {
     </button>
   );
 
+  if (loading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "250px", fontSize: 14, color: "#d97706", fontWeight: 700 }}>
+        🔄 Loading assessment data...
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", gap: 8 }}>{ASSESSMENT_STAGES.map(stageBtn)}</div>
 
       <SectionCard title={`${stage} Assessment`}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-          <div>
-            <label style={S.label}>Assessment Date</label>
+          <div id="item-assessment-date">
+            <label style={S.label}>Assessment Date <span style={{ color: "#dc2626" }}>*</span></label>
             <input
               type="date"
-              style={S.input}
+              style={{ ...S.input, borderColor: showValidation && !assessmentDate ? "#dc2626" : undefined, boxShadow: showValidation && !assessmentDate ? "0 0 0 2px rgba(220,38,38,0.15)" : undefined }}
               value={assessmentDate}
               onChange={(e) => setAssessmentDate(e.target.value)}
             />
+            {showValidation && !assessmentDate && <span style={{ fontSize: 11, color: "#dc2626", marginTop: 4, display: "block" }}>Required</span>}
           </div>
           <div>
             <label style={S.label}>Assessed By</label>
@@ -752,11 +800,27 @@ function ChildAssessmentTab({ child }) {
             alignItems: "center",
             fontSize: "0.85rem",
             marginBottom: 16,
+            flexWrap: "wrap",
+            gap: 8,
           }}
         >
-          <span>{answeredCount} / {totalItems} items rated</span>
-          <span>Running score: {totalScore}</span>
+          <span>
+            {answeredCount} / {totalItems} items rated
+            {unansweredIds.length > 0 && (
+              <span style={{ color: "#fbbf24", marginLeft: 8, fontSize: 12 }}>({unansweredIds.length} remaining)</span>
+            )}
+          </span>
+          <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ color: "#fca5a5", fontSize: 11 }}>All fields are mandatory <span style={{ color: "#ef4444" }}>*</span></span>
+            <span>Running score: {totalScore}</span>
+          </span>
         </div>
+        {showValidation && unansweredIds.length > 0 && (
+          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 12, color: "#dc2626", fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 16 }}>⚠️</span>
+            Please rate all {unansweredIds.length} unanswered items before saving. Unanswered items are highlighted in red.
+          </div>
+        )}
 
         {SECTIONS.map((section) => (
           <div key={section.id} style={{ marginBottom: "1.5rem" }}>
@@ -774,7 +838,7 @@ function ChildAssessmentTab({ child }) {
                 {section.number}
               </span>
               <h3 style={{ fontSize: "0.95rem", fontWeight: 700, color: "#1c1917", margin: 0 }}>
-                {section.title}
+                {section.title} <span style={{ color: "#dc2626", fontSize: 14 }}>*</span>
               </h3>
             </div>
 
@@ -784,23 +848,33 @@ function ChildAssessmentTab({ child }) {
               const hasActivities = item.activities?.length > 0;
               const isOpen = !!openActivities[item.id];
 
+              const isUnanswered = showValidation && !currentValue;
+
               return (
                 <div
                   key={item.id}
+                  id={`item-${item.id}`}
                   style={{
-                    background: "white",
-                    border: "1px solid #e4e2da",
+                    background: isUnanswered ? "#fff5f5" : "white",
+                    border: isUnanswered ? "1.5px solid #fca5a5" : "1px solid #e4e2da",
                     borderRadius: 10,
                     padding: "0.9rem 1rem",
                     marginBottom: "0.6rem",
+                    boxShadow: isUnanswered ? "0 0 0 2px rgba(220,38,38,0.1)" : "none",
+                    transition: "all 0.2s ease",
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                     <p style={{ margin: 0, fontSize: 13, color: "#1c1917", flex: 1 }}>
                       <span style={{ color: "#8a6a4f", fontWeight: 700 }}>{item.id}</span>{" "}
                       {item.text}
+                      <span style={{ color: "#dc2626", marginLeft: 3 }}>*</span>
                     </p>
-                    {currentValue && <span style={{ color: "#5b7a5b", fontWeight: "bold" }}>✓</span>}
+                    {currentValue ? (
+                      <span style={{ color: "#5b7a5b", fontWeight: "bold" }}>✓</span>
+                    ) : isUnanswered ? (
+                      <span style={{ color: "#dc2626", fontSize: 11, fontWeight: 600 }}>Required</span>
+                    ) : null}
                   </div>
 
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
@@ -860,7 +934,7 @@ function ChildAssessmentTab({ child }) {
 
         <div style={{ marginTop: 8 }}>
           <p style={{ fontSize: 13, fontWeight: 700, color: "#1c1917", marginBottom: 8 }}>
-            Overall Developmental Progress
+            Overall Developmental Progress <span style={{ color: "#dc2626" }}>*</span>
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
             {OVERALL_OPTIONS.map((opt) => (
@@ -884,6 +958,7 @@ function ChildAssessmentTab({ child }) {
               />
             )}
           </div>
+          {showValidation && !overallStatus && <div style={{ fontSize: 11, color: "#dc2626", fontWeight: 600, marginBottom: 8 }}>⚠️ Please select an overall status</div>}
 
           <label style={S.label}>Recommendations / Next Steps</label>
           <textarea
@@ -902,11 +977,16 @@ function ChildAssessmentTab({ child }) {
           />
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <button onClick={handleSaveAssessment} style={S.primaryBtn}>
             💾 Save {stage} Assessment
           </button>
           {savedMsg && <span style={{ fontSize: 12, color: "#059669", fontWeight: 700 }}>✓ {savedMsg}</span>}
+          {showValidation && unansweredIds.length > 0 && (
+            <span style={{ fontSize: 12, color: "#dc2626", fontWeight: 700 }}>
+              ⚠️ {unansweredIds.length} unanswered item{unansweredIds.length > 1 ? "s" : ""} — please complete all fields
+            </span>
+          )}
         </div>
       </SectionCard>
 
@@ -916,42 +996,472 @@ function ChildAssessmentTab({ child }) {
     </div>
   );
 }
+/**
+ * Build activity recommendations from the Section-wise Score Breakdown chart.
+ * HIGH score → 1-2 suggestions only (child is doing well)
+ * LOW score  → MORE suggestions (child needs support)
+ */
+function buildRecommendationsFromChart(chartScores, answers) {
+  return SECTIONS.map((section) => {
+    const chartEntry = chartScores.find((cs) => cs.id === section.id);
+    if (!chartEntry) return null;
+
+    const pct = chartEntry.max > 0 ? Math.round((chartEntry.score / chartEntry.max) * 100) : 0;
+
+    // HIGH score = fewer suggestions, LOW score = more suggestions
+    let maxItems, maxActivitiesPerItem;
+    if (pct >= 76) {
+      // Doing great — just 1 item, 1 activity
+      maxItems = 1;
+      maxActivitiesPerItem = 1;
+    } else if (pct >= 51) {
+      // Good progress — 2 items, 1 activity each
+      maxItems = 2;
+      maxActivitiesPerItem = 1;
+    } else if (pct >= 26) {
+      // Needs support — all items, 2 activities each
+      maxItems = section.items.length;
+      maxActivitiesPerItem = 2;
+    } else {
+      // Needs strong support — ALL items, ALL activities
+      maxItems = section.items.length;
+      maxActivitiesPerItem = 3;
+    }
+
+    // Sort items by individual score (weakest first)
+    const sortedItems = [...section.items].sort((a, b) => {
+      const sa = scoreOf(answers[a.id]);
+      const sb = scoreOf(answers[b.id]);
+      return (sa === null ? -1 : sa) - (sb === null ? -1 : sb);
+    });
+
+    const items = sortedItems.slice(0, maxItems).map((item) => ({
+      ...item,
+      itemScore: scoreOf(answers[item.id]),
+      activities: item.activities.slice(0, maxActivitiesPerItem),
+    }));
+
+    return {
+      sectionId: section.id,
+      sectionNumber: section.number,
+      title: section.title,
+      score: chartEntry.score,
+      max: chartEntry.max,
+      pct,
+      items,
+      totalActivities: items.reduce((sum, it) => sum + it.activities.length, 0),
+    };
+  })
+    .filter(Boolean)
+    .sort((a, b) => a.pct - b.pct);
+}
+
+// Section icons for visual flair
+const SECTION_ICONS = {
+  gross_fine_motor: "🏃",
+  cognitive: "🧠",
+  social_emotional: "🤝",
+  language: "🗣️",
+  adaptive: "🎒",
+  sensory_regulation: "🎨",
+};
+
 function ActivitySuggestionsTab({ child }) {
-  // TODO(backend): fetch from activity_recommendations joined with activities,
-  // grouped by weak domain, for this child's most recent assessment_id.
-  const recommendations = []; // placeholder — empty until wired to backend
+  const [expandedSections, setExpandedSections] = useState({});
+  const [completedActivities, setCompletedActivities] = useState({});
+  // Start: Dnyaneshwari Thorat
+  const [savedAssessments, setSavedAssessments] = useState({});
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!child) return;
+    setLoading(true);
+    getChildAssessments(child.id)
+      .then((data) => {
+        setSavedAssessments(data || {});
+      })
+      .catch((err) => {
+        console.error("Error loading child assessments for suggestions:", err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [child]);
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "250px", fontSize: 14, color: "#d97706", fontWeight: 700 }}>
+        🔄 Loading suggestions...
+      </div>
+    );
+  }
+
+  let chartScores = null;
+  let answers = {};
+  let latestStage = "";
+
+  for (const stage of ["Endline", "Midline", "Baseline"]) {
+    if (savedAssessments[stage] && savedAssessments[stage].answers && Object.keys(savedAssessments[stage].answers).length > 0) {
+      const rec = savedAssessments[stage];
+      answers = rec.answers || {};
+      chartScores = rec.sectionScores || computeSectionScores(answers);
+      latestStage = stage;
+      break;
+    }
+  }
+
+  const hasChartData = chartScores && chartScores.some((s) => s.score > 0);
+  // End: Dnyaneshwari Thorat
+
+  // ── No data state ──
+  if (!hasChartData) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "30px 0" }}>
+        <div
+          style={{
+            background: "white",
+            borderRadius: 20,
+            border: "2px dashed #d97706",
+            padding: "48px 40px",
+            textAlign: "center",
+            maxWidth: 500,
+            width: "100%",
+            boxShadow: "0 4px 24px rgba(217,119,6,0.08)",
+          }}
+        >
+          <div
+            style={{
+              width: 72,
+              height: 72,
+              borderRadius: 20,
+              background: "linear-gradient(135deg, #fef3c7, #fde68a)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 32,
+              margin: "0 auto 20px",
+              boxShadow: "0 4px 12px rgba(245,158,11,0.2)",
+            }}
+          >
+            🎯
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a", marginBottom: 8 }}>
+            Complete an Assessment First
+          </div>
+          <div style={{ fontSize: 13, color: "#64748b", lineHeight: 1.7 }}>
+            Activity suggestions are based on the <strong style={{ color: "#d97706" }}>Section-wise Score Breakdown</strong> chart.
+            Go to the <strong>Child Assessment</strong> tab, rate each section, and save. Suggestions will appear here automatically.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const recommendations = buildRecommendationsFromChart(chartScores, answers);
+  const totalActivities = recommendations.reduce((sum, r) => sum + r.totalActivities, 0);
+  const completedCount = Object.values(completedActivities).filter(Boolean).length;
+
+  const toggleSection = (id) => setExpandedSections((p) => ({ ...p, [id]: !p[id] }));
+  const toggleComplete = (key) => setCompletedActivities((p) => ({ ...p, [key]: !p[key] }));
+
+  // Score-to-label helper
+  const getScoreLabel = (pct) => {
+    if (pct >= 76) return { text: "Doing Well", color: "#059669", bg: "#d1fae5" };
+    if (pct >= 51) return { text: "Good Progress", color: "#d97706", bg: "#fef3c7" };
+    if (pct >= 26) return { text: "Needs Support", color: "#ea580c", bg: "#fff7ed" };
+    return { text: "Needs Focus", color: "#dc2626", bg: "#fee2e2" };
+  };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {recommendations.length === 0 ? (
-        <div style={{ padding: 40, textAlign: "center", background: "white", borderRadius: 16, border: "1px dashed #cbd5e1", color: "#94a3b8" }}>
-          No activity recommendations yet. These are generated automatically after an assessment
-          is submitted, targeting the child's lowest-scoring domains.
+    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      {/* ── Header Banner ── */}
+      <div
+        style={{
+          background: "linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #334155 100%)",
+          borderRadius: 16,
+          padding: "22px 24px",
+          color: "white",
+          borderTop: "3px solid #f59e0b",
+          boxShadow: "0 4px 20px rgba(15,23,42,0.15)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 3, display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ background: "linear-gradient(135deg, #f59e0b, #d97706)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                🎯 Activity Suggestions
+              </span>
+            </div>
+            <div style={{ fontSize: 11, color: "#94a3b8" }}>
+              Based on <span style={{ color: "#fbbf24", fontWeight: 700 }}>{latestStage}</span> Score Breakdown · Low scores get more suggestions
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+            <div style={{ textAlign: "center", padding: "6px 14px", background: "rgba(245,158,11,0.12)", borderRadius: 10, border: "1px solid rgba(245,158,11,0.25)" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#fbbf24" }}>{totalActivities}</div>
+              <div style={{ fontSize: 9, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1 }}>Total</div>
+            </div>
+            <div style={{ textAlign: "center", padding: "6px 14px", background: "rgba(16,185,129,0.12)", borderRadius: 10, border: "1px solid rgba(16,185,129,0.25)" }}>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#34d399" }}>{completedCount}</div>
+              <div style={{ fontSize: 9, color: "#94a3b8", textTransform: "uppercase", letterSpacing: 1 }}>Done</div>
+            </div>
+          </div>
         </div>
-      ) : (
-        recommendations.map((group) => (
-          <SectionCard key={group.domain} title={`${group.domain} — Needs Support`}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 14 }}>
-              {group.activities.map((a) => (
-                <div key={a.activityId} style={{ background: "white", borderRadius: 14, padding: 16, border: "1px solid #f1f5f9" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: "#1c1917" }}>{a.name}</div>
-                    <StatusBadge status={a.status || "assigned"} />
+
+        {/* Progress */}
+        <div style={{ marginTop: 14, background: "#334155", borderRadius: 999, height: 5, overflow: "hidden" }}>
+          <div
+            style={{
+              height: "100%",
+              borderRadius: 999,
+              background: "linear-gradient(90deg, #f59e0b, #d97706)",
+              width: totalActivities > 0 ? `${(completedCount / totalActivities) * 100}%` : "0%",
+              transition: "width 0.4s ease",
+            }}
+          />
+        </div>
+      </div>
+
+      {/* ── Section Cards ── */}
+      {recommendations.map((rec) => {
+        const isExpanded = expandedSections[rec.sectionId] !== false;
+        const label = getScoreLabel(rec.pct);
+        const icon = SECTION_ICONS[rec.sectionId] || "📋";
+
+        return (
+          <div
+            key={rec.sectionId}
+            style={{
+              background: "white",
+              borderRadius: 16,
+              border: "1px solid #f1f5f9",
+              overflow: "hidden",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+            }}
+          >
+            {/* Section Header */}
+            <div
+              onClick={() => toggleSection(rec.sectionId)}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "14px 20px",
+                background: "linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)",
+                cursor: "pointer",
+                borderBottom: isExpanded ? "1px solid #fde68a" : "none",
+                userSelect: "none",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 12,
+                    background: "linear-gradient(135deg, #f59e0b, #d97706)",
+                    color: "white",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 18,
+                    flexShrink: 0,
+                    boxShadow: "0 2px 8px rgba(217,119,6,0.3)",
+                  }}
+                >
+                  {icon}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: "#0f172a", marginBottom: 3 }}>
+                    {rec.title}
                   </div>
-                  <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 8 }}>{a.objective}</div>
-                  <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 4 }}><strong>Materials:</strong> {a.materials}</div>
-                  <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 8 }}><strong>Duration:</strong> {a.duration}</div>
-                  <Badge children={a.difficulty} color="#7c3aed" bg="#ede9fe" />
-                  <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                    <button style={{ ...S.exportBtn, flex: 1, fontSize: 11 }}>Mark Completed</button>
-                    <button style={{ ...S.exportBtn, flex: 1, fontSize: 11 }}>Add Observation</button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: label.color,
+                        background: label.bg,
+                        padding: "2px 10px",
+                        borderRadius: 20,
+                        border: `1px solid ${label.color}30`,
+                      }}
+                    >
+                      {label.text}
+                    </span>
+                    <span style={{ fontSize: 11, color: "#92400e", fontWeight: 600 }}>
+                      {rec.score}/{rec.max} pts
+                    </span>
+                    <span style={{ fontSize: 11, color: "#9ca3af" }}>
+                      · {rec.totalActivities} {rec.totalActivities === 1 ? "activity" : "activities"}
+                    </span>
                   </div>
                 </div>
-              ))}
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {/* Score ring */}
+                <div style={{ position: "relative", width: 44, height: 44 }}>
+                  <svg width="44" height="44" viewBox="0 0 44 44">
+                    <circle cx="22" cy="22" r="18" fill="none" stroke="#f3f4f6" strokeWidth="3" />
+                    <circle
+                      cx="22" cy="22" r="18" fill="none"
+                      stroke={rec.pct >= 76 ? "#059669" : rec.pct >= 51 ? "#d97706" : rec.pct >= 26 ? "#ea580c" : "#dc2626"}
+                      strokeWidth="3"
+                      strokeDasharray={`${(rec.pct / 100) * 113.1} 113.1`}
+                      strokeLinecap="round"
+                      transform="rotate(-90 22 22)"
+                    />
+                  </svg>
+                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "#0f172a" }}>
+                    {rec.pct}%
+                  </div>
+                </div>
+
+                <span style={{ fontSize: 14, color: "#d97706", transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "rotate(0)" }}>
+                  ▼
+                </span>
+              </div>
             </div>
-          </SectionCard>
-        ))
-      )}
+
+            {/* Activity Cards */}
+            {isExpanded && (
+              <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
+                {rec.items.map((item) => (
+                  <div key={item.id}>
+                    {/* Item label */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                      <span
+                        style={{
+                          background: "linear-gradient(135deg, #f59e0b, #d97706)",
+                          color: "white",
+                          fontSize: 10,
+                          fontWeight: 800,
+                          borderRadius: 6,
+                          padding: "3px 9px",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {item.id}
+                      </span>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#374151", lineHeight: 1.4, flex: 1 }}>
+                        {item.text}
+                      </span>
+                      {item.itemScore !== null && item.itemScore !== undefined && (
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            color: item.itemScore <= 1 ? "#dc2626" : item.itemScore <= 2 ? "#d97706" : "#059669",
+                            background: item.itemScore <= 1 ? "#fee2e2" : item.itemScore <= 2 ? "#fef3c7" : "#d1fae5",
+                            borderRadius: 20,
+                            padding: "2px 10px",
+                            flexShrink: 0,
+                          }}
+                        >
+                          Score {item.itemScore}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Activity cards grid */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 12 }}>
+                      {item.activities.map((activity, ai) => {
+                        const actKey = `${item.id}_${ai}`;
+                        const isDone = !!completedActivities[actKey];
+                        // Parse activity name (before —) and description (after —)
+                        const dashIdx = activity.indexOf("—");
+                        const actName = dashIdx > -1 ? activity.slice(0, dashIdx).trim() : activity;
+                        const actDesc = dashIdx > -1 ? activity.slice(dashIdx + 1).trim() : "";
+
+                        return (
+                          <div
+                            key={ai}
+                            style={{
+                              background: isDone
+                                ? "linear-gradient(135deg, #f0fdf4, #dcfce7)"
+                                : "white",
+                              border: isDone ? "1.5px solid #86efac" : "1.5px solid #f1f5f9",
+                              borderRadius: 14,
+                              padding: "16px",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 10,
+                              transition: "all 0.25s ease",
+                              opacity: isDone ? 0.8 : 1,
+                              boxShadow: isDone
+                                ? "none"
+                                : "0 2px 8px rgba(0,0,0,0.04)",
+                              borderTop: isDone
+                                ? "3px solid #10b981"
+                                : "3px solid #f59e0b",
+                            }}
+                          >
+                            {/* Activity name */}
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 700,
+                                color: isDone ? "#059669" : "#0f172a",
+                                textDecoration: isDone ? "line-through" : "none",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6,
+                              }}
+                            >
+                              <span style={{ fontSize: 14 }}>{isDone ? "✅" : "📌"}</span>
+                              {actName}
+                            </div>
+
+                            {/* Activity description */}
+                            {actDesc && (
+                              <div
+                                style={{
+                                  fontSize: 12,
+                                  color: isDone ? "#6b7280" : "#64748b",
+                                  lineHeight: 1.6,
+                                  textDecoration: isDone ? "line-through" : "none",
+                                }}
+                              >
+                                {actDesc}
+                              </div>
+                            )}
+
+                            {/* Mark done button */}
+                            <button
+                              onClick={() => toggleComplete(actKey)}
+                              style={{
+                                alignSelf: "flex-start",
+                                marginTop: "auto",
+                                background: isDone
+                                  ? "linear-gradient(135deg, #10b981, #059669)"
+                                  : "linear-gradient(135deg, #f59e0b, #d97706)",
+                                border: "none",
+                                borderRadius: 8,
+                                padding: "6px 16px",
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: "white",
+                                cursor: "pointer",
+                                transition: "all 0.2s ease",
+                                boxShadow: isDone
+                                  ? "0 2px 8px rgba(16,185,129,0.25)"
+                                  : "0 2px 8px rgba(217,119,6,0.25)",
+                              }}
+                            >
+                              {isDone ? "✓ Completed" : "Mark Done"}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -961,6 +1471,7 @@ export default function ChildDashboardModal({ child, onClose }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: child?.name || "" });
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     setForm({ name: child?.name || "" });
@@ -975,6 +1486,10 @@ export default function ChildDashboardModal({ child, onClose }) {
       setSaving(false);
       setEditing(false);
     }, 400);
+  };
+
+  const handleAssessmentSaved = () => {
+    setRefreshKey((prev) => prev + 1);
   };
 
   const tabBtn = (key, label, icon) => (
@@ -1041,8 +1556,12 @@ export default function ChildDashboardModal({ child, onClose }) {
           {tab === "profile" && (
             <ChildProfileTab child={child} editing={editing} setEditing={setEditing} form={form} setForm={setForm} onSave={handleSaveProfile} saving={saving} />
           )}
-          {tab === "assessment" && <ChildAssessmentTab child={child} />}
-          {tab === "activities" && <ActivitySuggestionsTab child={child} />}
+          {tab === "assessment" && (
+            <ChildAssessmentTab child={child} onAssessmentSaved={handleAssessmentSaved} />
+          )}
+          {tab === "activities" && (
+            <ActivitySuggestionsTab key={`${child.id}_${refreshKey}`} child={child} />
+          )}
         </div>
 
         {/* Footer */}

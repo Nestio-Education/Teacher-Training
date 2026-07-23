@@ -34,17 +34,49 @@ const userSchema = new mongoose.Schema(
       lessonsCompleted: { type: Number, default: 0 },
       lessonsPending: { type: Number, default: 0 },
     },
-    // Start: Dnyaneshwari Thorat
     mentorProfile: {
       center: { type: mongoose.Schema.Types.ObjectId, ref: "Center" },
+      classes: [{ type: mongoose.Schema.Types.ObjectId, ref: "Class" }],
       qualification: String,
       specialization: String,
       experience: String,
       address: String,
       fellowshipSemester: { type: Number, default: 3 },
-      assignedTeachers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }]
+      assignedTeachers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+      bio: String,
+      dob: Date,
+      gender: String,
+      languages: [String],
+      profilePhoto: String,
+      performanceRating: { type: Number, default: 0 },
+      lessonsCompleted: { type: Number, default: 0 },
+      menteeObservations: [
+        {
+          menteeId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+          notes: String,
+          date: { type: Date, default: Date.now }
+        }
+      ],
+      capstoneMilestone: { type: Number, default: 1 },
+      capstoneSubmissions: [
+        {
+          milestone: Number,
+          notes: String,
+          evidenceLink: String,
+          submittedAt: { type: Date, default: Date.now }
+        }
+      ],
+      pdcaCycles: [
+        {
+          plan: String,
+          do: String,
+          check: String,
+          act: String,
+          date: { type: Date, default: Date.now },
+          status: { type: String, default: "Completed" }
+        }
+      ]
     },
-    // End: Dnyaneshwari Thorat
   },
   { timestamps: true }
 );
