@@ -16,6 +16,7 @@ import NotificationsTab from "../admin/NotificationsTab";
 import SettingsTab from "../admin/SettingsTab";
 import FeedbackManagementTab from "../admin/FeedbackManagementTab";
 import LessonPlannerTab from "./LessonPlannerTab";
+import AdminUserGuide from "./adminuserguide";
 //import ScheduleManagementTab from "../admin/ScheduleManagementTab";
 //import CertificateManagementTab from "../admin/CertificateManagementTab";
 //import AutomationTab from "../admin/AutomationTab";
@@ -46,6 +47,7 @@ export default function AdminDashboard({ user, onLogout }) {
   const [courses, setCourses] = useState([]);
   const [assignments,setAssignments] = useState([]);
   const [toast, setToast] = useState({msg:"",type:""});
+  const [showGuide, setShowGuide] = useState(false);
 
   const pending = teachers.filter(t=>t.status==="pending");
   const mapCourseAssignmentForReview = (assignment) => {
@@ -223,8 +225,34 @@ export default function AdminDashboard({ user, onLogout }) {
 
       {/* Main Content */}
       <div style={{ flex:1, padding:"28px 32px", overflowY:"auto", maxHeight:"100vh" }}>
-        {/* Top bar with logout button, top-right corner */}
-        <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:16 }}>
+        {/* Top bar with User Guide + Logout buttons, top-right corner */}
+        <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginBottom:16 }}>
+          <button
+            onClick={() => setShowGuide(true)}
+            title={t("User Guide")}
+            style={{
+              display:"flex",
+              alignItems:"center",
+              gap:6,
+              padding:"8px 16px",
+              borderRadius:10,
+              border:"1px solid #fbbf24",
+              background:"white",
+              color:"#92400e",
+              fontSize:12,
+              fontWeight:700,
+              fontFamily:"inherit",
+              cursor:"pointer",
+              transition:"all 0.18s",
+              boxShadow:"0 1px 3px rgba(0,0,0,0.04)",
+            }}
+            onMouseEnter={(e)=>{ e.currentTarget.style.background="#fffbeb"; }}
+            onMouseLeave={(e)=>{ e.currentTarget.style.background="white"; }}
+          >
+            <span style={{ fontSize:14, lineHeight:1 }}>📖</span>
+            {t("User Guide")}
+          </button>
+
           <button
             onClick={onLogout}
             title="Sign Out"
@@ -254,6 +282,8 @@ export default function AdminDashboard({ user, onLogout }) {
 
         {renderContent()}
       </div>
+
+      {showGuide && <AdminUserGuide onClose={() => setShowGuide(false)} />}
     </div>
   );
 }
