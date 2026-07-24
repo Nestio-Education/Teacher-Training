@@ -321,4 +321,13 @@ export const globalCSS = `
   button:active {
     transform: scale(0.98);
   }
+  
+  @keyframes micPulse {
+    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+    70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  }
+  .mic-pulsing {
+    animation: micPulse 1.4s infinite ease-in-out !important;
+  }
 `;
