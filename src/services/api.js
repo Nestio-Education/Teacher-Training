@@ -1289,3 +1289,19 @@ export function generateAILessonPlan(data) {
    export function getCourseAssessment(courseId) {
   return request(`/api/courses/${courseId}/assessment`);
 }
+
+// Child Feedback (AI-structured teacher feedback) APIs
+export function getAllChildFeedback() {
+  return request("/api/child-feedback");
+}
+
+export function getChildFeedbackByChild(childId) {
+  return request(`/api/child-feedback/child/${childId}`);
+}
+
+export function submitChildFeedback(payload) {
+  return request("/api/child-feedback", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}

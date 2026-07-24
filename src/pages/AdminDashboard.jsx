@@ -16,6 +16,7 @@ import NotificationsTab from "../admin/NotificationsTab";
 import SettingsTab from "../admin/SettingsTab";
 import FeedbackManagementTab from "../admin/FeedbackManagementTab";
 import LessonPlannerTab from "./LessonPlannerTab";
+import ChildFeedbackTab from "../admin/ChildFeedbackTab";
 //import ScheduleManagementTab from "../admin/ScheduleManagementTab";
 //import CertificateManagementTab from "../admin/CertificateManagementTab";
 //import AutomationTab from "../admin/AutomationTab";
@@ -109,6 +110,7 @@ export default function AdminDashboard({ user, onLogout }) {
     //{ key:"certificates", label:"Certificates",        icon:"\uD83C\uDFC6" },
     { key:"feedback",     label:"Feedback",              icon:"\uD83D\uDCAC" },
     //{ key:"automation",   label:"Automation Center",     icon:"\u2699\uFE0F" },
+    { key: "childfeedback", label: "Child Feedback", icon: "💬" },
   ];
   const persistTeachers = (updater) => {
   setTeachers(prev => {
@@ -147,6 +149,7 @@ export default function AdminDashboard({ user, onLogout }) {
      // case "certificates": return <CertificateManagementTab setToast={setToast}/>;
       case "feedback":     return <FeedbackManagementTab setToast={setToast}/>;
       //case "automation":   return <AutomationTab user={user} setToast={setToast}/>;
+      case "childfeedback": return <ChildFeedbackTab/>;
       default:             return null;
     }
   };

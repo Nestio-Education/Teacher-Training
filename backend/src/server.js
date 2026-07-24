@@ -37,6 +37,7 @@ import { LessonCompletionReport } from "./models/LessonCompletionReport.js";
 import { ActivitySubmission } from "./models/ActivitySubmission.js";
 import { Trainer } from "./models/Trainer.js";
 import { Feedback } from "./models/Feedback.js";
+import { ChildFeedback } from "./models/ChildFeedback.js";
 import { FileAsset } from "./models/FileAsset.js";
 import { ChildAttendanceSession, TeacherAttendanceRecord } from "./models/Attendance.js";
 import { Certificate } from "./models/Certificate.js";
@@ -78,6 +79,7 @@ const databaseModels = [
    CourseAssignment,
    Course,
    Feedback,
+   ChildFeedback,
    FileAsset,
    LessonCompletionReport,
    LessonPlan,
@@ -5419,6 +5421,9 @@ app.use("/api/parent-modules", parentModulesRouter);
 // Snehal change: session assignment tracking (status/feedback) route
 import parentSessionAssignmentsRouter from "./routes/parentSessionAssignments.js";
 app.use("/api/parent-session-assignments", parentSessionAssignmentsRouter);
+
+import childFeedbackRouter from "./routes/childFeedback.js";
+app.use("/api/child-feedback", childFeedbackRouter);
 
 await connectDb();
 await ensureDatabaseReady();
