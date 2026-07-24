@@ -518,10 +518,15 @@ export function updateCourseAssignmentProgress(assignmentId, payload) {
   });
 }
 
-// Start: Dnyaneshwari Thorat
 export function resetCourseAssignmentProgress(assignmentId) {
   return request(`/api/teacher/courses/assignments/${assignmentId}/reset`, {
     method: "POST"
+  });
+}
+
+export function deleteCourseAssignment(assignmentId) {
+  return request(`/api/teacher/courses/assignments/${assignmentId}`, {
+    method: "DELETE"
   });
 }
 // End: Dnyaneshwari Thorat
@@ -1038,51 +1043,42 @@ export function askEnhancedChatbot(message) {
 // Daily Task Automation
 // Daily Task Automation
 export const generateDummyTeachers = async () => {
-  const res = await fetch(`${API_BASE_URL}/api/daily-task-automation/teachers/generate-dummy`, { method: "POST" });
-  return res.json();
+  return request("/api/daily-task-automation/teachers/generate-dummy", { method: "POST" });
 };
 
 export const uploadActivityBank = async (file) => {
   const formData = new FormData();
   formData.append("file", file);
-  const res = await fetch(`${API_BASE_URL}/api/daily-task-automation/activities/upload`, {
+  return request("/api/daily-task-automation/activities/upload", {
     method: "POST",
     body: formData
   });
-  return res.json();
 };
 
 export const generateDailyTasks = async ({ activityCount = 4, replaceExisting = false } = {}) => {
-  const res = await fetch(`${API_BASE_URL}/api/daily-task-automation/generate-daily`, {
+  return request("/api/daily-task-automation/generate-daily", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ activityCount, replaceExisting })
   });
-  return res.json();
 };
 
 export const getTodayAssignments = async () => {
-  const res = await fetch(`${API_BASE_URL}/api/daily-task-automation/today`);
-  return res.json();
+  return request("/api/daily-task-automation/today");
 };
 
 export const getTeacherTodayTasks = async (teacherId) => {
-  const res = await fetch(`${API_BASE_URL}/api/daily-task-automation/teacher/${teacherId}/today`);
-  return res.json();
+  return request(`/api/daily-task-automation/teacher/${teacherId}/today`);
 };
 
 export const getTeacherNotifications = async (teacherId) => {
-  const res = await fetch(`${API_BASE_URL}/api/daily-task-automation/teacher/${teacherId}/notifications`);
-  return res.json();
+  return request(`/api/daily-task-automation/teacher/${teacherId}/notifications`);
 };
 
 export const updateTaskStatus = async (assignmentId, taskId, status) => {
-  const res = await fetch(`${API_BASE_URL}/api/daily-task-automation/assignments/${assignmentId}/tasks/${taskId}/status`, {
+  return request(`/api/daily-task-automation/assignments/${assignmentId}/tasks/${taskId}/status`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status })
   });
-  return res.json();
 };
 // ── Course Library (parsed from the .docx source of truth) ──
 export function getCourseLibrary() {
@@ -1227,6 +1223,13 @@ export function unblockMentor(id) {
   });
 }
 
+export function sendDirectMessageToMentor(mentorId, payload) {
+  return request(`/api/admin/mentors/${mentorId}/message`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 // ── Mentor APIs (missing stubs) ──
 export function registerMentor(payload) {
   return request("/api/auth/register-mentor", {
@@ -1258,24 +1261,24 @@ export function changeMentorPassword(currentPassword, newPassword) {
 }
 
 // ── Mentor Tabs APIs ──
-export function recordMenteeObservation(data) {
-  return request("/api/mentor/observations", {
+export function recordMenteeObservation(menteeId, notes) {
+  return request("/api/mentor/observation", {
     method: "POST",
-    body: JSON.stringify(data)
+    body: JSON.stringify({ menteeId, notes })
   });
 }
 
-export function submitCapstoneMilestone(data) {
+export function submitCapstoneMilestone(notes, evidenceLink) {
   return request("/api/mentor/capstone", {
     method: "POST",
-    body: JSON.stringify(data)
+    body: JSON.stringify({ notes, evidenceLink })
   });
 }
 
-export function submitPDCACycle(data) {
+export function submitPDCACycle(plan, doAction, check, act) {
   return request("/api/mentor/pdca", {
     method: "POST",
-    body: JSON.stringify(data)
+    body: JSON.stringify({ plan, do: doAction, check, act })
   });
 }
 
@@ -1305,3 +1308,15 @@ export function submitChildFeedback(payload) {
     body: JSON.stringify(payload),
   });
 }
+// Start: Dnyaneshwari Thorat
+export function getChildAssessments(childId) {
+  return request(`/api/teacher/children/${childId}/assessments`);
+}
+
+export function saveChildAssessment(childId, payload) {
+  return request(`/api/teacher/children/${childId}/assessments`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+// End: Dnyaneshwari Thorat
