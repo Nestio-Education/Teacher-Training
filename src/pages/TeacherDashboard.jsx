@@ -10,6 +10,7 @@ import GeotagAttendance from "./GeotagAttendance";
 import ProctoredAssessment from "./Proctoredassessment";      // now reading/notes based, same filename
 import TeacherCourseNotes from "./TeacherCourseNotes";    // NEW — replaces the old video CoursesTab
 import LessonPlannerTab from "./LessonPlannerTab";     
+import CurriculumTab from "./CurriculumTab";
 import {
   getTeacherProgress,
   getNotifications,
@@ -155,6 +156,57 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
         <span style={{ fontSize: 18 }}>@</span>
         <span>Working Center: {centerName}</span>
       </div>
+
+      {/* ── My Mentor Section ── */}
+      {user.role === 'fellow' && (
+        <div style={{ marginBottom: 20, marginTop: 20 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#1c1917", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 18 }}>🎓</span> My Mentor
+          </div>
+          
+          {user.assignedMentor ? (
+            <div style={{
+              background: "white", borderRadius: 14, padding: "16px",
+              border: "1px solid #e5e7eb", boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+              borderLeft: "4px solid #3b82f6", display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center", justifyContent: "space-between"
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{
+                  width: 48, height: 48, borderRadius: "50%",
+                  background: "linear-gradient(135deg,#dbeafe,#93c5fd)",
+                  display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
+                  fontSize: 18, flexShrink: 0, border: "2px solid #bfdbfe"
+                }}>
+                  {user.assignedMentor.photoUrl ? (
+                    <img src={user.assignedMentor.photoUrl.startsWith('http') ? user.assignedMentor.photoUrl : `${API_BASE_URL}${user.assignedMentor.photoUrl}`} alt={user.assignedMentor.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    "👨‍🏫"
+                  )}
+                </div>
+                <div>
+                  <h4 style={{ margin: "0 0 4px", fontSize: 16, color: "#1e293b" }}>{user.assignedMentor.name}</h4>
+                  <div style={{ fontSize: 12, color: "#64748b", display: "flex", alignItems: "center", gap: 6 }}>
+                    <span>✉️ {user.assignedMentor.email}</span>
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <a href={`mailto:${user.assignedMentor.email}`} style={{ padding: "8px 12px", background: "#f8fafc", color: "#334155", borderRadius: 8, textDecoration: "none", fontSize: 12, fontWeight: 600, border: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 6 }}>
+                  ✉️ Message
+                </a>
+              </div>
+            </div>
+          ) : (
+            <div style={{ background: "#f8fafc", padding: "16px", borderRadius: 14, border: "1px dashed #cbd5e1", display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>⏳</div>
+              <div>
+                <h4 style={{ margin: "0 0 4px", fontSize: 14, color: "#334155" }}>Pending Mentor Assignment</h4>
+                <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>An admin or mentor will review your profile and claim you as a mentee shortly.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── My Assigned Class Section ── */}
       <div style={{ marginBottom: 20, marginTop: 20 }}>
@@ -1975,6 +2027,11 @@ export default function TeacherDashboard({ user, onLogout }) {
       };
       setNotifications((prev) => [mapped, ...prev]);
       setToast({ msg: `🔔 ${newNotif.title}`, type: "info" });
+      
+      // Dynamically refresh the dashboard if it's an approval, claim, or status update
+      if (["status_update", "approval", "mentor_assigned"].includes(newNotif.type) || newNotif.title?.includes("Mentor Assigned")) {
+        refreshCoreData();
+      }
     });
 
     return () => {
@@ -2103,13 +2160,21 @@ export default function TeacherDashboard({ user, onLogout }) {
     { key: "profile",       label: "My Profile",          icon: "👤" },
   ];
 
+  // Start: Fellow-only tabs
+  if (currentUser?.role === "fellow") {
+    navItems.splice(navItems.length - 1, 0,
+      { key: "curriculum", label: "Curriculum", icon: "📖" }
+    );
+  }
+  // End: Fellow-only tabs
+
   const enrichedUser = { ...currentUser, workingCenter };
 
   // Pages that are fully wired to backend/database and should render normally.
   // Every other page shows an "Under Construction" placeholder instead.
   // "courses" and "assessment" are now notes/assessment based (no video) —
   // both are fully wired, so they're included here.
-  const WORKING_TABS = new Set(["overview", "children_att", "geotag", "profile", "training", "courses", "assessment", "certificates", "notifications", "feedback","lesson_planner", "parent_capacity"]);
+  const WORKING_TABS = new Set(["overview", "children_att", "geotag", "profile", "training", "courses", "assessment", "certificates", "notifications", "feedback","lesson_planner", "parent_capacity", "curriculum","planner"]);
 
   const renderContent = () => {
     if (loading) {
@@ -2154,6 +2219,7 @@ export default function TeacherDashboard({ user, onLogout }) {
       case "grades":        return <GradesTab assignments={courses}/>;
       case "assignments":   return <AssignmentsTab assignments={courses} onSubmitAssignment={handleSubmitAssignment}/>;
       case "parent_capacity": return <ParentCapacityBuildingTab user={enrichedUser} setToast={setToast} />;
+      case "curriculum":    return <CurriculumTab user={enrichedUser} />;
       case "certificates":  return <CertificatesTab assignments={courses} certificates={certificates}/>;
       case "notifications": return <NotificationsTab notifications={notifications} onMarkRead={handleMarkNotifRead} onMarkAllRead={handleMarkAllNotifRead}/>;
       case "feedback":      return <TeacherFeedbackTab user={enrichedUser} setToast={setToast}/>;

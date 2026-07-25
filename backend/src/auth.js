@@ -76,6 +76,11 @@ const ROLE_PERMISSIONS = {
     "view_courses", "attend_sessions", "mark_participation",
     "submit_assignments", "view_feedback", "track_progress",
     "download_certificates"
+  ],
+  fellow: [
+    "view_courses", "attend_sessions", "mark_participation",
+    "submit_assignments", "view_feedback", "track_progress",
+    "download_certificates"
   ]
 };
 
