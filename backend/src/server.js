@@ -50,6 +50,7 @@ import { ReportJob } from "./models/ReportJob.js";
 import ActivityBank from "./models/ActivityBank.js";
 import AIActivity from "./models/AIActivity.js";
 import AutomationTeacher from "./models/AutomationTeacher.js";
+import { CurriculumUnit } from "./models/CurriculumUnit.js";
 import DailyTaskAssignment from "./models/DailyTaskAssignment.js";
 import TeacherNotification from "./models/TeacherNotification.js";
 import TaskReplacementLog from "./models/TaskReplacementLog.js";
@@ -604,7 +605,8 @@ app.get("/health", (_req, res) => {
 app.post("/api/auth/login", async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email: String(email).toLowerCase().trim() });
+    const user = await User.findOne({ email: String(email).toLowerCase().trim() })
+      .populate("assignedMentor", "name email phone photoUrl");
 
     if (!user || !(await verifyPassword(password, user.passwordHash))) {
       return res.status(401).json({ message: "Invalid email or password" });
@@ -621,6 +623,17 @@ app.post("/api/auth/login", async (req, res, next) => {
       name: user.name,
     });
 
+    let assignedMentor = user.assignedMentor;
+    if (!assignedMentor && (user.role === 'teacher' || user.role === 'fellow')) {
+      assignedMentor = await User.findOne({
+        "mentorProfile.assignedTeachers": user._id
+      }).select("name email phone photoUrl mentorProfile.qualification mentorProfile.specialization");
+      
+      if (assignedMentor) {
+        await User.findByIdAndUpdate(user._id, { $set: { assignedMentor: assignedMentor._id } });
+      }
+    }
+
     res.json({
       token,
       user: {
@@ -634,6 +647,7 @@ app.post("/api/auth/login", async (req, res, next) => {
         preferredNotificationChannel: user.preferredNotificationChannel || "in_app",
         teacherProfile: user.teacherProfile,
         mentorProfile: user.mentorProfile,
+        assignedMentor: assignedMentor,
         subject: user.teacherProfile?.subject,
         address: user.teacherProfile?.address || user.mentorProfile?.address,
         qualification: user.teacherProfile?.qualification || user.mentorProfile?.qualification,
@@ -647,7 +661,7 @@ app.post("/api/auth/login", async (req, res, next) => {
 
 app.post("/api/auth/register-teacher", async (req, res, next) => {
   try {
-    const { name, email, phone, password, qualification, subject, experience, address, center, class: classId, classIds } = req.body;
+    const { name, email, phone, password, qualification, subject, experience, address, center, class: classId, classIds, photoUrl } = req.body;
     
     const normalizedEmail = String(email).toLowerCase().trim(); // ADD THIS
 
@@ -678,6 +692,7 @@ app.post("/api/auth/register-teacher", async (req, res, next) => {
       phone,
       passwordHash,
       status: "pending",
+      photoUrl,
       teacherProfile: { qualification, subject, experience, address, center, class: classId, classes: assignedClasses },
     });
 
@@ -740,7 +755,7 @@ app.post("/api/auth/register-teacher", async (req, res, next) => {
 
 app.post("/api/auth/register-mentor", async (req, res, next) => {
   try {
-    const { name, email, phone, password, qualification, specialization, experience, address, fellowshipSemester } = req.body;
+    const { name, email, phone, password, qualification, specialization, experience, address, fellowshipSemester, role, photoUrl } = req.body;
     
     // Start: Dnyaneshwari Thorat
     if (!phone || !isValidPhoneNumber(String(phone).trim(), 'IN')) {
@@ -754,25 +769,74 @@ app.post("/api/auth/register-mentor", async (req, res, next) => {
     }
 
     const passwordHash = await hashPassword(password);
+    const targetRole = role === "fellow" ? "fellow" : "mentor";
 
-    const mentor = await User.create({
-      role: "mentor",
-      name,
-      email,
-      phone,
-      passwordHash,
-      status: "pending",
-      mentorProfile: { qualification, specialization, experience, address, fellowshipSemester: fellowshipSemester || 3 },
-    });
+    let user;
+    if (targetRole === "fellow") {
+      user = await User.create({
+        role: "fellow",
+        name,
+        email: email.toLowerCase().trim(),
+        phone,
+        passwordHash,
+        status: "pending",
+        photoUrl,
+        teacherProfile: { qualification, subject: specialization || "ECCE", experience, address },
+      });
+
+      // Auto course assignment for fellow
+      try {
+        const adminUser = await User.findOne({ role: "admin" });
+        const adminId = adminUser ? adminUser._id : null;
+        const courses = await Course.find({ status: "published" });
+
+        for (let i = 0; i < courses.length; i++) {
+          const course = courses[i];
+          const isLocked = i >= 4 && !course.isRequired;
+
+          await CourseAssignment.findOneAndUpdate(
+            { course: course._id, teacher: user._id },
+            {
+              course: course._id,
+              teacher: user._id,
+              assignedBy: adminId,
+              status: "assigned",
+              progressPercent: 0,
+              locked: isLocked
+            },
+            { upsert: true, new: true }
+          );
+        }
+        await createAndEmitNotification({
+          recipientId: user._id,
+          title: "Courses Allocated!",
+          body: `Successfully allocated ${courses.length} educational courses to your training profile. Your first 4 courses are ready to start!`,
+          type: "course",
+        });
+      } catch (assignError) {
+        console.error("Auto course assignment failed during fellow registration:", assignError);
+      }
+    } else {
+      user = await User.create({
+        role: "mentor",
+        name,
+        email: email.toLowerCase().trim(),
+        phone,
+        passwordHash,
+        status: "pending",
+        photoUrl,
+        mentorProfile: { qualification, specialization, experience, address, fellowshipSemester: fellowshipSemester || 3 },
+      });
+    }
 
     res.status(201).json({
-      mentor: {
-        id: mentor._id,
-        role: mentor.role,
-        name: mentor.name,
-        email: mentor.email,
-        phone: mentor.phone,
-        status: mentor.status,
+      [targetRole]: {
+        id: user._id,
+        role: user.role,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        status: user.status,
       },
     });
   } catch (error) {
@@ -888,26 +952,20 @@ app.post("/api/auth/send-signup-otp", async (req, res, next) => {
     storeOtp(email, emailOtp);
 
     // Send Email OTP (non-blocking)
-    let sentEmailOk = false;
-    try {
-      const emailResult = await sendEmail({
-        to: email,
-        // Start: Dnyaneshwari Thorat
-        subject: "SpacECE Portal - Registration Email Verification OTP",
-        // End: Dnyaneshwari Thorat
-        html: `
-          <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
-            <h2 style="color:#1e3a8a;margin-top:0;">Verify Your Email Address</h2>
-            <p style="color:#334155;font-size:14px;line-height:1.6;">Thank you for registering at SpacECE Teacher Portal. Use the following OTP to verify your email address:</p>
-            <div style="font-size:36px;font-weight:900;color:#f59e0b;letter-spacing:12px;margin:16px 0;background:#fef3c7;padding:16px;border-radius:10px;text-align:center;">${emailOtp}</div>
-            <p style="color:#9ca3af;font-size:12px;margin:16px 0 0;">This OTP is valid for <strong>${OTP_TTL_MINUTES} minutes</strong>. Please do not share this code.</p>
-          </div>
-        `
-      });
-      sentEmailOk = emailResult.success;
-    } catch (err) {
-      console.error("Signup Email OTP delivery failed:", err);
-    }
+    sendEmail({
+      to: email,
+      // Start: Dnyaneshwari Thorat
+      subject: "SpacECE Portal - Registration Email Verification OTP",
+      // End: Dnyaneshwari Thorat
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
+          <h2 style="color:#1e3a8a;margin-top:0;">Verify Your Email Address</h2>
+          <p style="color:#334155;font-size:14px;line-height:1.6;">Thank you for registering at SpacECE Teacher Portal. Use the following OTP to verify your email address:</p>
+          <div style="font-size:36px;font-weight:900;color:#f59e0b;letter-spacing:12px;margin:16px 0;background:#fef3c7;padding:16px;border-radius:10px;text-align:center;">${emailOtp}</div>
+          <p style="color:#9ca3af;font-size:12px;margin:16px 0 0;">This OTP is valid for <strong>${OTP_TTL_MINUTES} minutes</strong>. Please do not share this code.</p>
+        </div>
+      `
+    }).catch(err => console.error("Non-blocking OTP email failed:", err));
 
     // Log OTP to server console
     console.log(`[signup-otp] OTP for email ${email} is ${emailOtp}`);
@@ -918,7 +976,7 @@ app.post("/api/auth/send-signup-otp", async (req, res, next) => {
     res.json({
       success: true,
       message: "Verification OTP sent successfully to email.",
-      emailOtp: isMailConfigured ? undefined : emailOtp
+      emailOtp: undefined
     });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
@@ -976,13 +1034,13 @@ app.post("/api/auth/forgot-password-otp", async (req, res, next) => {
 
     // Send OTP via email
     // Start: Dnyaneshwari Thorat
-    const emailResult = await sendEmail({
+    sendEmail({
       to: user.email,
       subject: "SpacECE Portal - Password Reset OTP",
       html: `
         <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
           <div style="text-align:center;margin-bottom:24px;">
-            <h2 style="color:#f59e0b;margin:0;">🔐 Password Reset</h2>
+            <h2 style="color:#f59e0b;margin:0;">🔒 Password Reset</h2>
             <p style="color:#6b7280;font-size:14px;margin-top:8px;">SpacECE Teacher Training Portal</p>
           </div>
           <div style="background:white;border-radius:12px;padding:24px;text-align:center;border:2px dashed #fbbf24;">
@@ -992,13 +1050,12 @@ app.post("/api/auth/forgot-password-otp", async (req, res, next) => {
             <p style="color:#9ca3af;font-size:12px;margin:16px 0 0;">This OTP expires in <strong>${OTP_TTL_MINUTES} minutes</strong>.</p>
             <p style="color:#9ca3af;font-size:12px;margin:4px 0 0;">Do not share this code with anyone.</p>
           </div>
-          <p style="color:#d1d5db;font-size:11px;text-align:center;margin-top:20px;">
-            If you didn't request this, please ignore this email.<br/>
-            Sent at ${new Date().toLocaleString("en-IN")} · SpacECE Portal
-          </p>
+          <p style="color:#9ca3af;font-size:11px;text-align:center;margin-top:24px;">If you didn't request a password reset, you can safely ignore this email.</p>
         </div>
       `
-    });
+    }).catch(err => console.error("Non-blocking password reset OTP email failed:", err));
+
+    res.json({ success: true, message: "OTP sent to your registered email address.", devOtp: undefined });
     // End: Dnyaneshwari Thorat
 
     console.log("[otp] generated_and_sent", JSON.stringify({
@@ -1600,9 +1657,29 @@ app.get("/api/teacher/me", requireAuth, requireRole("teacher"), async (req, res,
     const teacher = await User.findById(req.user.id)
       .select("-passwordHash")
       .populate("teacherProfile.center", "name address city pincode contactPerson phone email")
-      .populate("teacherProfile.classes", "name ageGroup curriculumLevel schedule");
+      .populate("teacherProfile.classes", "name ageGroup curriculumLevel schedule")
+      .populate("assignedMentor", "name email phone photoUrl mentorProfile.qualification mentorProfile.specialization");
 
-    res.json({ teacher });
+    // Find assigned mentor via reverse lookup if not explicitly populated
+    let assignedMentor = teacher.assignedMentor;
+    if (!assignedMentor) {
+      assignedMentor = await User.findOne({
+        "mentorProfile.assignedTeachers": req.user.id
+      }).select("name email phone photoUrl mentorProfile.qualification mentorProfile.specialization");
+    }
+
+    // Convert teacher to plain object to attach assignedMentor
+    const teacherData = teacher.toObject();
+    if (assignedMentor) {
+      teacherData.assignedMentor = assignedMentor;
+      
+      // Keep DB in sync
+      if (!teacher.assignedMentor) {
+        await User.findByIdAndUpdate(req.user.id, { $set: { assignedMentor: assignedMentor._id } });
+      }
+    }
+
+    res.json({ teacher: teacherData });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
   }
@@ -1642,10 +1719,11 @@ app.get("/api/mentor/me", requireAuth, requireRole("mentor"), async (req, res, n
   try {
     const mentor = await User.findById(req.user.id)
       .select("-passwordHash")
-      .populate("mentorProfile.assignedCenters", "name address city pincode contactPerson phone email")
       .populate("mentorProfile.center", "name address city")
       .populate("mentorProfile.classes", "name")
-      .populate("mentorProfile.assignedTeachers", "name teacherProfile.subject photoUrl");
+      // start dnyaneshwari thorat
+      .populate("mentorProfile.assignedTeachers", "name email phone role teacherProfile.subject photoUrl teacherProfile.communityProfilingStatus teacherProfile.communityImmersionStatus teacherProfile.curriculumImplementationStatus");
+      // end dnyaneshwari thorat
     res.json({ mentor });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
@@ -1678,8 +1756,9 @@ app.patch("/api/mentor/me", requireAuth, requireRole("mentor"), async (req, res,
 
     const mentor = await User.findByIdAndUpdate(req.user.id, { $set: update }, { new: true })
       .select("-passwordHash")
-      .populate("mentorProfile.assignedCenters", "name address city")
-      .populate("mentorProfile.assignedTeachers", "name teacherProfile.subject photoUrl");
+      // start dnyaneshwari thorat
+      .populate("mentorProfile.assignedTeachers", "name email phone role teacherProfile.subject photoUrl teacherProfile.communityProfilingStatus teacherProfile.communityImmersionStatus teacherProfile.curriculumImplementationStatus");
+      // end dnyaneshwari thorat
     res.json({ mentor });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
@@ -1700,6 +1779,222 @@ app.post("/api/mentor/change-password", requireAuth, requireRole("mentor"), asyn
     res.json({ message: "Password updated successfully" });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+// ── Mentor Fellow Approval APIs ──
+app.get("/api/mentor/fellows", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const fellows = await User.find({ role: "fellow" })
+      .select("-passwordHash")
+      .populate("teacherProfile.center", "name city")
+      .populate("teacherProfile.classes", "name")
+      .sort({ createdAt: -1 });
+    res.json({ fellows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/mentor/fellows/:id/status", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const { status } = req.body;
+    if (!["approved", "rejected", "pending", "inactive"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status specified" });
+    }
+
+    const fellow = await User.findOneAndUpdate(
+      { _id: req.params.id, role: "fellow" },
+      { status },
+      { new: true }
+    ).select("-passwordHash");
+
+    if (!fellow) {
+      return res.status(404).json({ message: "Fellow not found" });
+    }
+
+    const mentor = await User.findById(req.user.id);
+    if (mentor && status === "approved") {
+      // Add fellow to mentor's assignedTeachers
+      if (mentor.mentorProfile && !mentor.mentorProfile.assignedTeachers.includes(fellow._id)) {
+        mentor.mentorProfile.assignedTeachers.push(fellow._id);
+        await mentor.save();
+      }
+      // Set fellow's center to mentor's center if fellow has no center
+      if (mentor.mentorProfile?.center && !fellow.teacherProfile?.center) {
+        if (!fellow.teacherProfile) {
+          fellow.teacherProfile = {};
+        }
+        fellow.teacherProfile.center = mentor.mentorProfile.center;
+        await fellow.save();
+      }
+
+      await createAndEmitNotification({
+        recipientId: fellow._id,
+        title: "Account Approved by Mentor! 🎉",
+        body: "Your fellow account has been approved by your mentor. All ECCE training features are now unlocked.",
+        type: "approval",
+      });
+    }
+
+    // Trigger notification to the fellow
+    await createAndEmitNotification({
+      recipientId: fellow._id,
+      title: "Status Update",
+      message: `Your fellow application has been ${status}.`,
+      type: "status_update",
+      link: "/dashboard"
+    });
+
+    res.json({ message: `Fellow status updated to ${status}` });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// start dnyaneshwari thorat
+app.delete("/api/mentor/fellows/:id", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const fellow = await User.findOneAndDelete({ _id: req.params.id, role: "fellow" });
+    if (!fellow) return res.status(404).json({ message: "Fellow not found" });
+    
+    // Remove fellow from any mentor's assignedTeachers list
+    await User.updateMany(
+      { "mentorProfile.assignedTeachers": fellow._id },
+      { $pull: { "mentorProfile.assignedTeachers": fellow._id } }
+    );
+    
+    res.json({ message: "Fellow deleted successfully" });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── Claim Fellow API ──
+app.post("/api/mentor/fellows/:id/claim", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const fellowId = req.params.id;
+    const fellow = await User.findOne({ _id: fellowId, role: "fellow" });
+    if (!fellow) {
+      return res.status(404).json({ message: "Fellow not found." });
+    }
+
+    const mentor = await User.findById(req.user.id);
+    if (!mentor) {
+      return res.status(404).json({ message: "Mentor not found." });
+    }
+
+    // Update fellow center, status and assignedMentor
+    const updateFields = { status: "approved", assignedMentor: mentor._id };
+    if (mentor.mentorProfile?.center) {
+      updateFields["teacherProfile.center"] = mentor.mentorProfile.center;
+    }
+    
+    const updatedFellow = await User.findByIdAndUpdate(
+      fellowId,
+      { $set: updateFields },
+      { new: true }
+    ).select("-passwordHash");
+
+    // Add to assigned teachers of mentor
+    await User.findByIdAndUpdate(
+      req.user.id,
+      { $addToSet: { "mentorProfile.assignedTeachers": fellowId } }
+    );
+
+    // Trigger Notification for the Fellow
+    await createAndEmitNotification({
+      recipientId: fellowId,
+      title: "Mentor Assigned!",
+      body: `Great news! ${mentor.name} is now your assigned mentor.`,
+      type: "in_app",
+      metadata: { mentorId: mentor._id }
+    });
+
+    res.json({ success: true, message: "Fellow claimed successfully.", fellow: updatedFellow });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── Unclaim Fellow API ──
+app.post("/api/mentor/fellows/:id/unclaim", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const fellowId = req.params.id;
+    const fellow = await User.findOne({ _id: fellowId, role: "fellow" });
+    if (!fellow) {
+      return res.status(404).json({ message: "Fellow not found." });
+    }
+
+    const mentor = await User.findById(req.user.id);
+    if (!mentor) {
+      return res.status(404).json({ message: "Mentor not found." });
+    }
+
+    // Update fellow status to pending, remove center, and unset assignedMentor
+    const updatedFellow = await User.findByIdAndUpdate(
+      fellowId,
+      { $set: { status: "pending" }, $unset: { "teacherProfile.center": "", assignedMentor: "" } },
+      { new: true }
+    ).select("-passwordHash");
+
+    // Remove from assigned teachers of mentor
+    await User.findByIdAndUpdate(
+      req.user.id,
+      { $pull: { "mentorProfile.assignedTeachers": fellowId } }
+    );
+
+    // Trigger Notification for the Fellow
+    await createAndEmitNotification({
+      recipientId: fellowId,
+      title: "Mentor Reassigned",
+      body: `Your mentor assignment has been reset by the administration. You are now back in the pending pool.`,
+      type: "in_app",
+      metadata: { previousMentorId: mentor._id }
+    });
+
+    res.json({ success: true, message: "Fellow unclaimed successfully.", fellow: updatedFellow });
+  } catch (error) {
+    next(error);
+  }
+});
+// end dnyaneshwari thorat
+
+
+// ── Update Mentee Tracking Statuses ──
+app.patch("/api/mentor/mentee/:id/tracking", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const { communityProfilingStatus, communityImmersionStatus, curriculumImplementationStatus } = req.body;
+    const menteeId = req.params.id;
+
+    const updateFields = {};
+    if (communityProfilingStatus) updateFields["teacherProfile.communityProfilingStatus"] = communityProfilingStatus;
+    if (communityImmersionStatus) updateFields["teacherProfile.communityImmersionStatus"] = communityImmersionStatus;
+    if (curriculumImplementationStatus) updateFields["teacherProfile.curriculumImplementationStatus"] = curriculumImplementationStatus;
+
+    const mentee = await User.findByIdAndUpdate(
+      menteeId,
+      { $set: updateFields },
+      { new: true, runValidators: true }
+    );
+
+    if (!mentee) {
+      return res.status(404).json({ message: "Mentee not found." });
+    }
+
+    res.json({ success: true, mentee });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── Curriculum Units Route ──
+app.get("/api/curriculum", requireAuth, async (req, res, next) => {
+  try {
+    const units = await CurriculumUnit.find({}).sort({ createdAt: 1 });
+    res.json({ success: true, units });
+  } catch (error) {
+    next(error);
   }
 });
 
@@ -5377,6 +5672,13 @@ app.post("/api/mentor/observation", requireAuth, requireRole("mentor"), async (r
     const user = await User.findById(req.user.id);
     user.mentorProfile.menteeObservations.push({ menteeId, notes, date: new Date() });
     await user.save();
+
+    // start dnyaneshwari thorat
+    await user.populate([
+      { path: "mentorProfile.assignedTeachers", select: "name teacherProfile.subject photoUrl teacherProfile.communityProfilingStatus teacherProfile.communityImmersionStatus teacherProfile.curriculumImplementationStatus" },
+      { path: "mentorProfile.center", select: "name address city" }
+    ]);
+    // end dnyaneshwari thorat
     
     res.json({ message: "Observation recorded successfully", user });
   } catch (err) {

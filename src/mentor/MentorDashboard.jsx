@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Logo, Toast, Badge, StatusBadge, StatCard, SectionCard, S, globalCSS } from "../components/Shared";
 import { t } from "../services/i18n";
-import { getStoredSession, getMyCenter } from "../services/api";
+import { getStoredSession, getMyCenter, getMentorMe } from "../services/api";
 import { MentorProfileTab, MentorNotificationsTab, MentorFeedbackTab, MenteeManagementTab, ImpactCapstoneTab, PDCATab } from "./MentorDashboardTabs";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
@@ -79,7 +79,8 @@ function OverviewTab({ user, workingCenter }) {
         </div>
         
         {mentees.length > 0 ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {/* start dnyaneshwari thorat */}
             {mentees.map((mentee, i) => (
               <div key={mentee?._id || mentee?.id || i} style={{
                 background: "white", borderRadius: 14, padding: "16px",
@@ -100,6 +101,7 @@ function OverviewTab({ user, workingCenter }) {
                 </div>
               </div>
             ))}
+            {/* end dnyaneshwari thorat */}
           </div>
         ) : (
           <div style={{
@@ -162,6 +164,12 @@ export default function MentorDashboard({ user, onLogout }) {
     getMyCenter().then(res => {
       if (res.center) setWorkingCenter(res.center);
     }).catch(err => console.error("Failed to load working center", err));
+
+    // start dnyaneshwari thorat
+    getMentorMe().then(res => {
+      if (res.mentor) setCurrentUser(res.mentor);
+    }).catch(err => console.error("Failed to load mentor profile", err));
+    // end dnyaneshwari thorat
   }, []);
 
   // Dummy notifications for now, since we haven't implemented mentor notifications endpoint
