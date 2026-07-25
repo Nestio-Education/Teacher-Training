@@ -1042,8 +1042,14 @@ export default function CourseManagementTab({ courses, setCourses, categories, s
         body: formData,
       });
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Upload failed: ${text}`);
+        let errorMsg = `Upload failed (Status ${res.status})`;
+        try {
+          const errData = await res.json();
+          errorMsg = errData.message || errorMsg;
+        } catch {
+          // fallback if not JSON
+        }
+        throw new Error(errorMsg);
       }
       const data = await res.json();
       setToast({ msg: "Course & Assessment generated successfully!", type: "success" });
