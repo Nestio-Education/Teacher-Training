@@ -38,6 +38,7 @@ export default function AttendanceManager({ user, onRosterChange }) {
   const [newStudentGender, setNewStudentGender] = useState("");
   const [newStudentParentName, setNewStudentParentName] = useState("");
   const [newStudentParentPhone, setNewStudentParentPhone] = useState("");
+  const [newStudentClassId, setNewStudentClassId] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [loading, setLoading] = useState(true);
@@ -419,7 +420,8 @@ export default function AttendanceManager({ user, onRosterChange }) {
 
   const handleAddStudent = (e) => {
     e.preventDefault();
-    const classId = selectedClassId || (teacherProfile?.teacherProfile?.classes || [])[0]?._id || (teacherProfile?.teacherProfile?.classes || [])[0];
+    const fallbackClassId = selectedClassId || (teacherProfile?.teacherProfile?.classes || [])[0]?._id || (teacherProfile?.teacherProfile?.classes || [])[0];
+    const classId = newStudentClassId || fallbackClassId;
 
     // Start: Dnyaneshwari Thorat
     if (bulkMode) {
@@ -471,6 +473,7 @@ export default function AttendanceManager({ user, onRosterChange }) {
         setNewStudentGender("");
         setNewStudentParentName("");
         setNewStudentParentPhone("");
+        setNewStudentClassId("");
         setShowAddModal(false);
         setRosterVersion(v => v + 1);
         onRosterChange?.();
@@ -899,6 +902,19 @@ export default function AttendanceManager({ user, onRosterChange }) {
                 </div>
               ) : (
                 <div>
+                  <label style={S.label}>Assign Class *</label>
+                  <select
+                    required
+                    style={{ ...S.input, marginBottom: 12 }}
+                    value={newStudentClassId}
+                    onChange={e => setNewStudentClassId(e.target.value)}
+                  >
+                    <option value="">Select a class…</option>
+                    {classes.map(c => (
+                      <option key={c._id || c.id} value={c._id || c.id}>{c.name} ({c.ageGroup || "All Ages"})</option>
+                    ))}
+                  </select>
+
                   <label style={S.label}>Student Full Name *</label>
                   <input
                     required
