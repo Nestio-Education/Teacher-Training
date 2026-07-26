@@ -15,6 +15,9 @@ import ReportsTab from "../admin/ReportsTab";
 import NotificationsTab from "../admin/NotificationsTab";
 import SettingsTab from "../admin/SettingsTab";
 import FeedbackManagementTab from "../admin/FeedbackManagementTab";
+// Start: Snehal change
+import ParentModulesManagementTab from "../admin/ParentModulesManagementTab";
+// End: Snehal change
 //import ScheduleManagementTab from "../admin/ScheduleManagementTab";
 //import CertificateManagementTab from "../admin/CertificateManagementTab";
 //import AutomationTab from "../admin/AutomationTab";
@@ -92,6 +95,9 @@ export default function AdminDashboard({ user, onLogout }) {
     { key:"centers",      label:"Center Management", icon:"\uD83C\uDFEB" },
     { key:"teachers",     label:"Teacher Management",icon:"\uD83D\uDC69\u200D\uD83C\uDFEB", badge:pending.length },
     { key: "curriculum", label: "Course Management", icon: "\uD83D\uDCDA" },
+    // Start: Snehal change
+    { key: "parentModules", label: "Parent Capacity Building", icon: "\uD83D\uDC6A" },
+    // End: Snehal change
     { key: "activities", label: "Activity Monitoring", icon: "\uD83D\uDCF8" },
     { key: "lessonplans", label: "Lesson Plans", icon: "\uD83D\uDCCB" },
     { key: "children", label: "Children & Classes", icon: "\uD83D\uDC76" },
@@ -104,7 +110,7 @@ export default function AdminDashboard({ user, onLogout }) {
     { key:"settings",     label:"Settings & Roles",  icon:"\u2699\uFE0F" },
     //{ key:"schedules",    label:"Schedule Management", icon:"\uD83D\uDCC5" },
     //{ key:"certificates", label:"Certificates",        icon:"\uD83C\uDFC6" },
-    { key:"feedback",     label:"Feedback",              icon:"\uD83D\uDCAC" },
+ { key:"feedback",     label:"Feedback",              icon:"\uD83D\uDCAC" },
     //{ key:"automation",   label:"Automation Center",     icon:"\u2699\uFE0F" },
   ];
   const persistTeachers = (updater) => {
@@ -142,6 +148,9 @@ export default function AdminDashboard({ user, onLogout }) {
       //case "schedules":    return <ScheduleManagementTab setToast={setToast}/>;
      // case "certificates": return <CertificateManagementTab setToast={setToast}/>;
       case "feedback":     return <FeedbackManagementTab setToast={setToast}/>;
+      // Start: Snehal change
+      case "parentModules": return <ParentModulesManagementTab setToast={setToast}/>;
+      // End: Snehal change
       //case "automation":   return <AutomationTab user={user} setToast={setToast}/>;
       default:             return null;
     }

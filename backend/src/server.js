@@ -5420,6 +5420,9 @@ app.use("/api/parent-modules", parentModulesRouter);
 import parentSessionAssignmentsRouter from "./routes/parentSessionAssignments.js";
 app.use("/api/parent-session-assignments", parentSessionAssignmentsRouter);
 
+import parentModuleAssignmentsRouter from "./routes/parentModuleAssignments.js";
+app.use("/api/parent-module-assignments", parentModuleAssignmentsRouter);
+
 await connectDb();
 await ensureDatabaseReady();
 
