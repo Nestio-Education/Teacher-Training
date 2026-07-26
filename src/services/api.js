@@ -1238,6 +1238,47 @@ export function registerMentor(payload) {
   });
 }
 
+export function getMentorFellows() {
+  return request("/api/mentor/fellows");
+}
+
+export function updateFellowStatus(id, status) {
+  return request(`/api/mentor/fellows/${id}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status })
+  });
+}
+
+// start dnyaneshwari thorat
+export function claimFellow(id) {
+  return request(`/api/mentor/fellows/${id}/claim`, {
+    method: "POST"
+  });
+}
+
+export function unclaimFellow(id) {
+  return request(`/api/mentor/fellows/${id}/unclaim`, {
+    method: "POST"
+  });
+}
+
+export function deleteMentorFellow(id) {
+  return request(`/api/mentor/fellows/${id}`, { method: "DELETE" });
+}
+// end dnyaneshwari thorat
+
+
+export function updateMenteeTracking(id, data) {
+  return request(`/api/mentor/mentee/${id}/tracking`, {
+    method: "PATCH",
+    body: JSON.stringify(data)
+  });
+}
+
+export function getCurriculumUnits() {
+  return request("/api/curriculum");
+}
+
 export function getAdminMentors() {
   return request("/api/admin/mentors");
 }
@@ -1251,6 +1292,10 @@ export function updateMentorMe(data) {
     method: "PATCH",
     body: JSON.stringify(data)
   });
+}
+
+export function getMentorMe() {
+  return request("/api/mentor/me");
 }
 
 export function changeMentorPassword(currentPassword, newPassword) {

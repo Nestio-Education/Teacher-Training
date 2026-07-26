@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 const userSchema = new mongoose.Schema(
   {
     // Start: Dnyaneshwari Thorat
-    role: { type: String, enum: ["admin", "teacher", "trainer", "super_admin", "mentor"], required: true, index: true },
+    role: { type: String, enum: ["admin", "teacher", "trainer", "super_admin", "mentor", "fellow"], required: true, index: true },
     // End: Dnyaneshwari Thorat
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
@@ -15,6 +15,9 @@ const userSchema = new mongoose.Schema(
       default: "pending",
       index: true,
     },
+    // start dnyaneshwari thorat
+    assignedMentor: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    // end dnyaneshwari thorat
     photoUrl: String,
     language: { type: String, enum: ["English", "Hindi", "Marathi", "Telugu", "Kannada", "Tamil"], default: "English" },
     preferredNotificationChannel: { type: String, enum: ["in_app", "email", "sms", "whatsapp", "all"], default: "in_app" },
@@ -33,6 +36,9 @@ const userSchema = new mongoose.Schema(
       coursesCompleted: { type: Number, default: 0 },
       lessonsCompleted: { type: Number, default: 0 },
       lessonsPending: { type: Number, default: 0 },
+      communityProfilingStatus: { type: String, enum: ["pending", "in_progress", "completed"], default: "pending" },
+      communityImmersionStatus: { type: String, enum: ["pending", "in_progress", "completed"], default: "pending" },
+      curriculumImplementationStatus: { type: String, enum: ["pending", "in_progress", "completed"], default: "pending" },
     },
     mentorProfile: {
       center: { type: mongoose.Schema.Types.ObjectId, ref: "Center" },

@@ -660,7 +660,7 @@ function RegisterForm({ onBack }) {
       return;
     }
 
-    const { name, email, phone, address, subject, password } = form;
+    const { name, email, phone, address, subject, password, photo } = form;
     setVerifying(true);
 
     verifySignupOtp(email.trim().toLowerCase(), emailOtp)
@@ -675,6 +675,7 @@ function RegisterForm({ onBack }) {
             subject,
             experience: "2 years",
             address,
+            photoUrl: photo,
           });
         } else {
           return registerMentor({
@@ -688,6 +689,7 @@ function RegisterForm({ onBack }) {
             address,
             fellowshipSemester: role === "fellow" ? 1 : undefined,
             role,
+            photoUrl: photo,
           });
         }
       })
