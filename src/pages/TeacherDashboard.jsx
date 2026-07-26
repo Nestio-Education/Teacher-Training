@@ -10,6 +10,7 @@ import GeotagAttendance from "./GeotagAttendance";
 import ProctoredAssessment from "./Proctoredassessment";      // now reading/notes based, same filename
 import TeacherCourseNotes from "./TeacherCourseNotes";    // NEW — replaces the old video CoursesTab
 import LessonPlannerTab from "./LessonPlannerTab";     
+import TeacherUserGuide from "./teacheruserguide";
 import CurriculumTab from "./CurriculumTab";
 import {
   getTeacherProgress,
@@ -1919,6 +1920,7 @@ export default function TeacherDashboard({ user, onLogout }) {
   const [menuOpen, setMenuOpen]           = useState(false);
   const [toast, setToast]                 = useState({ msg: "", type: "" });
   const [currentUser, setCurrentUser]     = useState(user);
+  const [showGuide, setShowGuide]         = useState(false);
   const [workingCenter, setWorkingCenter] = useState(() => {
     const center = user?.teacherProfile?.center;
     if (typeof center === "object" && center?.name) {
@@ -2272,6 +2274,29 @@ export default function TeacherDashboard({ user, onLogout }) {
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16, position: "relative" }}>
           <div
             onClick={() => setMenuOpen(!menuOpen)}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginBottom: 16 }}>
+          <button
+            onClick={() => setShowGuide(true)}
+            title={t("User Guide")}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "6px 14px", borderRadius: 20,
+              border: "1px solid #bfdbfe", background: "white",
+              color: "#1e40af", fontSize: 12, fontWeight: 600,
+              cursor: "pointer", fontFamily: "inherit",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+              transition: "all 0.18s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "#eff6ff"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "white"; }}
+          >
+            <span style={{ fontSize: 14, lineHeight: 1 }}>📖</span>
+            {t("User Guide")}
+          </button>
+
+          <button
+            onClick={() => setActiveTab("profile")}
+            title={t("My Profile")}
             style={{
               display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
               padding: "6px 12px", borderRadius: 20, background: "#fef3c7",
@@ -2427,6 +2452,8 @@ export default function TeacherDashboard({ user, onLogout }) {
           💬
         </button>
       </div>
+
+      {showGuide && <TeacherUserGuide onClose={() => setShowGuide(false)} />}
     </div>
   );
 }
