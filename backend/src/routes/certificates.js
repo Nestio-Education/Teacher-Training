@@ -83,7 +83,7 @@ export async function autoIssueCertificateForAssignment(assignmentId) {
 }
 
 // Teacher: get my certificates
-router.get("/teacher", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
+router.get("/teacher", requireAuth, requireRole("teacher"), async (req, res, next) => {
   try {
     const certs = await Certificate.find({ teacher: req.user.id })
       .populate("course", "title duration category")
@@ -235,25 +235,6 @@ router.patch("/:id/revoke", requireAuth, requireRole("admin"), async (req, res, 
 });
 
 // Verify certificate by number (public)
-router.get("/verify/:certNumber", async (req, res, next) => {
-  try {
-    const cert = await Certificate.findOne({ 
-      certificateNumber: req.params.certNumber.toUpperCase(),
-      status: "issued"
-    })
-      .populate("teacher", "name email")
-      .populate("course", "title duration category")
-      .populate("issuedBy", "name");
-    
-    if (!cert) {
-      return res.status(404).json({ valid: false, message: "Certificate not found or has been revoked" });
-    }
-    res.json({ valid: true, certificate: cert });
-  } catch (err) {
-    next(err);
-  }
-});
-
 // Teacher (or admin) — download certificate as a PDF
 router.get("/:id/pdf", requireAuth, async (req, res, next) => {
   try {
@@ -271,47 +252,156 @@ router.get("/:id/pdf", requireAuth, async (req, res, next) => {
       day: "numeric", month: "long", year: "numeric",
     });
 
+    // Start: Prajwal edit — redesigned certificate template (gold-foil elegant style, no QR for now)
     const html = `
     <html>
     <head>
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;900&family=Great+Vibes&family=Montserrat:wght@500;600;700&display=swap" rel="stylesheet">
       <style>
         @page { size: A4 landscape; margin: 0; }
-        body { margin: 0; font-family: 'Georgia', serif; }
-        .cert {
-          width: 1100px; height: 780px; box-sizing: border-box;
-          padding: 50px; border: 14px solid #d97706; outline: 2px solid #d97706;
-          outline-offset: -30px;
-          text-align: center; background: linear-gradient(135deg,#fffbeb,#ffffff);
-          position: relative;
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Montserrat', sans-serif; }
+
+        .page {
+          width: 1123px; height: 794px; position: relative;
+          background: radial-gradient(circle at 50% 0%, #fffdf5 0%, #fdf6e3 60%, #faf0d7 100%);
+          overflow: hidden;
         }
-        .logo { width: 150px; height: auto; position: absolute; top: 40px; left: 60px; }
-        .brand { font-size: 20px; font-weight: 700; color: #92400e; letter-spacing: 3px; margin-top: 0; }
-        .title { font-size: 46px; font-weight: 900; color: #1c1917; margin: 30px 0 10px; }
-        .sub { font-size: 16px; color: #6b7280; }
-        .name { font-size: 38px; font-weight: 800; color: #d97706; margin: 25px 0; border-bottom: 2px solid #fbbf24; display: inline-block; padding-bottom: 8px; }
-        .course { font-size: 22px; color: #1c1917; margin: 10px 0 30px; font-weight: 600; }
-        .meta { display: flex; justify-content: space-between; margin-top: 60px; padding: 0 60px; }
-        .meta div { font-size: 13px; color: #6b7280; }
-        .meta b { display: block; font-size: 15px; color: #1c1917; margin-top: 4px; }
+
+        .border-outer {
+          position: absolute; inset: 22px;
+          border: 3px solid #b8860b;
+        }
+        .border-inner {
+          position: absolute; inset: 34px;
+          border: 1.5px solid #d4af37;
+        }
+
+        .corner {
+          position: absolute; width: 90px; height: 90px;
+          border-top: 4px solid #b8860b; border-left: 4px solid #b8860b;
+        }
+        .corner.tl { top: 34px; left: 34px; }
+        .corner.tr { top: 34px; right: 34px; transform: rotate(90deg); }
+        .corner.br { bottom: 34px; right: 34px; transform: rotate(180deg); }
+        .corner.bl { bottom: 34px; left: 34px; transform: rotate(270deg); }
+
+        .content {
+          position: absolute; inset: 70px;
+          display: flex; flex-direction: column; align-items: center;
+          text-align: center;
+        }
+
+        .brand-row { display: flex; align-items: center; gap: 20px; margin-top: 4px; }
+        .logo { width: 92px; height: auto; }
+        .brand-text { text-align: left; }
+        .brand-name { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 700; color: #78350f; letter-spacing: 1px; }
+        .brand-sub { font-size: 10.5px; color: #a16207; letter-spacing: 3px; font-weight: 600; }
+
+        .divider { width: 140px; height: 2px; background: linear-gradient(90deg, transparent, #d4af37, transparent); margin: 18px 0; }
+
+        .title {
+          font-family: 'Playfair Display', serif; font-size: 40px; font-weight: 900;
+          color: #92400e; letter-spacing: 1px; margin: 6px 0 2px;
+        }
+        .title-sub { font-size: 11.5px; letter-spacing: 5px; color: #a16207; font-weight: 600; text-transform: uppercase; }
+
+        .presented { font-size: 13.5px; color: #57534e; margin-top: 30px; font-style: italic; }
+
+        .name {
+          font-family: 'Great Vibes', cursive; font-size: 58px; color: #78350f;
+          margin: 10px 0 4px; line-height: 1;
+        }
+        .name-underline { width: 320px; height: 1.5px; background: #d4af37; margin-bottom: 18px; }
+
+        .for-course { font-size: 13.5px; color: #57534e; font-style: italic; }
+        .course { font-family: 'Playfair Display', serif; font-size: 21px; font-weight: 700; color: #1c1917; margin: 8px 0 0; max-width: 640px; }
+
+        .meta-row {
+          display: flex; justify-content: center; gap: 60px;
+          margin-top: auto; padding-top: 26px; width: 100%;
+        }
+        .meta-item { text-align: center; }
+        .meta-label { font-size: 9.5px; letter-spacing: 1.5px; color: #a8a29e; text-transform: uppercase; font-weight: 600; }
+        .meta-value { font-size: 14px; color: #1c1917; font-weight: 700; margin-top: 3px; font-family: 'Playfair Display', serif; }
+
+        .footer-row {
+          display: flex; justify-content: center; align-items: flex-end; gap: 120px;
+          width: 100%; margin-top: 24px; padding: 0 10px;
+        }
+
+        .signature-block { text-align: center; }
+        .signature-line { width: 180px; height: 1px; background: #78350f; margin: 0 auto 6px; }
+        .signature-label { font-size: 10.5px; color: #57534e; font-weight: 600; }
+
+        .seal {
+          width: 74px; height: 74px; border-radius: 50%;
+          background: radial-gradient(circle at 35% 30%, #fde68a, #d97706 70%, #92400e 100%);
+          display: flex; align-items: center; justify-content: center;
+          color: #fffbeb; font-family: 'Playfair Display', serif; font-weight: 900; font-size: 10px;
+          box-shadow: 0 3px 8px rgba(146,64,14,0.35);
+          border: 2px solid #fde68a;
+          text-align: center; line-height: 1.2;
+        }
       </style>
     </head>
     <body>
-      <div class="cert">
-        <img class="logo" src="${logoDataUri}" alt="SpacECE Logo" />
-        <div class="brand">SPACECE TEACHER TRAINING PORTAL</div>
-        <div class="title">Certificate of Completion</div>
-        <div class="sub">This certifies that</div>
-        <div class="name">${cert.teacher?.name || "Teacher"}</div>
-        <div class="sub">has successfully completed the course</div>
-        <div class="course">${cert.course?.title || "Course"}</div>
-        <div class="meta">
-          <div>Certificate No.<b>${cert.certificateNumber}</b></div>
-          <div>Grade<b>${cert.grade || "Pass"}</b></div>
-          <div>Date Issued<b>${dateStr}</b></div>
+      <div class="page">
+        <div class="border-outer"></div>
+        <div class="border-inner"></div>
+        <div class="corner tl"></div>
+        <div class="corner tr"></div>
+        <div class="corner br"></div>
+        <div class="corner bl"></div>
+
+        <div class="content">
+          <div class="brand-row">
+            <img class="logo" src="${logoDataUri}" alt="SpacECE Logo" />
+            <div class="brand-text">
+              <div class="brand-name">SpacECE Teacher Training Portal</div>
+              <div class="brand-sub">EARLY CHILDHOOD EDUCATION</div>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+          <div class="title">Certificate of Completion</div>
+          <div class="title-sub">Awarded in Recognition of Achievement</div>
+
+          <div class="presented">This certificate is proudly presented to</div>
+          <div class="name">${cert.teacher?.name || "Teacher"}</div>
+          <div class="name-underline"></div>
+
+          <div class="for-course">for successfully completing the course</div>
+          <div class="course">${cert.course?.title || "Course"}</div>
+
+          <div class="meta-row">
+            <div class="meta-item">
+              <div class="meta-label">Certificate No.</div>
+              <div class="meta-value">${cert.certificateNumber}</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Grade</div>
+              <div class="meta-value">${cert.grade || "Pass"}</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Date Issued</div>
+              <div class="meta-value">${dateStr}</div>
+            </div>
+          </div>
+
+          <div class="footer-row">
+            <div class="signature-block">
+              <div class="signature-line"></div>
+              <div class="signature-label">Authorized Signatory</div>
+            </div>
+            <div class="seal">SPACECE<br/>VERIFIED</div>
+          </div>
         </div>
       </div>
     </body>
     </html>`;
+    // End: Prajwal edit
 
     const browser = await puppeteer.launch({ args: ["--no-sandbox"] });
     const page = await browser.newPage();

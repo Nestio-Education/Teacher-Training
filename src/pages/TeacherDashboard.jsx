@@ -2271,10 +2271,7 @@ export default function TeacherDashboard({ user, onLogout }) {
       </div>
 
       <div style={{ flex: 1, width: "0px", minWidth: "0px", padding: "28px 32px", overflowY: "auto", maxHeight: "100vh" }}>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16, position: "relative" }}>
-          <div
-            onClick={() => setMenuOpen(!menuOpen)}
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginBottom: 16, position: "relative" }}>
           <button
             onClick={() => setShowGuide(true)}
             title={t("User Guide")}
@@ -2294,9 +2291,8 @@ export default function TeacherDashboard({ user, onLogout }) {
             {t("User Guide")}
           </button>
 
-          <button
-            onClick={() => setActiveTab("profile")}
-            title={t("My Profile")}
+          <div
+            onClick={() => setMenuOpen(!menuOpen)}
             style={{
               display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
               padding: "6px 12px", borderRadius: 20, background: "#fef3c7",
@@ -2318,7 +2314,7 @@ export default function TeacherDashboard({ user, onLogout }) {
             <div style={{ fontSize: 14, fontWeight: 700, color: "#92400e" }}>{currentUser.name?.split(" ")[0] || (currentUser.role === "fellow" ? "Fellow" : "Teacher")}</div>
             <div style={{ fontSize: 18, fontWeight: 700, paddingBottom: 6, color: "#92400e" }}>⋮</div>
           </div>
-          
+
           {menuOpen && (
             <div style={{
               position:"absolute", top: 48, right: 0, background:"white",
