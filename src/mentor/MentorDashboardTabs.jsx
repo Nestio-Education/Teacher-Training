@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { S, SectionCard, Toast, StatCard, StatusBadge, SearchBar, Modal } from "../components/Shared";
-import { uploadFile, submitFeedback, getFeedbacks, updateMentorMe, changeMentorPassword, recordMenteeObservation, submitCapstoneMilestone, submitPDCACycle, getMentorFellows, updateFellowStatus, getMentorMe, updateMenteeTracking, claimFellow, unclaimFellow, deleteMentorFellow } from "../services/api";
+import { uploadFile, submitFeedback, getFeedbacks, updateMentorMe, changeMentorPassword, recordMenteeObservation, getMenteeObservations, submitCapstoneMilestone, getCapstoneSubmissions, submitPDCACycle, getPDCACycles, getMentorFellows, updateFellowStatus, getMentorMe, updateMenteeTracking, claimFellow, unclaimFellow, deleteMentorFellow } from "../services/api";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
@@ -631,8 +631,7 @@ export function MenteeManagementTab({ user, setToast, onUserUpdate }) {
     }
     
     try {
-      const res = await recordMenteeObservation(selectedMentee._id, observationText);
-      if (res.user) onUserUpdate(res.user);
+      await recordMenteeObservation(selectedMentee._id, observationText);
       setToast?.({ msg: "Observation recorded successfully!", type: "success" });
       setObservationModal(false);
       setObservationText("");
@@ -1186,6 +1185,20 @@ export function MenteeManagementTab({ user, setToast, onUserUpdate }) {
 export function ImpactCapstoneTab({ user, setToast, onUserUpdate }) {
   const [capstoneText, setCapstoneText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submissions, setSubmissions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchSubmissions = () => {
+    setLoading(true);
+    getCapstoneSubmissions()
+      .then(res => setSubmissions(res.submissions || []))
+      .catch(err => console.error("Failed to fetch Capstone", err))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchSubmissions();
+  }, []);
 
   const MILESTONES = [
     { id: 1, title: "Problem Identification", desc: "Identify a core challenge in the community." },
@@ -1194,7 +1207,7 @@ export function ImpactCapstoneTab({ user, setToast, onUserUpdate }) {
     { id: 4, title: "Evaluation", desc: "Analyze impact and finalize the report." }
   ];
 
-  const milestone = user?.mentorProfile?.capstoneMilestone || 1;
+  const milestone = Math.min(submissions.length + 1, 4);
 
   const handleSubmit = async () => {
     if(!capstoneText.trim()) {
@@ -1204,10 +1217,10 @@ export function ImpactCapstoneTab({ user, setToast, onUserUpdate }) {
     setSubmitting(true);
     
     try {
-      const res = await submitCapstoneMilestone(capstoneText, "");
-      if (res.user) onUserUpdate(res.user);
+      await submitCapstoneMilestone(milestone, capstoneText, "");
       setToast?.({ msg: "Capstone milestone submitted successfully!", type: "success" });
       setCapstoneText("");
+      fetchSubmissions();
     } catch (err) {
       setToast?.({ msg: err.message || "Failed to submit milestone", type: "error" });
     } finally {
@@ -1295,7 +1308,20 @@ export function ImpactCapstoneTab({ user, setToast, onUserUpdate }) {
 export function PDCATab({ user, setToast, onUserUpdate }) {
   const [pdcaForm, setPdcaForm] = useState({ plan: "", do: "", check: "", act: "" });
   const [submitting, setSubmitting] = useState(false);
-  const history = user?.mentorProfile?.pdcaCycles || [];
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchCycles = () => {
+    setLoading(true);
+    getPDCACycles()
+      .then(res => setHistory(res.cycles || []))
+      .catch(err => console.error("Failed to fetch PDCA", err))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchCycles();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1306,10 +1332,11 @@ export function PDCATab({ user, setToast, onUserUpdate }) {
     setSubmitting(true);
     
     try {
-      const res = await submitPDCACycle(pdcaForm.plan, pdcaForm.do, pdcaForm.check, pdcaForm.act);
-      if (res.user) onUserUpdate(res.user);
+      const cycleNumber = history.length + 1;
+      await submitPDCACycle(cycleNumber, pdcaForm.plan, pdcaForm.do, pdcaForm.check, pdcaForm.act);
       setToast?.({ msg: "PDCA cycle recorded successfully!", type: "success" });
       setPdcaForm({ plan: "", do: "", check: "", act: "" });
+      fetchCycles();
     } catch (err) {
       setToast?.({ msg: err.message || "Failed to save PDCA cycle", type: "error" });
     } finally {

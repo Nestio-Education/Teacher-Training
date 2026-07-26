@@ -137,8 +137,8 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
     <div style={{ animation: "fadeIn 0.3s ease" }}>
       <div style={{ background: "linear-gradient(135deg,#f59e0b,#d97706)", borderRadius: 20, padding: "24px 28px", marginBottom: 24, color: "white", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 6px", letterSpacing: "-0.3px" }}>Good morning, {user.name?.split(" ")[0] || "Teacher"}!</h1>
-          <p style={{ fontSize: 13, margin: 0, opacity: 0.88 }}>{user.subject || user.teacherProfile?.subject || "Teacher"} - {className} - {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long"})}</p>
+          <h1 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 6px", letterSpacing: "-0.3px" }}>Good morning, {user.name?.split(" ")[0] || (user.role === "fellow" ? "Fellow" : "Teacher")}!</h1>
+          <p style={{ fontSize: 13, margin: 0, opacity: 0.88 }}>{user.subject || user.teacherProfile?.subject || (user.role === "fellow" ? "Fellow" : "Teacher")} - {className} - {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long"})}</p>
         </div>
         <div style={{ position: "relative", flexShrink: 0 }}>
           <div style={{ width: 48, height: 48, borderRadius: "50%", overflow: "hidden", border: "3px solid rgba(255,255,255,0.3)", background: "#f59e0b", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1916,6 +1916,7 @@ function ParentCapacityBuildingTab({ user, setToast }) {
 ═══════════════════════════════════════════ */
 export default function TeacherDashboard({ user, onLogout }) {
   const [activeTab, setActiveTab]         = useState("overview");
+  const [menuOpen, setMenuOpen]           = useState(false);
   const [toast, setToast]                 = useState({ msg: "", type: "" });
   const [currentUser, setCurrentUser]     = useState(user);
   const [workingCenter, setWorkingCenter] = useState(() => {
@@ -2143,7 +2144,7 @@ export default function TeacherDashboard({ user, onLogout }) {
   const pendingAssignmentsCount = courses.filter(a=>a.status==="assigned"||a.status==="revision").length;
 
   const navItems = [
-    { key: "overview",      label: "Teacher's Dashboard", icon: "📊" },
+    { key: "overview",      label: currentUser?.role === "fellow" ? "Fellow's Dashboard" : "Teacher's Dashboard", icon: "📊" },
     { key: "children_att",  label: "Daily Attendance",    icon: "📋" },
     { key: "geotag",        label: "Geotag Attendance",   icon: "📍" },
     { key: "training",      label: "Training & Lessons",  icon: "🎓" },
@@ -2151,13 +2152,8 @@ export default function TeacherDashboard({ user, onLogout }) {
     { key: "courses",       label: "My Courses",          icon: "📚" },
     { key: "parent_capacity", label: "Parent Capacity Building", icon: "👪" },
     { key: "assessment",    label: "Assessments",         icon: "📝" },
-    //{ key: "schedule",      label: "Schedule",            icon: "📅" },
-    //{ key: "grades",        label: "Grades",              icon: "📊" },
-    //{ key: "assignments",   label: "Assignments",         icon: "✏️", badge: pendingAssignmentsCount },
     { key: "certificates",  label: "Certificates",        icon: "🏆" },
-    { key: "notifications", label: "Notifications",       icon: "🔔", badge: unreadCount },
     { key: "feedback",      label: "Feedback",             icon: "💬" },
-    { key: "profile",       label: "My Profile",          icon: "👤" },
   ];
 
   // Start: Fellow-only tabs
@@ -2229,18 +2225,18 @@ export default function TeacherDashboard({ user, onLogout }) {
   };
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#f8fafc", fontFamily: "'Segoe UI','Inter',-apple-system,sans-serif" }}>
+    <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "#f8fafc", fontFamily: "'Segoe UI','Inter',-apple-system,sans-serif" }}>
       <style>{globalCSS}</style>
       <Toast msg={toast.msg} type={toast.type} onClose={()=>setToast({msg:"",type:""})}/>
 
-      <div style={{ width: 240, background: "white", borderRight: "1px solid #f1f5f9", display: "flex", flexDirection: "column", flexShrink: 0, boxShadow: "2px 0 12px rgba(0,0,0,0.04)", position: "sticky", top: 0, height: "100vh", overflowY: "auto" }}>
+      <div style={{ width: 240, background: "white", borderRight: "1px solid #f1f5f9", display: "flex", flexDirection: "column", flexShrink: 0, boxShadow: "2px 0 12px rgba(0,0,0,0.04)", position: "relative", height: "100vh" }}>
         <div style={{ padding: "20px 16px 12px" }}>
           <Logo size={120}/>
           <div style={{ textAlign: "center", padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "#dbeafe", color: "#1e40af", border: "1px solid #bfdbfe", margin: "6px auto 0", display: "inline-block", width: "fit-content" }}>
-            🎓 {t("Teacher Panel")}
+            🎓 {t(currentUser?.role === "fellow" ? "Fellow Panel" : "Teacher Panel")}
           </div>
         </div>
-        <nav style={{ padding: "4px 10px", flex: 1 }}>
+        <nav style={{ padding: "4px 10px", flex: 1, overflowY: "auto", marginBottom: 80 }}>
           {navItems.map(item=>(
             <button key={item.key} onClick={()=>setActiveTab(item.key)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", border: "none", borderRadius: 10, background: activeTab===item.key?"#dbeafe":"transparent", color: activeTab===item.key?"#1e40af":"#6b7280", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", textAlign: "left", marginBottom: 2, transition: "all 0.18s" }}>
               <span style={{ fontSize: 15 }}>{item.icon}</span>
@@ -2249,35 +2245,103 @@ export default function TeacherDashboard({ user, onLogout }) {
             </button>
           ))}
         </nav>
-        <div style={{ padding: "12px 16px", borderTop: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ 
+          position: "fixed", bottom: 0, left: 0, width: 240,
+          padding: "12px 16px", borderTop: "1px solid #f1f5f9", 
+          display: "flex", alignItems: "center", gap: 10, background: "white", zIndex: 50
+        }}>
           <SidebarAvatar teacher={currentUser} size={34} />
           <div style={{ flex: 1, overflow: "hidden" }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: "#1c1917" }}>{currentUser.name?.split(" ")[0]}</div>
             <div style={{ fontSize: 10, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser.subject}</div>
           </div>
-          <button onClick={onLogout} title={t("Sign Out")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "#9ca3af", padding: 4 }}>⏻</button>
+          <button onClick={onLogout} title={t("Sign Out")} 
+            style={{ 
+              background:"transparent", border:"none", cursor:"pointer", 
+              fontSize:22, color:"#ef4444", padding:"8px", 
+              borderRadius: "8px", transition: "all 0.2s ease",
+              display: "flex", alignItems: "center", justifyContent: "center"
+            }}
+            onMouseEnter={(e)=>e.currentTarget.style.background="#fee2e2"}
+            onMouseLeave={(e)=>e.currentTarget.style.background="transparent"}
+          >⏻</button>
         </div>
       </div>
 
       <div style={{ flex: 1, width: "0px", minWidth: "0px", padding: "28px 32px", overflowY: "auto", maxHeight: "100vh" }}>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
-          <button
-            onClick={() => setActiveTab("profile")}
-            title={t("My Profile")}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16, position: "relative" }}>
+          <div
+            onClick={() => setMenuOpen(!menuOpen)}
             style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "6px 12px", borderRadius: 20,
-              border: "1px solid #e2e8f0", background: "white",
-              cursor: "pointer", fontFamily: "inherit",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-              transition: "all 0.18s",
+              display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
+              padding: "6px 12px", borderRadius: 20, background: "#fef3c7",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.1)", border: "1px solid #fbbf24",
+              transition: "all 0.2s ease", position: "relative"
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#3b82f6"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(59,130,246,0.15)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.06)"; }}
+            onMouseEnter={(e) => e.currentTarget.style.background = "#fde68a"}
+            onMouseLeave={(e) => e.currentTarget.style.background = "#fef3c7"}
           >
-            <SidebarAvatar teacher={currentUser} size={28} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{currentUser.name?.split(" ")[0]}</span>
-          </button>
+            {unreadCount > 0 && (
+              <span style={{
+                position: "absolute", top: -4, right: -4, background: "#ef4444", color: "white",
+                borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center",
+                justifyContent: "center", fontSize: 10, fontWeight: "bold", border: "2px solid white"
+              }}>
+                {unreadCount}
+              </span>
+            )}
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#92400e" }}>{currentUser.name?.split(" ")[0] || (currentUser.role === "fellow" ? "Fellow" : "Teacher")}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, paddingBottom: 6, color: "#92400e" }}>⋮</div>
+          </div>
+          
+          {menuOpen && (
+            <div style={{
+              position:"absolute", top: 48, right: 0, background:"white",
+              border:"1px solid #e5e7eb", borderRadius: 12, boxShadow:"0 10px 25px rgba(0, 0, 0, 0.1)",
+              zIndex: 50, minWidth: 180, display: "flex", flexDirection: "column", overflow: "hidden"
+            }}>
+              <button
+                onClick={() => { setActiveTab("notifications"); setMenuOpen(false); }}
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding:"12px 18px", border:"none", background:"white", textAlign:"left", cursor:"pointer", borderBottom:"1px solid #f3f4f6", fontSize:14, fontWeight:600, color:"#374151", transition: "background 0.2s" }}
+                onMouseEnter={(e)=>e.currentTarget.style.background="#f8fafc"}
+                onMouseLeave={(e)=>e.currentTarget.style.background="white"}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: "#fef3c7" }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                  </div>
+                  <span style={{ color: "#374151", fontWeight: 700 }}>Notifications</span>
+                </div>
+                {unreadCount > 0 && (
+                  <span style={{ background: "#ef4444", color: "white", borderRadius: 10, padding: "2px 8px", fontSize: 11, fontWeight: "bold" }}>
+                    {unreadCount} New
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => { setActiveTab("profile"); setMenuOpen(false); }}
+                style={{ display:"flex", alignItems:"center", gap: 12, padding:"12px 18px", border:"none", background:"white", textAlign:"left", cursor:"pointer", borderBottom:"1px solid #f3f4f6", fontSize:14, fontWeight:600, color:"#374151", transition: "background 0.2s" }}
+                onMouseEnter={(e)=>e.currentTarget.style.background="#f8fafc"}
+                onMouseLeave={(e)=>e.currentTarget.style.background="white"}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: "#e0e7ff" }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                </div>
+                <span style={{ color: "#374151", fontWeight: 700 }}>My Profile</span>
+              </button>
+              <button
+                onClick={onLogout}
+                style={{ display:"flex", alignItems:"center", gap: 12, padding:"12px 18px", border:"none", background:"white", textAlign:"left", cursor:"pointer", color:"#dc2626", fontSize:14, fontWeight:600, transition: "background 0.2s" }}
+                onMouseEnter={(e)=>e.currentTarget.style.background="#fef2f2"}
+                onMouseLeave={(e)=>e.currentTarget.style.background="white"}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: "#fee2e2" }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                </div>
+                <span style={{ color: "#dc2626", fontWeight: 700 }}>Logout</span>
+              </button>
+            </div>
+          )}
         </div>
         {renderContent()}
       </div>

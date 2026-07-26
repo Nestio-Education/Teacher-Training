@@ -43,7 +43,7 @@ import { ActivitySubmission } from "./models/ActivitySubmission.js";
 import { Trainer } from "./models/Trainer.js";
 import { Feedback } from "./models/Feedback.js";
 import { FileAsset } from "./models/FileAsset.js";
-import { ChildAttendanceSession, TeacherAttendanceRecord } from "./models/Attendance.js";
+import { ChildAttendanceSession, TeacherAttendanceRecord, MentorAttendanceRecord } from "./models/Attendance.js";
 import { Certificate } from "./models/Certificate.js";
 import { Notification } from "./models/Notification.js";
 import { ReportJob } from "./models/ReportJob.js";
@@ -1621,7 +1621,13 @@ app.get("/api/courses", requireAuth, async (req, res, next) => {
       return res.json({ courses: decoratedCourses });
     }
 
-    const assignments = await CourseAssignment.find({ teacher: req.user.id })
+    const courseFilter = { teacher: req.user.id };
+    if (req.user.role === "fellow") {
+      const mentors = await User.find({ role: "mentor" }).select("_id");
+      courseFilter.assignedBy = { $in: mentors.map(m => m._id) };
+    }
+
+    const assignments = await CourseAssignment.find(courseFilter)
       .populate("course")
       .sort({ createdAt: -1 });
 
@@ -1652,7 +1658,7 @@ app.post("/api/courses", requireAuth, requireRole("admin"), async (req, res, nex
   }
 });
 
-app.get("/api/teacher/me", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.get("/api/teacher/me", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const teacher = await User.findById(req.user.id)
       .select("-passwordHash")
@@ -1685,7 +1691,7 @@ app.get("/api/teacher/me", requireAuth, requireRole("teacher"), async (req, res,
   }
 });
 
-app.patch("/api/teacher/me", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.patch("/api/teacher/me", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { name, phone, photoUrl, language, preferredNotificationChannel, teacherProfile = {} } = req.body;
     const allowedProfileFields = ["qualification", "subject", "experience", "address"];
@@ -1727,6 +1733,54 @@ app.get("/api/mentor/me", requireAuth, requireRole("mentor"), async (req, res, n
     res.json({ mentor });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+// ── Mentor Geo-tag Attendance APIs ──
+app.get("/api/mentor/attendance", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const records = await MentorAttendanceRecord.find({ mentor: req.user.id })
+      .sort({ attendanceDate: -1 });
+    res.json({ records });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/mentor/attendance", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const { latitude, longitude, address, status, note, source } = req.body;
+    
+    // Normalize date to YYYY-MM-DD
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const record = await MentorAttendanceRecord.findOneAndUpdate(
+      { mentor: req.user.id, attendanceDate: today },
+      {
+        mentor: req.user.id,
+        attendanceDate: today,
+        status: req.body.status || status || "present",
+        source: req.body.source || source || (latitude && longitude ? "geo" : "manual"),
+        latitude,
+        longitude,
+        address,
+        note,
+        checkInTime: req.body.checkInTime,
+        checkOutTime: req.body.checkOutTime,
+        checkedIn: req.body.checkedIn,
+        checkedOut: req.body.checkedOut,
+        distanceOffset: req.body.distanceOffset,
+        distanceOffsetOut: req.body.distanceOffsetOut,
+        snapshot: req.body.snapshot,
+        snapshotOut: req.body.snapshotOut
+      },
+      { upsert: true, new: true }
+    );
+
+    res.status(201).json({ success: true, record });
+  } catch (error) {
+    next(error);
   }
 });
 
@@ -1785,12 +1839,43 @@ app.post("/api/mentor/change-password", requireAuth, requireRole("mentor"), asyn
 // ── Mentor Fellow Approval APIs ──
 app.get("/api/mentor/fellows", requireAuth, requireRole("mentor"), async (req, res, next) => {
   try {
-    const fellows = await User.find({ role: "fellow" })
+    const fellows = await User.find({ 
+      role: "fellow",
+      $or: [
+        { assignedMentor: { $exists: false } },
+        { assignedMentor: null },
+        { assignedMentor: req.user.id }
+      ]
+    })
       .select("-passwordHash")
       .populate("teacherProfile.center", "name city")
       .populate("teacherProfile.classes", "name")
       .sort({ createdAt: -1 });
     res.json({ fellows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/mentor/fellows/attendance", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const { from, to } = req.query;
+    const fellows = await User.find({ role: "fellow", assignedMentor: req.user.id }).select("_id");
+    const fellowIds = fellows.map(f => f._id);
+    
+    let dateFilter = {};
+    if (from && to) {
+      dateFilter = { $gte: new Date(from), $lte: new Date(to) };
+    }
+
+    const query = { teacher: { $in: fellowIds } };
+    if (from && to) query.attendanceDate = dateFilter;
+
+    const attendanceRecords = await TeacherAttendanceRecord.find(query)
+      .populate("teacher", "name email")
+      .sort({ attendanceDate: -1 });
+      
+    res.json({ attendanceRecords });
   } catch (error) {
     next(error);
   }
@@ -1874,27 +1959,40 @@ app.delete("/api/mentor/fellows/:id", requireAuth, requireRole("mentor"), async 
 app.post("/api/mentor/fellows/:id/claim", requireAuth, requireRole("mentor"), async (req, res, next) => {
   try {
     const fellowId = req.params.id;
-    const fellow = await User.findOne({ _id: fellowId, role: "fellow" });
-    if (!fellow) {
-      return res.status(404).json({ message: "Fellow not found." });
-    }
-
     const mentor = await User.findById(req.user.id);
     if (!mentor) {
       return res.status(404).json({ message: "Mentor not found." });
     }
 
-    // Update fellow center, status and assignedMentor
+    // Update fellow center, status and assignedMentor atomically
     const updateFields = { status: "approved", assignedMentor: mentor._id };
     if (mentor.mentorProfile?.center) {
       updateFields["teacherProfile.center"] = mentor.mentorProfile.center;
     }
     
-    const updatedFellow = await User.findByIdAndUpdate(
-      fellowId,
+    // Atomic lock: Only update if assignedMentor is null or not exists
+    const updatedFellow = await User.findOneAndUpdate(
+      { 
+        _id: fellowId, 
+        role: "fellow",
+        $or: [
+          { assignedMentor: { $exists: false } },
+          { assignedMentor: null }
+        ]
+      },
       { $set: updateFields },
       { new: true }
     ).select("-passwordHash");
+
+    if (!updatedFellow) {
+      // It means the fellow doesn't exist OR was already claimed by someone else
+      const existingFellow = await User.findOne({ _id: fellowId, role: "fellow" });
+      if (!existingFellow) {
+        return res.status(404).json({ message: "Fellow not found." });
+      } else {
+        return res.status(409).json({ message: "Conflict: This fellow has already been claimed by another mentor." });
+      }
+    }
 
     // Add to assigned teachers of mentor
     await User.findByIdAndUpdate(
@@ -1960,7 +2058,55 @@ app.post("/api/mentor/fellows/:id/unclaim", requireAuth, requireRole("mentor"), 
 });
 // end dnyaneshwari thorat
 
+// ── Mentor Fellow Activities APIs ──
+app.get("/api/mentor/activities", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const activities = await ActivitySubmission.find({ mentor: req.user.id })
+      .populate("teacher", "name email")
+      .populate("center", "name")
+      .populate("class", "name")
+      .populate("lessonPlan", "title")
+      .sort({ createdAt: -1 });
+    res.json({ activities });
+  } catch (error) {
+    next(error);
+  }
+});
 
+app.patch("/api/mentor/activities/:id", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const { status, adminComments } = req.body;
+    
+    if (!["approved", "rejected", "flagged"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+
+    const activity = await ActivitySubmission.findOneAndUpdate(
+      { _id: req.params.id, mentor: req.user.id },
+      { status, adminComments, reviewedBy: req.user.id, reviewedAt: new Date() },
+      { new: true }
+    ).populate("teacher", "name email");
+
+    if (!activity) {
+      return res.status(404).json({ message: "Activity not found or not assigned to you" });
+    }
+
+    // Trigger Notification to Fellow
+    if (activity.teacher) {
+      await createAndEmitNotification({
+        recipientId: activity.teacher._id,
+        title: "Activity Reviewed",
+        body: `Your activity submission was reviewed by your mentor. Status: ${status}.`,
+        type: "in_app",
+        metadata: { activityId: activity._id }
+      });
+    }
+
+    res.json({ success: true, activity });
+  } catch (error) {
+    next(error);
+  }
+});
 // ── Update Mentee Tracking Statuses ──
 app.patch("/api/mentor/mentee/:id/tracking", requireAuth, requireRole("mentor"), async (req, res, next) => {
   try {
@@ -1999,7 +2145,7 @@ app.get("/api/curriculum", requireAuth, async (req, res, next) => {
 });
 
 // Ã¢â€â‚¬Ã¢â€â‚¬ Teacher Language Preference (persisted to Atlas) Ã¢â€â‚¬Ã¢â€â‚¬
-app.patch("/api/teacher/me/language", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.patch("/api/teacher/me/language", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { language } = req.body;
     const validLanguages = ["English", "Hindi", "Marathi", "Telugu", "Kannada", "Tamil"];
@@ -2014,7 +2160,7 @@ app.patch("/api/teacher/me/language", requireAuth, requireRole("teacher"), async
 });
 
 // Ã¢â€â‚¬Ã¢â€â‚¬ Teacher Notification Preference (persisted to Atlas) Ã¢â€â‚¬Ã¢â€â‚¬
-app.patch("/api/teacher/me/notification-preference", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.patch("/api/teacher/me/notification-preference", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { preferredNotificationChannel } = req.body;
     const validChannels = ["in_app", "email", "sms", "whatsapp", "all"];
@@ -2092,7 +2238,7 @@ app.post("/api/admin/settings/twilio", requireAuth, requireRole("admin"), async 
   }
 });
 
-app.get("/api/teacher/classes", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.get("/api/teacher/classes", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const teacher = await User.findById(req.user.id).select("teacherProfile");
     const classIds = teacher?.teacherProfile?.classes || [];
@@ -2116,7 +2262,7 @@ app.get("/api/teacher/classes", requireAuth, requireRole("teacher"), async (req,
   }
 });
 
-app.get("/api/teacher/children", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.get("/api/teacher/children", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const teacher = await User.findById(req.user.id).select("teacherProfile");
     const classIds = teacher?.teacherProfile?.classes || [];
@@ -2130,6 +2276,13 @@ app.get("/api/teacher/children", requireAuth, requireRole("teacher"), async (req
 
     const requestedClassId = req.query.classId;
     const filter = { status: "active" };
+
+    if (req.user.role === "fellow") {
+      filter.createdBy = req.user.id;
+    } else if (req.user.role === "teacher") {
+      const fellowUsers = await User.find({ role: "fellow" }).select("_id");
+      filter.createdBy = { $nin: fellowUsers.map(u => u._id) };
+    }
 
     if (allClassIds.length > 0) {
       if (requestedClassId && allClassIds.includes(requestedClassId)) {
@@ -2156,7 +2309,7 @@ app.get("/api/teacher/children", requireAuth, requireRole("teacher"), async (req
 });
 
 // Start: Dnyaneshwari Thorat
-app.get("/api/teacher/children/:id/assessments", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.get("/api/teacher/children/:id/assessments", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const childId = req.params.id;
     requireObjectId(childId, "childId");
@@ -2202,7 +2355,7 @@ app.get("/api/teacher/children/:id/assessments", requireAuth, requireRole("teach
   }
 });
 
-app.post("/api/teacher/children/:id/assessments", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/teacher/children/:id/assessments", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const childId = req.params.id;
     requireObjectId(childId, "childId");
@@ -2283,7 +2436,7 @@ app.post("/api/teacher/children/:id/assessments", requireAuth, requireRole("teac
 });
 // End: Dnyaneshwari Thorat
 
-app.get("/api/teacher/children/:id/activity-suggestions", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.get("/api/teacher/children/:id/activity-suggestions", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const childId = req.params.id;
     requireObjectId(childId, "childId");
@@ -2326,7 +2479,7 @@ app.get("/api/teacher/children/:id/activity-suggestions", requireAuth, requireRo
   }
 });
 
-app.patch("/api/teacher/children/:id/activity-suggestions/:itemId/:activityIndex/complete", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.patch("/api/teacher/children/:id/activity-suggestions/:itemId/:activityIndex/complete", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const childId = req.params.id;
     const { itemId, activityIndex } = req.params;
@@ -2349,7 +2502,7 @@ app.patch("/api/teacher/children/:id/activity-suggestions/:itemId/:activityIndex
   }
 });
 
-app.patch("/api/teacher/children/:id/activity-suggestions/:itemId/:activityIndex/observation", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.patch("/api/teacher/children/:id/activity-suggestions/:itemId/:activityIndex/observation", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const childId = req.params.id;
     const { itemId, activityIndex } = req.params;
@@ -2383,7 +2536,7 @@ async function getNextChildRollNo(classId) {
   }
 }
 
-app.post("/api/teacher/children", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/teacher/children", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const teacher = await User.findById(req.user.id).select("teacherProfile");
     const centerId = teacher?.teacherProfile?.center;
@@ -2433,7 +2586,7 @@ app.post("/api/teacher/children", requireAuth, requireRole("teacher"), async (re
 });
 
 // Start: Dnyaneshwari Thorat
-app.post("/api/teacher/children/bulk", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/teacher/children/bulk", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const teacher = await User.findById(req.user.id).select("teacherProfile");
     const centerId = teacher?.teacherProfile?.center;
@@ -2486,7 +2639,7 @@ app.post("/api/teacher/children/bulk", requireAuth, requireRole("teacher"), asyn
 // End: Dnyaneshwari Thorat
 
 // Start: Dnyaneshwari Thorat
-app.delete("/api/teacher/children/:id", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.delete("/api/teacher/children/:id", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const teacher = await User.findById(req.user.id).select("teacherProfile");
     const classIds = teacher?.teacherProfile?.classes || [];
@@ -2520,7 +2673,7 @@ app.delete("/api/teacher/children/:id", requireAuth, requireRole("teacher"), asy
 });
 // End: Dnyaneshwari Thorat
 
-app.get("/api/teacher/progress", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.get("/api/teacher/progress", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     // Start: Dnyaneshwari Thorat
     // FIX: get classId from teacher's profile first
@@ -2532,8 +2685,14 @@ app.get("/api/teacher/progress", requireAuth, requireRole("teacher"), async (req
       return !title.toLowerCase().includes("ai testing");
     };
 
+    const courseFilter = { teacher: req.user.id };
+    if (req.user.role === "fellow") {
+      const mentors = await User.find({ role: "mentor" }).select("_id");
+      courseFilter.assignedBy = { $in: mentors.map(m => m._id) };
+    }
+
     const [courses, lessons, activities, attendance, totalChildren] = await Promise.all([
-      CourseAssignment.find({ teacher: req.user.id }).populate("course"),
+      CourseAssignment.find(courseFilter).populate("course"),
       LessonPlanAssignment.find({ teacher: req.user.id }).populate("lessonPlan", "title scheduleDate"),
       ActivitySubmission.find({ teacher: req.user.id }).sort({ activityDate: -1 }),
       TeacherAttendanceRecord.find({ teacher: req.user.id }).sort({ attendanceDate: -1 }),
@@ -2571,7 +2730,7 @@ app.get("/api/teacher/progress", requireAuth, requireRole("teacher"), async (req
   }
 });
 
-app.post("/api/teacher/chatbot", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/teacher/chatbot", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const message = String(req.body.message || "").trim();
     const text = message.toLowerCase();
@@ -2613,7 +2772,7 @@ app.post("/api/teacher/chatbot", requireAuth, requireRole("teacher"), async (req
   }
 });
 
-app.get("/api/teacher/lesson-plans", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.get("/api/teacher/lesson-plans", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const lessonPlans = await LessonPlanAssignment.find({ teacher: req.user.id })
       .populate({
@@ -3302,7 +3461,7 @@ app.patch("/api/admin/courses/assignments/:id", requireAuth, requireRole("admin"
 });
 
 
-app.patch("/api/teacher/courses/assignments/:id", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.patch("/api/teacher/courses/assignments/:id", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { 
       progressPercent, completedContent, status, title, feedback, submissionFiles,
@@ -3408,7 +3567,7 @@ app.patch("/api/teacher/courses/assignments/:id", requireAuth, requireRole("teac
 });
 
 // Start: Dnyaneshwari Thorat
-app.post("/api/teacher/courses/assignments/:id/reset", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/teacher/courses/assignments/:id/reset", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const assignment = await CourseAssignment.findOne({ _id: req.params.id, teacher: req.user.id }).populate("course");
     if (!assignment) {
@@ -3453,7 +3612,7 @@ app.post("/api/teacher/courses/assignments/:id/reset", requireAuth, requireRole(
   }
 });
 
-app.delete("/api/teacher/courses/assignments/:id", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.delete("/api/teacher/courses/assignments/:id", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const assignment = await CourseAssignment.findOneAndDelete({
       _id: req.params.id,
@@ -3564,7 +3723,7 @@ app.delete("/api/courses/notes/:id", requireAuth, requireRole("admin"), async (r
   }
 });
 
-app.get("/api/teacher/courses/:courseId/notes", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.get("/api/teacher/courses/:courseId/notes", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const notes = await Note.find({ course: req.params.courseId }).populate("createdBy", "name email").sort({ createdAt: -1 });
     res.json({ notes });
@@ -3848,7 +4007,7 @@ app.patch("/api/admin/lesson-plans/assignments/:id", requireAuth, requireRole("a
 });
 
 
-app.post("/api/teacher/lesson-plans/:id/complete", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/teacher/lesson-plans/:id/complete", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     requireObjectId(req.params.id, "assignment id");
     const { teachingNotes, activityDescription, files } = req.body;
@@ -3929,7 +4088,7 @@ app.get("/api/activities", requireAuth, async (req, res, next) => {
   }
 });
 
-app.post("/api/activities", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/activities", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { center, class: classId, lessonPlan, activityBank, activityDate, description, files, activityName, duration, level, type, ageGroup, milestone, developmentalDomain, purposeOfActivity, howToConduct, facilitatorRole, materialsRequired, expectedLearningOutcomes, dayNumber, learningObjectives, activities, resources, instructions, expectedOutput, notes } = req.body;
     if (!center || !classId) {
@@ -3938,8 +4097,10 @@ app.post("/api/activities", requireAuth, requireRole("teacher"), async (req, res
     if (!description) {
       return res.status(400).json({ message: "Activity description is required." });
     }
+    const userObj = await User.findById(req.user.id);
     const activity = await ActivitySubmission.create({
       teacher: req.user.id,
+      mentor: userObj.assignedMentor || undefined,
       center,
       class: classId,
       lessonPlan,
@@ -4106,7 +4267,7 @@ app.get("/api/attendance/children", requireAuth, async (req, res, next) => {
   }
 });
 
-app.post("/api/attendance/children", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/attendance/children", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { centerId, classId, attendanceDate, records } = req.body;
     const dateVal = new Date(attendanceDate);
@@ -4137,7 +4298,7 @@ app.post("/api/attendance/children", requireAuth, requireRole("teacher"), async 
 });
 
 // Start: Dnyaneshwari Thorat
-app.delete("/api/attendance/children", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.delete("/api/attendance/children", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { classId, attendanceDate } = req.query;
     if (!classId || !attendanceDate) {
@@ -4191,7 +4352,7 @@ app.get("/api/attendance/teachers", requireAuth, async (req, res, next) => {
   }
 });
 
-app.post("/api/attendance/teachers", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/attendance/teachers", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { status, source, latitude, longitude, note, attendanceDate } = req.body;
     const today = new Date();
@@ -4209,7 +4370,15 @@ app.post("/api/attendance/teachers", requireAuth, requireRole("teacher"), async 
         latitude,
         longitude,
         note,
-        markedBy: req.user.id
+        markedBy: req.user.id,
+        checkInTime: req.body.checkInTime,
+        checkOutTime: req.body.checkOutTime,
+        checkedIn: req.body.checkedIn,
+        checkedOut: req.body.checkedOut,
+        distanceOffset: req.body.distanceOffset,
+        distanceOffsetOut: req.body.distanceOffsetOut,
+        snapshot: req.body.snapshot,
+        snapshotOut: req.body.snapshotOut
       },
       { upsert: true, new: true }
     );
@@ -4446,6 +4615,18 @@ app.get("/api/notifications", requireAuth, async (req, res, next) => {
   try {
     const notifications = await Notification.find({ recipient: req.user.id }).sort({ createdAt: -1 });
     res.json({ notifications });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+app.patch("/api/notifications/read-all", requireAuth, async (req, res, next) => {
+  try {
+    await Notification.updateMany(
+      { recipient: req.user.id, read: false },
+      { read: true, readAt: new Date() }
+    );
+    res.json({ success: true, message: "All notifications marked as read." });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
   }
@@ -5102,7 +5283,7 @@ app.post("/api/automation/attendance-reminders", requireAuth, requireRole("admin
 });
 
 // Auto-notify admin when teacher submits assignment
-app.post("/api/automation/notify-assignment-submission", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/automation/notify-assignment-submission", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const admins = await User.find({ role: "admin" }).select("_id");
     const teacher = await User.findById(req.user.id).select("name");
@@ -5500,7 +5681,7 @@ app.post("/api/admin/notifications/auto-triggers/check", requireAuth, requireRol
   }
 });
 
-app.post("/api/teacher/deadline-reminders", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/teacher/deadline-reminders", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const userId = req.user.id;
     const now = new Date();
@@ -5627,7 +5808,7 @@ const CHATBOT_RESPONSES = {
   "bye": "Goodbye! Have a great day teaching!",
 };
 
-app.post("/api/teacher/chatbot/enhanced", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/teacher/chatbot/enhanced", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { message } = req.body;
     if (!message) return res.status(400).json({ message: "message required" });
@@ -5664,70 +5845,7 @@ app.post("/api/teacher/chatbot/enhanced", requireAuth, requireRole("teacher"), a
 // Mentor Dynamic Tab Routes
 // ==========================================
 
-app.post("/api/mentor/observation", requireAuth, requireRole("mentor"), async (req, res, next) => {
-  try {
-    const { menteeId, notes } = req.body;
-    if (!menteeId || !notes) return res.status(400).json({ message: "Mentee ID and notes are required" });
-    
-    const user = await User.findById(req.user.id);
-    user.mentorProfile.menteeObservations.push({ menteeId, notes, date: new Date() });
-    await user.save();
 
-    // start dnyaneshwari thorat
-    await user.populate([
-      { path: "mentorProfile.assignedTeachers", select: "name teacherProfile.subject photoUrl teacherProfile.communityProfilingStatus teacherProfile.communityImmersionStatus teacherProfile.curriculumImplementationStatus" },
-      { path: "mentorProfile.center", select: "name address city" }
-    ]);
-    // end dnyaneshwari thorat
-    
-    res.json({ message: "Observation recorded successfully", user });
-  } catch (err) {
-    next(err);
-  }
-});
-
-app.post("/api/mentor/capstone", requireAuth, requireRole("mentor"), async (req, res, next) => {
-  try {
-    const { notes, evidenceLink } = req.body;
-    const user = await User.findById(req.user.id);
-    
-    const currentMilestone = user.mentorProfile.capstoneMilestone || 1;
-    user.mentorProfile.capstoneSubmissions.push({
-      milestone: currentMilestone,
-      notes,
-      evidenceLink,
-      submittedAt: new Date()
-    });
-    
-    if (currentMilestone < 4) {
-      user.mentorProfile.capstoneMilestone = currentMilestone + 1;
-    }
-    
-    await user.save();
-    res.json({ message: "Capstone milestone submitted successfully", user });
-  } catch (err) {
-    next(err);
-  }
-});
-
-app.post("/api/mentor/pdca", requireAuth, requireRole("mentor"), async (req, res, next) => {
-  try {
-    const { plan, do: doAction, check, act } = req.body;
-    if (!plan || !doAction || !check || !act) {
-      return res.status(400).json({ message: "All PDCA fields are required" });
-    }
-    
-    const user = await User.findById(req.user.id);
-    user.mentorProfile.pdcaCycles.unshift({
-      plan, do: doAction, check, act, date: new Date(), status: "Completed"
-    }); // unshift to put latest first
-    await user.save();
-    
-    res.json({ message: "PDCA cycle recorded successfully", user });
-  } catch (err) {
-    next(err);
-  }
-});
 
 // ==========================================
 // Assessment Results Routes
@@ -6003,6 +6121,11 @@ app.use("/api/parent-modules", parentModulesRouter);
 // Snehal change: session assignment tracking (status/feedback) route
 import parentSessionAssignmentsRouter from "./routes/parentSessionAssignments.js";
 app.use("/api/parent-session-assignments", parentSessionAssignmentsRouter);
+
+import mentorTrackingRouter from "./routes/mentorTracking.js";
+import mentorCurriculumRouter from "./routes/mentorCurriculum.js";
+app.use("/api/mentor/tracking", requireAuth, requireRole("mentor"), mentorTrackingRouter);
+app.use("/api/mentor/curriculum", requireAuth, mentorCurriculumRouter);
 
 await connectDb();
 await ensureDatabaseReady();

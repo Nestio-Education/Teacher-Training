@@ -47,7 +47,7 @@ router.get("/teacher", requireAuth, async (req, res, next) => {
 });
 
 // Teacher: get their OWN grades (grades assigned to them by admin)
-router.get("/teacher/my-grades", requireAuth, requireRole("teacher"), async (req, res, next) => {
+router.get("/teacher/my-grades", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     // Find grades where this teacher is the subject (teacherProfile matches)
     // Or more practically, return CourseAssignment scores as teacher grades

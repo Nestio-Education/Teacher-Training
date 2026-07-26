@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { SectionCard, S } from "../components/Shared";
-import { getTeacherAttendance, saveTeacherAttendance } from "../services/api";
 
-export default function GeotagAttendance({ user }) {
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+
+export default function MentorAttendanceTab({ user }) {
   const [loading, setLoading] = useState(false);
   const [actionType, setActionType] = useState(null); // "checkin" | "checkout"
   const [coords, setCoords] = useState(null);
@@ -49,7 +50,11 @@ export default function GeotagAttendance({ user }) {
     const fetchAttendance = async () => {
       try {
         setLoading(true);
-        const data = await getTeacherAttendance();
+        const token = localStorage.getItem("spaceece_auth_token");
+        const res = await fetch(`${API_BASE_URL}/api/mentor/attendance`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        const data = await res.json();
         if (data && data.records) {
           const map = {};
           const logs = [];
@@ -63,7 +68,7 @@ export default function GeotagAttendance({ user }) {
               if (record.note) {
                 parsedNote = JSON.parse(record.note);
               }
-            } catch (e) {
+            } catch {
               parsedNote = { noteText: record.note };
             }
             
@@ -121,7 +126,7 @@ export default function GeotagAttendance({ user }) {
           setHistoryLogs(logs.sort((a, b) => b.id.localeCompare(a.id)));
         }
       } catch (err) {
-        console.error("Error fetching teacher attendance:", err);
+        console.error("Error fetching mentor attendance:", err);
         setErrorAlert("Failed to load attendance records from database.");
       } finally {
         setLoading(false);
@@ -145,7 +150,7 @@ export default function GeotagAttendance({ user }) {
         video: { facingMode: "user", width: 640, height: 480 }
       });
       if (videoRef.current) videoRef.current.srcObject = stream;
-    } catch (_err) {
+    } catch {
       setErrorAlert("Camera access denied. Please allow camera permissions.");
     }
   }, []);
@@ -268,21 +273,30 @@ export default function GeotagAttendance({ user }) {
         };
       }
 
-      await saveTeacherAttendance({
-        status: "present",
-        source: "geo",
-        latitude: lat,
-        longitude: lng,
-        checkInTime: updatedRecord.checkInTime,
-        checkOutTime: updatedRecord.checkOutTime,
-        checkedIn: updatedRecord.checkedIn,
-        checkedOut: updatedRecord.checkedOut,
-        distanceOffset: updatedRecord.distanceOffset,
-        distanceOffsetOut: updatedRecord.distanceOffsetOut,
-        snapshot: updatedRecord.snapshot,
-        snapshotOut: updatedRecord.snapshotOut,
-        note: JSON.stringify({ coords: coordStr })
+      const token = localStorage.getItem("spaceece_auth_token");
+      const res = await fetch(`${API_BASE_URL}/api/mentor/attendance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({
+          status: "present",
+          source: "geo",
+          latitude: lat,
+          longitude: lng,
+          checkInTime: updatedRecord.checkInTime,
+          checkOutTime: updatedRecord.checkOutTime,
+          checkedIn: updatedRecord.checkedIn,
+          checkedOut: updatedRecord.checkedOut,
+          distanceOffset: updatedRecord.distanceOffset,
+          distanceOffsetOut: updatedRecord.distanceOffsetOut,
+          snapshot: updatedRecord.snapshot,
+          snapshotOut: updatedRecord.snapshotOut,
+          note: JSON.stringify({ coords: coordStr })
+        })
       });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.message || "Failed to save attendance");
+      }
 
       // Update local states
       const updatedMap = { ...attendanceMap };
@@ -312,7 +326,7 @@ export default function GeotagAttendance({ user }) {
         message: `${type === "checkin" ? "Check-in" : "Check-out"} recorded at ${timeStr}. Distance from campus: ${Math.round(dist)}m.`
       });
     } catch (err) {
-      console.error("Error saving teacher attendance:", err);
+      console.error("Error saving mentor attendance:", err);
       setErrorAlert("Failed to save attendance check-in details to backend database.");
     } finally {
       setLoading(false);
@@ -334,16 +348,7 @@ export default function GeotagAttendance({ user }) {
     return "absent";
   };
 
-  const getDayLabel = (day) => {
-    const status = getDayStatus(day);
-    switch (status) {
-      case "present": return "Present";
-      case "absent": return "Absent";
-      case "today": return "Today";
-      case "holiday": return "Holiday";
-      default: return "";
-    }
-  };
+
 
   const getCalendarTileStyles = (status) => {
     switch (status) {
@@ -387,8 +392,8 @@ export default function GeotagAttendance({ user }) {
                 </div>
 <div style={{ fontSize: "13px", fontWeight: "800", color: "#1c1917" }}>
                    🏫 <span style={{ color: "#d97706" }}>
-                     {user?.teacherProfile?.center?.name 
-                       ? `${user.teacherProfile.center.name}${user.teacherProfile.center.city ? `, ${user.teacherProfile.center.city}` : ""}` 
+                     {user?.mentorProfile?.center?.name 
+                       ? `${user.mentorProfile.center.name}${user.mentorProfile.center.city ? `, ${user.mentorProfile.center.city}` : ""}` 
                        : "Center not assigned"}
                    </span>
                  </div>

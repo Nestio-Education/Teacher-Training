@@ -1,279 +1,139 @@
-import { useState, useEffect } from "react";
-import { Badge, StatusBadge, StatCard, SectionCard, S } from "../components/Shared";
-import { getCurriculumUnits } from "../services/api";
+import React, { useState, useEffect } from "react";
+import { S, StatusBadge } from "../components/Shared";
 
-/* ─────────────────────────────────────────
-   DEMO DATA — replace with real API data
-   once a backend endpoint exists (e.g.
-   getCurriculumUnits(), getCurriculumTopics())
-───────────────────────────────────────── */
-const DEMO_UNITS = [
-  {
-    id: "u1",
-    title: "Foundations of Early Literacy",
-    subject: "Language & Literacy",
-    grade: "Pre-K – Class 1",
-    status: "active",
-    progress: 72,
-    topics: [
-      { id: "t1", title: "Phonemic Awareness", status: "completed", duration: "2 weeks" },
-      { id: "t2", title: "Letter Recognition (A–M)", status: "completed", duration: "2 weeks" },
-      { id: "t3", title: "Letter Recognition (N–Z)", status: "in_progress", duration: "2 weeks" },
-      { id: "t4", title: "Sight Words — Level 1", status: "pending", duration: "3 weeks" },
-    ],
-    resources: 8,
-    updatedAt: "2026-07-10",
-  },
-  {
-    id: "u2",
-    title: "Numeracy & Number Sense",
-    subject: "Mathematics",
-    grade: "Class 1 – Class 2",
-    status: "active",
-    progress: 45,
-    topics: [
-      { id: "t5", title: "Counting 1–50", status: "completed", duration: "1 week" },
-      { id: "t6", title: "Addition Basics", status: "in_progress", duration: "2 weeks" },
-      { id: "t7", title: "Subtraction Basics", status: "pending", duration: "2 weeks" },
-      { id: "t8", title: "Shapes & Patterns", status: "pending", duration: "1 week" },
-    ],
-    resources: 12,
-    updatedAt: "2026-07-15",
-  },
-  {
-    id: "u3",
-    title: "Environmental Awareness",
-    subject: "EVS",
-    grade: "Class 2 – Class 3",
-    status: "draft",
-    progress: 10,
-    topics: [
-      { id: "t9",  title: "My Neighborhood", status: "in_progress", duration: "1 week" },
-      { id: "t10", title: "Plants & Animals Around Us", status: "pending", duration: "2 weeks" },
-      { id: "t11", title: "Weather & Seasons", status: "pending", duration: "1 week" },
-    ],
-    resources: 4,
-    updatedAt: "2026-07-02",
-  },
-  {
-    id: "u4",
-    title: "Creative Expression",
-    subject: "Art & Craft",
-    grade: "Pre-K – Class 3",
-    status: "completed",
-    progress: 100,
-    topics: [
-      { id: "t12", title: "Color Theory Basics", status: "completed", duration: "1 week" },
-      { id: "t13", title: "Paper Craft", status: "completed", duration: "1 week" },
-      { id: "t14", title: "Storytelling Through Drawing", status: "completed", duration: "1 week" },
-    ],
-    resources: 6,
-    updatedAt: "2026-06-20",
-  },
-];
+const API_BASE_URL = "http://localhost:5000";
 
-const STATUS_META = {
-  active:      { label: "Active",    color: "#059669", bg: "#d1fae5" },
-  draft:       { label: "Draft",     color: "#d97706", bg: "#fef3c7" },
-  completed:   { label: "Completed", color: "#7c3aed", bg: "#ede9fe" },
-  in_progress: { label: "In Progress", color: "#f59e0b", bg: "#fef3c7" },
-  pending:     { label: "Pending",   color: "#94a3b8", bg: "#f1f5f9" },
-};
-
-function UnitStatusBadge({ status }) {
-  const meta = STATUS_META[status] || STATUS_META.pending;
-  return <Badge children={meta.label} color={meta.color} bg={meta.bg} />;
-}
-
-function TopicRow({ topic }) {
-  const meta = STATUS_META[topic.status] || STATUS_META.pending;
-  const icon = topic.status === "completed" ? "✅" : topic.status === "in_progress" ? "🔵" : "⚪";
-  return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 12,
-      padding: "10px 12px", background: "white", borderRadius: 10,
-      border: "1px solid #f1f5f9", marginBottom: 6,
-    }}>
-      <span style={{ fontSize: 15 }}>{icon}</span>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 700, color: "#1c1917" }}>{topic.title}</div>
-        <div style={{ fontSize: 10.5, color: "#9ca3af", marginTop: 1 }}>{topic.duration}</div>
-      </div>
-      <Badge children={meta.label} color={meta.color} bg={meta.bg} />
-    </div>
-  );
-}
-
-function UnitCard({ unit, expanded, onToggle }) {
-  return (
-    <div style={{
-      background: "white", borderRadius: 16, padding: "18px 20px",
-      border: "1px solid #f1f5f9", boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
-      borderLeft: `4px solid ${STATUS_META[unit.status]?.color || "#f59e0b"}`,
-      marginBottom: 14,
-    }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-            <span style={{ fontSize: 15, fontWeight: 800, color: "#1c1917" }}>{unit.title}</span>
-            <UnitStatusBadge status={unit.status} />
-          </div>
-          <div style={{ fontSize: 12, color: "#6b7280" }}>
-            {unit.subject} · {unit.grade} · 📎 {unit.resources} resources
-          </div>
-        </div>
-        <button
-          onClick={() => onToggle(unit.id)}
-          style={{ ...S.exportBtn, flexShrink: 0, padding: "6px 12px", fontSize: 11 }}
-        >
-          {expanded ? "Hide topics ▲" : "View topics ▼"}
-        </button>
-      </div>
-
-      <div style={{ marginTop: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, color: "#374151" }}>Unit Progress</span>
-          <span style={{ fontSize: 11, fontWeight: 800, color: "#f59e0b" }}>{unit.progress}%</span>
-        </div>
-        <div style={{ height: 6, background: "#f3f4f6", borderRadius: 4, overflow: "hidden" }}>
-          <div style={{ height: "100%", width: `${unit.progress}%`, background: "linear-gradient(90deg,#f59e0b,#d97706)", borderRadius: 4 }} />
-        </div>
-        <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4 }}>
-          Last updated: {new Date(unit.updatedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-        </div>
-      </div>
-
-      {expanded && (
-        <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px dashed #e5e7eb" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#92400e", marginBottom: 8 }}>
-            Topics ({unit.topics.length})
-          </div>
-          {unit.topics.map(topic => <TopicRow key={topic.id} topic={topic} />)}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────
-   CURRICULUM TAB
-───────────────────────────────────────── */
-export default function CurriculumTab({ user }) {
-  const [units, setUnits] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all");
-  const [expandedIds, setExpandedIds] = useState(new Set());
+function CurriculumTab({ user }) {
+  const [assignments, setAssignments] = useState([]);
+  const [allPhases, setAllPhases] = useState([]);
+  const token = localStorage.getItem("spaceece_auth_token");
 
   useEffect(() => {
-    getCurriculumUnits()
-      .then(res => {
-        if (res?.success && res?.units && res.units.length > 0) {
-          // Map backend _id to id so it matches existing UnitCard usage
-          const mapped = res.units.map(u => ({
-            ...u,
-            id: u._id,
-            topics: u.topics.map(t => ({ ...t, id: t._id }))
-          }));
-          setUnits(mapped);
-        } else {
-          setUnits(DEMO_UNITS);
-        }
-      })
-      .catch(err => {
-        console.error("Failed to load curriculum", err);
-        setUnits(DEMO_UNITS);
-      })
-      .finally(() => setLoading(false));
+    fetchCurriculum();
   }, []);
 
-  const toggleExpand = (id) => {
-    setExpandedIds(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+  const fetchCurriculum = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/mentor/curriculum/my-curriculum`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAssignments(data.assignments || []);
+        setAllPhases(data.allPhases || []);
+      }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const activeCount    = units.filter(u => u.status === "active").length;
-  const draftCount     = units.filter(u => u.status === "draft").length;
-  const completedCount = units.filter(u => u.status === "completed").length;
-  const totalTopics    = units.reduce((sum, u) => sum + (u.topics?.length || 0), 0);
-  const avgProgress    = units.length
-    ? Math.round(units.reduce((sum, u) => sum + (u.progress || 0), 0) / units.length)
-    : 0;
-
-  const visibleUnits = units.filter(u => filter === "all" ? true : u.status === filter);
-
-  const filterBtn = (key, label) => (
-    <button
-      onClick={() => setFilter(key)}
-      style={{
-        ...S.exportBtn,
-        background: filter === key ? "#d97706" : "white",
-        color: filter === key ? "white" : "#6b7280",
-        borderColor: filter === key ? "#d97706" : "#e5e7eb",
-      }}
-    >
-      {label}
-    </button>
-  );
-
-  if (loading) {
+  if (assignments.length === 0) {
     return (
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "40vh", fontSize: 14, fontWeight: 600, color: "#d97706" }}>
-        🔄 Loading Curriculum Plan...
+      <div style={{ padding: "40px", textAlign: "center", color: "#6b7280" }}>
+        <div style={{ fontSize: "40px", marginBottom: "15px" }}>📚</div>
+        <h3 style={{ margin: "0 0 10px 0", color: "#374151" }}>No Curriculum Assigned</h3>
+        <p>Your mentor has not assigned a curriculum plan to you yet.</p>
       </div>
     );
   }
 
   return (
-    <div style={{ animation: "fadeIn 0.3s ease" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <div>
-          <h1 style={S.pageTitle}>Curriculum</h1>
-          <p style={S.pageSub}>Units, topics, and coverage plan for your assigned classes</p>
-        </div>
-      </div>
+    <div style={{ padding: "20px" }}>
+      <h2 style={S.pageTitle}>My Curriculum</h2>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 16, marginBottom: 20 }}>
-        <StatCard icon="📘" label="Total Units"    val={units.length}   color="#3b82f6" bg="#dbeafe" />
-        <StatCard icon="🟢" label="Active"          val={activeCount}    color="#059669" bg="#d1fae5" />
-        <StatCard icon="📝" label="Draft"           val={draftCount}     color="#d97706" bg="#fef3c7" />
-        <StatCard icon="✅" label="Completed"       val={completedCount} color="#7c3aed" bg="#ede9fe" />
-        <StatCard icon="📊" label="Avg. Progress"   val={`${avgProgress}%`} color="#f59e0b" bg="#fef3c7" />
-      </div>
+      {assignments.map(assignment => {
+        const planPhases = allPhases.filter(p => p.plan === assignment.plan._id);
+        const activePhaseIndex = planPhases.findIndex(p => p._id === assignment.activePhase._id);
 
-      <SectionCard title={`Curriculum Units (${totalTopics} topics total)`}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-          {filterBtn("all", "All")}
-          {filterBtn("active", "Active")}
-          {filterBtn("draft", "Draft")}
-          {filterBtn("completed", "Completed")}
-        </div>
+        return (
+          <div key={assignment._id} style={{ background: "#fff", padding: "20px", borderRadius: "8px", border: "1px solid #e5e7eb", marginBottom: "20px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px" }}>
+              <div>
+                <h3 style={{ margin: "0 0 5px 0", color: "#1f2937", fontSize: "20px" }}>{assignment.plan.title}</h3>
+                <span style={{ fontSize: "13px", color: "#6b7280", background: "#f3f4f6", padding: "4px 8px", borderRadius: "4px" }}>
+                  {assignment.plan.durationType === "1yr" ? "1-Year Plan" : "2-Year Plan"}
+                </span>
+              </div>
+            </div>
 
-        {visibleUnits.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", background: "#fafbfc", borderRadius: 16, border: "1px dashed #cbd5e1", color: "#94a3b8" }}>
-            No curriculum units found for this filter.
+            <div style={{ position: "relative", marginLeft: "10px" }}>
+              <div style={{ position: "absolute", left: "15px", top: 0, bottom: 0, width: "2px", background: "#e5e7eb" }}></div>
+              
+              {planPhases.map((phase, idx) => {
+                const isUnlocked = idx <= activePhaseIndex;
+                const isCurrent = idx === activePhaseIndex;
+
+                return (
+                  <div key={phase._id} style={{ position: "relative", paddingLeft: "40px", marginBottom: "30px", opacity: isUnlocked ? 1 : 0.6 }}>
+                    <div style={{ 
+                      position: "absolute", 
+                      left: "9px", 
+                      top: "5px", 
+                      width: "14px", 
+                      height: "14px", 
+                      borderRadius: "50%", 
+                      background: isUnlocked ? "#f97316" : "#e5e7eb", 
+                      border: "3px solid #fff", 
+                      boxShadow: `0 0 0 1px ${isUnlocked ? "#f97316" : "#d1d5db"}` 
+                    }}></div>
+                    
+                    <div style={{ background: "#fff", padding: "15px", borderRadius: "8px", border: `1px solid ${isCurrent ? "#f97316" : "#e5e7eb"}`, boxShadow: isCurrent ? "0 2px 5px rgba(249,115,22,0.1)" : "none" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                        <div>
+                          <h4 style={{ margin: "0 0 5px 0", color: "#1f2937", fontSize: "16px" }}>Phase {phase.phaseNumber}: {phase.title}</h4>
+                          <div style={{ fontSize: "13px", color: "#6b7280", fontWeight: "500" }}>{phase.semester}</div>
+                        </div>
+                        {!isUnlocked && (
+                          <div style={{ background: "#f3f4f6", color: "#6b7280", padding: "4px 8px", borderRadius: "4px", fontSize: "12px", fontWeight: "600" }}>
+                            🔒 Coming Soon
+                          </div>
+                        )}
+                        {isCurrent && (
+                          <div style={{ background: "#fff7ed", color: "#f97316", padding: "4px 8px", borderRadius: "4px", fontSize: "12px", fontWeight: "600", border: "1px solid #ffedd5" }}>
+                            Current Phase
+                          </div>
+                        )}
+                      </div>
+
+                      {isUnlocked && phase.topics?.length > 0 && (
+                        <div style={{ marginTop: "15px", borderTop: "1px dashed #e5e7eb", paddingTop: "15px" }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                            {phase.topics.map((topic, tIdx) => (
+                              <div key={tIdx} style={{ fontSize: "13px", background: "#f9fafb", padding: "12px", borderRadius: "6px" }}>
+                                <div style={{ fontWeight: "600", color: "#374151", marginBottom: "5px", fontSize: "14px" }}>{topic.title}</div>
+                                {topic.description && <div style={{ color: "#4b5563", marginBottom: "10px" }}>{topic.description}</div>}
+                                
+                                {topic.materials?.length > 0 && (
+                                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                                    {topic.materials.map((mat, mIdx) => (
+                                      <a 
+                                        key={mIdx} 
+                                        href={mat.fileUrl} 
+                                        target="_blank" 
+                                        rel="noreferrer"
+                                        style={{ display: "flex", alignItems: "center", gap: "8px", color: "#f97316", textDecoration: "none", background: "#fff", padding: "6px 10px", borderRadius: "4px", border: "1px solid #ffedd5" }}
+                                      >
+                                        <span style={{ textTransform: "uppercase", fontSize: "10px", fontWeight: "bold", background: "#f97316", color: "#fff", padding: "2px 4px", borderRadius: "3px" }}>{mat.type}</span>
+                                        {mat.title || "View Material"}
+                                      </a>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        ) : (
-          visibleUnits.map(unit => (
-            <UnitCard
-              key={unit.id}
-              unit={unit}
-              expanded={expandedIds.has(unit.id)}
-              onToggle={toggleExpand}
-            />
-          ))
-        )}
-      </SectionCard>
-
-      <div style={{
-        marginTop: 16, padding: "14px 18px", background: "#ecfdf5",
-        border: "1px solid #a7f3d0", borderRadius: 12,
-        fontSize: 11.5, color: "#065f46", lineHeight: 1.6,
-      }}>
-        📡 Showing live curriculum data connected directly to database.
-      </div>
+        );
+      })}
     </div>
   );
 }
+
+export default CurriculumTab;

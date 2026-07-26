@@ -83,7 +83,7 @@ export async function autoIssueCertificateForAssignment(assignmentId) {
 }
 
 // Teacher: get my certificates
-router.get("/teacher", requireAuth, requireRole("teacher"), async (req, res, next) => {
+router.get("/teacher", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const certs = await Certificate.find({ teacher: req.user.id })
       .populate("course", "title duration category")

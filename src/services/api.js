@@ -1306,24 +1306,37 @@ export function changeMentorPassword(currentPassword, newPassword) {
 }
 
 // ── Mentor Tabs APIs ──
-export function recordMenteeObservation(menteeId, notes) {
-  return request("/api/mentor/observation", {
+// ── Mentor Tracking APIs ──
+export function getMenteeObservations() {
+  return request("/api/mentor/tracking/observations");
+}
+
+export function recordMenteeObservation(menteeId, observation) {
+  return request("/api/mentor/tracking/observations", {
     method: "POST",
-    body: JSON.stringify({ menteeId, notes })
+    body: JSON.stringify({ menteeId, observation })
   });
 }
 
-export function submitCapstoneMilestone(notes, evidenceLink) {
-  return request("/api/mentor/capstone", {
+export function getCapstoneSubmissions() {
+  return request("/api/mentor/tracking/capstone");
+}
+
+export function submitCapstoneMilestone(milestone, notes, fileUrl) {
+  return request("/api/mentor/tracking/capstone", {
     method: "POST",
-    body: JSON.stringify({ notes, evidenceLink })
+    body: JSON.stringify({ milestone, notes, fileUrl })
   });
 }
 
-export function submitPDCACycle(plan, doAction, check, act) {
-  return request("/api/mentor/pdca", {
+export function getPDCACycles() {
+  return request("/api/mentor/tracking/pdca");
+}
+
+export function submitPDCACycle(cycleNumber, plan, doAction, check, act) {
+  return request("/api/mentor/tracking/pdca", {
     method: "POST",
-    body: JSON.stringify({ plan, do: doAction, check, act })
+    body: JSON.stringify({ cycleNumber, plan, do: doAction, check, act })
   });
 }
 
