@@ -2,22 +2,36 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000
 
 async function request(path, options = {}) {
   const token = localStorage.getItem("spaceece_auth_token");
-  
+
   const headers = {
     ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   };
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch (networkError) {
+    console.error(
+      `[api] Network request failed before reaching the server.\n` +
+      `  URL attempted: ${API_BASE_URL}${path}\n` +
+      `  Likely cause: backend not running, wrong VITE_API_BASE_URL, or CORS block.\n` +
+      `  Original error:`, networkError
+    );
+    throw new Error(
+      `Could not reach the server at ${API_BASE_URL}. ` +
+      `Check that the backend is running and VITE_API_BASE_URL is correct.`
+    );
+  }
 
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(data.message || "Request failed");
+    throw new Error(data.message || `Request failed (${response.status})`);
   }
 
   return data;

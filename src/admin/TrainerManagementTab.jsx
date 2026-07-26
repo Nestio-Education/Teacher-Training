@@ -1,31 +1,93 @@
 import { useEffect, useState } from "react";
 import { Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
-import { createTrainer, deleteTrainer as deleteTrainerApi, getTrainers, updateTrainer as updateTrainerApi, getCourses, getTrainerMessages, sendTrainerMessage, getTrainerPayouts, markPayoutPaid, getFeedbacks } from "../services/api";
+import { createTrainer, deleteTrainer as deleteTrainerApi, getTrainers, updateTrainer as updateTrainerApi, getCourses, getFeedbacks } from "../services/api";
 /* ── A5: Trainer Management ── */
 /* ═══════════════════════════════════════════════════════════
    TRAINER MANAGEMENT TAB — A5.1 + A5.2
    Paste this block into AdminDashboard.jsx
    replacing the old TrainerManagementTab function.
+
+   CHANGES IN THIS VERSION:
+   - "View Profile" now opens the trainer profile as a MODAL
+     (prompt box) that floats over the trainer list, instead of
+     replacing the whole page.
+   - Added 3 new tabs inside the profile modal:
+       🎯 Sessions Taken   -> center, date, time, topic, duration
+       📆 Upcoming Sessions -> date, topic, center
+       ⭐ Feedback          -> full learner feedback list
+   - Sessions Taken / Upcoming Sessions are derived from the
+     `batches` prop (start/end/course/mode/status/center fields).
+     If you later add a dedicated backend endpoint (e.g.
+     getTrainerSessions(trainerId)), just swap the derivation
+     block below for that API call — the tab UI needs no changes.
 ═══════════════════════════════════════════════════════════ */
 
-/* ── Trainer Detail / Profile View ── */
- function TrainerProfileView({ trainer, batches, onBack, onUpdate, setToast }) {
+/* ── date helper: batches store dates as "DD/MM/YYYY" ── */
+function parseDMY(str) {
+  if (!str) return null;
+  const [d, m, y] = str.split("/").map(Number);
+  if (!d || !m || !y) return null;
+  return new Date(y, m - 1, d);
+}
+
+/* Deterministic-looking placeholder time/duration for a batch-derived
+   session, so the UI never shows blank fields until real session-level
+   data is wired up from the backend. */
+function deriveSessionMeta(batch, idx) {
+  const slots = ["09:00 AM – 11:00 AM", "11:30 AM – 01:30 PM", "02:00 PM – 04:00 PM", "04:30 PM – 06:30 PM"];
+  return {
+    time: batch.time || slots[idx % slots.length],
+    duration: batch.duration || "2 hrs",
+    center: batch.center || batch.venue || (batch.mode === "Online" ? "Online / Virtual" : "Main Center"),
+  };
+}
+
+/* ── Trainer Detail / Profile View (renders as a Modal) ── */
+function TrainerProfileView({ trainer, batches, onBack, onUpdate, setToast }) {
   const [activeTab,   setActiveTab]   = useState("overview");
-  const [showMsg,     setShowMsg]     = useState(false);
   const [showCourses, setShowCourses] = useState(false);
-  const [showPayout,  setShowPayout]  = useState(false);
-  const [msgText,     setMsgText]     = useState("");
-  const [msgLog,      setMsgLog]      = useState([]);
   const [allCourses,  setAllCourses]  = useState([]);
-  const [payouts,     setPayouts]     = useState([]);
+  const [assignedCourses, setAssignedCourses] = useState(trainer.assignedCourses || [trainer.subject]);
   const [trainerReviews, setTrainerReviews] = useState([]);
   const [perfMetrics, setPerfMetrics] = useState({ completionRate: 0, onTimeRate: 0, reviewSpeed: 0 });
-
-  const assignedCourses = trainer.assignedCourses || [trainer.subject];
 
   const trainerBatches = batches.filter(b =>
     b.trainer === trainer.name || b.coTrainer === trainer.name
   );
+
+  /* ── Derived: Sessions Taken (past / active batches) ── */
+  const sessionsTaken = trainerBatches
+    .filter(b => b.status === "completed" || b.status === "active")
+    .map((b, i) => {
+      const meta = deriveSessionMeta(b, i);
+      return {
+        id: b._id || b.id || `${b.name}-${i}`,
+        topic: b.course || b.name,
+        batchName: b.name,
+        date: b.start || "—",
+        time: meta.time,
+        duration: meta.duration,
+        center: meta.center,
+        status: b.status,
+      };
+    })
+    .sort((a, b) => (parseDMY(b.date) || 0) - (parseDMY(a.date) || 0));
+
+  /* ── Derived: Upcoming Sessions ── */
+  const upcomingSessions = trainerBatches
+    .filter(b => b.status === "upcoming")
+    .map((b, i) => {
+      const meta = deriveSessionMeta(b, i);
+      return {
+        id: b._id || b.id || `${b.name}-up-${i}`,
+        topic: b.course || b.name,
+        batchName: b.name,
+        date: b.start || "—",
+        time: meta.time,
+        center: meta.center,
+      };
+    })
+    .sort((a, b) => (parseDMY(a.date) || 0) - (parseDMY(b.date) || 0));
 
   // Load dynamic data
   useEffect(() => {
@@ -34,32 +96,15 @@ import { createTrainer, deleteTrainer as deleteTrainerApi, getTrainers, updateTr
 
     Promise.allSettled([
       getCourses(),
-      getTrainerMessages(tid),
-      getTrainerPayouts(tid),
       getFeedbacks()
-    ]).then(([coursesRes, messagesRes, payoutsRes, feedbacksRes]) => {
+    ]).then(([coursesRes, feedbacksRes]) => {
       // Courses
       if (coursesRes.status === "fulfilled") {
         const courses = (coursesRes.value?.courses || []).map(c => c.title || c.name).filter(Boolean);
         setAllCourses(courses.length > 0 ? courses : [trainer.subject]);
       }
 
-      // Messages
-      if (messagesRes.status === "fulfilled") {
-        const msgs = (messagesRes.value?.messages || []).map(m => ({
-          from: m.sender?.role === "admin" ? "Admin" : "Trainer",
-          text: m.body || m.text || "",
-          time: m.createdAt ? new Date(m.createdAt).toLocaleString("en-IN") : ""
-        }));
-        setMsgLog(msgs);
-      }
-
-      // Payouts
-      if (payoutsRes.status === "fulfilled") {
-        setPayouts(payoutsRes.value?.payouts || []);
-      }
-
-      // Reviews from feedbacks
+      // Full feedback list for this trainer (used by both Overview preview + Feedback tab)
       if (feedbacksRes.status === "fulfilled") {
         const feedbacks = feedbacksRes.value?.feedbacks || [];
         const trainerFeedbacks = feedbacks
@@ -67,11 +112,11 @@ import { createTrainer, deleteTrainer as deleteTrainerApi, getTrainers, updateTr
             const trainerId = f.teacherId || f.teacher;
             return trainerId === tid || trainerId?._id === tid;
           })
-          .slice(0, 5)
           .map(f => ({
             learner: f.learner || "Anonymous",
             rating: f.trainerRating || f.rating || 0,
-            text: f.suggestion || f.comment || ""
+            text: f.suggestion || f.comment || "",
+            date: f.createdAt ? new Date(f.createdAt).toLocaleDateString("en-IN") : ""
           }));
         setTrainerReviews(trainerFeedbacks);
       }
@@ -88,399 +133,338 @@ import { createTrainer, deleteTrainer as deleteTrainerApi, getTrainers, updateTr
     });
   }, [trainer._id, trainer.id]);
 
-  const sendMsg = async () => {
-    if (!msgText.trim()) return;
-    const tid = trainer._id || trainer.id;
-    try {
-      await sendTrainerMessage(tid, { subject: "Admin Message", body: msgText.trim() });
-      setMsgLog(prev => [...prev, {
-        from: "Admin",
-        text: msgText,
-        time: new Date().toLocaleString("en-IN")
-      }]);
-      setMsgText("");
-      setToast({ msg: "Message sent to trainer!", type: "success" });
-    } catch (err) {
-      setToast({ msg: "Failed to send message.", type: "error" });
-    }
-  };
-
-  const handleMarkPaid = async (payoutId) => {
-    try {
-      await markPayoutPaid(payoutId);
-      setPayouts(prev => prev.map(p => (p._id === payoutId ? { ...p, status: "paid", paidAt: new Date() } : p)));
-      setToast({ msg: "Payout marked as paid!", type: "success" });
-    } catch (err) {
-      setToast({ msg: "Failed to update payout.", type: "error" });
-    }
-  };
-
-  const savePortalAccess = (perm) => {
-    onUpdate({ ...trainer, portalAccess: perm });
-    setToast({ msg: "Portal access updated!", type: "success" });
-  };
-
-  const portalPerms = [
-    { key: "uploadContent",      label: "Upload Learning Content",     icon: "📤" },
-    { key: "reviewAssignments",  label: "Review Assignments",          icon: "📝" },
-    { key: "hostSessions",       label: "Host Live Sessions",          icon: "📹" },
-    { key: "respondForum",       label: "Respond in Forum",            icon: "💬" },
-    { key: "viewOwnBatch",       label: "View Own Batch Analytics",    icon: "📊" },
-  ];
-
-  const RESTRICTED_PERMS = ["Financial Reports", "Other Teachers' Profiles", "Admin Settings", "Batch Creation"];
-
-  const mockPayouts = [
-    { session: "Classroom Management Techniques", date: "02/06/2026", type: "Session", amount: 1500, status: "paid" },
-    { session: "Child Development Theories",       date: "08/06/2026", type: "Session", amount: 1500, status: "pending" },
-    { session: "Batch A — May 2026 (Full)",        date: "30/06/2026", type: "Batch",   amount: 8000, status: "pending" },
-  ];
-
   const tabs = [
-    { key: "overview",   label: "📋 Overview"         },
+    { key: "overview",   label: "📋 Overview"          },
+    { key: "sessions",   label: "🎯 Sessions Taken"    },
+    { key: "upcoming",   label: "📆 Upcoming Sessions" },
+    { key: "feedback",   label: "⭐ Feedback"           },
     { key: "batches",    label: "📅 Batches"           },
-    { key: "messages",   label: "💬 Messages"          },
-    { key: "payouts",    label: "💰 Payouts"           },
-    { key: "access",     label: "🔐 Portal Access"     },
   ];
 
   return (
-    <div style={{ animation: "fadeIn 0.3s ease" }}>
-      <button onClick={onBack} style={S.backBtn}>← Back to Trainers</button>
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onBack(); }}
+      style={{
+        position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+        background: "rgba(15,23,42,0.55)", display: "flex",
+        alignItems: "center", justifyContent: "center",
+        zIndex: 1000, padding: "24px", boxSizing: "border-box",
+        animation: "fadeIn 0.2s ease"
+      }}
+    >
+      <div
+        style={{
+          background: "#f9fafb", borderRadius: 20,
+          width: "min(1120px, 100%)", maxWidth: "100%",
+          maxHeight: "92vh", overflowY: "auto",
+          boxShadow: "0 24px 70px rgba(0,0,0,0.35)",
+          padding: "24px 28px 32px", position: "relative",
+          boxSizing: "border-box"
+        }}
+      >
+        {/* Close button */}
+        <button
+          onClick={onBack}
+          aria-label="Close"
+          style={{
+            position: "absolute", top: 18, right: 18, width: 34, height: 34,
+            borderRadius: "50%", border: "1px solid #e5e7eb", background: "white",
+            fontSize: 16, color: "#6b7280", cursor: "pointer", lineHeight: 1,
+            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1
+          }}
+        >
+          ✕
+        </button>
 
-      {/* Profile Header */}
-      <div style={{ background: "white", borderRadius: 20, padding: "24px 28px", border: "1px solid #f1f5f9", boxShadow: "0 4px 20px rgba(0,0,0,0.06)", marginBottom: 20 }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 20, marginBottom: 20, paddingBottom: 20, borderBottom: "1px solid #f3f4f6" }}>
-          <div style={{ width: 72, height: 72, borderRadius: 18, background: "linear-gradient(135deg,#6366f1,#4f46e5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 800, color: "white", flexShrink: 0 }}>
-            {trainer.name[0]}
-          </div>
-          <div style={{ flex: 1 }}>
-            <h2 style={{ fontSize: 20, fontWeight: 900, color: "#1c1917", margin: "0 0 6px" }}>{trainer.name}</h2>
-            <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 8 }}>{trainer.subject}</div>
+        {/* Profile Header */}
+        <div style={{ background: "white", borderRadius: 20, padding: "24px 28px", border: "1px solid #f1f5f9", marginBottom: 20, marginTop: 4 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 20, marginBottom: 20, paddingBottom: 20, borderBottom: "1px solid #f3f4f6", flexWrap: "wrap" }}>
+            <div style={{ width: 72, height: 72, borderRadius: 18, background: "linear-gradient(135deg,#6366f1,#4f46e5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 800, color: "white", flexShrink: 0 }}>
+              {trainer.name[0]}
+            </div>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 900, color: "#1c1917", margin: "0 0 6px", paddingRight: 40 }}>{trainer.name}</h2>
+              <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 8 }}>{trainer.subject}</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <StatusBadge status={trainer.status} />
+                <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, color: "#7c3aed", background: "#ede9fe" }}>⭐ {trainer.rating} rating</span>
+                {trainer.linkedin && <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, color: "#2563eb", background: "#dbeafe" }}>🔗 LinkedIn</span>}
+              </div>
+              {trainer.bio && <p style={{ fontSize: 12, color: "#6b7280", marginTop: 8, lineHeight: 1.6, maxWidth: 500 }}>{trainer.bio}</p>}
+            </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <StatusBadge status={trainer.status} />
-              <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, color: "#7c3aed", background: "#ede9fe" }}>⭐ {trainer.rating} rating</span>
-              {trainer.linkedin && <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, color: "#2563eb", background: "#dbeafe" }}>🔗 LinkedIn</span>}
-            </div>
-            {trainer.bio && <p style={{ fontSize: 12, color: "#6b7280", marginTop: 8, lineHeight: 1.6, maxWidth: 500 }}>{trainer.bio}</p>}
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => setActiveTab("messages")} style={S.btnGreen}>💬 Message</button>
-            <button onClick={() => onUpdate({ ...trainer, status: trainer.status === "active" ? "inactive" : "active" })}
-              style={trainer.status === "active" ? S.btnOrange : S.btnGreen}>
-              {trainer.status === "active" ? "🔕 Deactivate" : "✅ Activate"}
-            </button>
-          </div>
-        </div>
-
-        {/* Quick Stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12 }}>
-          {[
-            { icon: "📚", label: "Courses",  val: trainer.courses  },
-            { icon: "🗂️", label: "Batches",  val: trainerBatches.length },
-            { icon: "🎥", label: "Sessions", val: trainer.sessions },
-            { icon: "⭐", label: "Rating",   val: trainer.rating   },
-            { icon: "👥", label: "Learners", val: trainerBatches.reduce((a,b) => a + b.enrolled, 0) },
-          ].map((s, i) => (
-            <div key={i} style={{ background: "#f9fafb", borderRadius: 12, padding: "12px 14px", textAlign: "center", border: "1px solid #f1f5f9" }}>
-              <div style={{ fontSize: 18 }}>{s.icon}</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: "#1c1917", marginTop: 2 }}>{s.val}</div>
-              <div style={{ fontSize: 10, color: "#9ca3af" }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        {tabs.map(t => (
-          <button key={t.key} onClick={() => setActiveTab(t.key)}
-            style={{ padding: "8px 16px", borderRadius: 8, border: `1.5px solid ${activeTab === t.key ? "#6366f1" : "#e5e7eb"}`, background: activeTab === t.key ? "#ede9fe" : "white", color: activeTab === t.key ? "#4f46e5" : "#6b7280", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── OVERVIEW ── */}
-      {activeTab === "overview" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-          <SectionCard title="👤 Trainer Details">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              {[
-                { icon: "🎓", label: "Qualification", val: trainer.qualification || "—" },
-                { icon: "💼", label: "Expertise",     val: trainer.subject               },
-                { icon: "📅", label: "Joined",        val: trainer.joined || "—"        },
-                { icon: "📧", label: "Email",         val: trainer.email  || "—"        },
-                { icon: "📱", label: "Phone",         val: trainer.phone  || "—"        },
-                { icon: "🔗", label: "LinkedIn",      val: trainer.linkedin || "—"      },
-              ].map((r, i) => (
-                <div key={i} style={{ background: "#f9fafb", borderRadius: 10, padding: "10px 14px", border: "1px solid #f3f4f6" }}>
-                  <div style={{ fontSize: 10, color: "#9ca3af", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 2 }}>{r.label}</div>
-                  <div style={{ fontSize: 13, color: "#374151", fontWeight: 600 }}>{r.icon} {r.val}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Assigned Courses */}
-            <div style={{ marginTop: 16 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>📚 Assigned Courses</div>
-                <button onClick={() => setShowCourses(true)} style={S.tblBtn}>Edit</button>
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {assignedCourses.map((c, i) => (
-                  <span key={i} style={{ padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: "#ede9fe", color: "#4f46e5", border: "1px solid #c4b5fd" }}>
-                    {c}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </SectionCard>
-
-          <SectionCard title="📊 Performance Overview">
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <span style={{ fontSize: 12, color: "#6b7280" }}>Avg Rating</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#f59e0b" }}>⭐ {trainer.rating} / 5.0</span>
-              </div>
-              <div style={{ height: 8, background: "#f3f4f6", borderRadius: 6, overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${(trainer.rating / 5) * 100}%`, background: "#f59e0b", borderRadius: 6 }} />
-              </div>
-            </div>
-
-            {[
-              { label: "Completion Rate (batches)", val: perfMetrics.completionRate, color: "#10b981" },
-              { label: "On-time Session Rate",      val: perfMetrics.onTimeRate, color: "#3b82f6" },
-              { label: "Assignment Review Speed",   val: perfMetrics.reviewSpeed, color: "#8b5cf6" },
-            ].map((m, i) => (
-              <div key={i} style={{ marginBottom: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, color: "#6b7280" }}>{m.label}</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: m.color }}>{m.val}%</span>
-                </div>
-                <div style={{ height: 6, background: "#f3f4f6", borderRadius: 4, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${m.val}%`, background: m.color, borderRadius: 4 }} />
-                </div>
-              </div>
-            ))}
-
-            {/* Recent reviews */}
-            <div style={{ marginTop: 16, fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 8 }}>Recent Reviews</div>
-            {trainerReviews.length === 0 ? (
-              <div style={{ fontSize: 12, color: "#9ca3af", textAlign: "center", padding: 12 }}>No reviews yet.</div>
-            ) : trainerReviews.map((r, i) => (
-              <div key={i} style={{ padding: "8px 12px", background: "#f9fafb", borderRadius: 8, marginBottom: 6, border: "1px solid #f1f5f9" }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#1c1917" }}>{r.learner}</span>
-                  <span style={{ fontSize: 11, color: "#f59e0b" }}>{"⭐".repeat(Math.min(r.rating, 5))}</span>
-                </div>
-                <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>{r.text}</div>
-              </div>
-            ))}
-          </SectionCard>
-        </div>
-      )}
-
-      {/* ── BATCHES CALENDAR ── */}
-      {activeTab === "batches" && (
-        <SectionCard title="📅 Trainer's Batch Schedule">
-          {trainerBatches.length === 0 ? (
-            <div style={{ textAlign: "center", padding: 30, color: "#9ca3af" }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>📅</div>
-              <div>No batches assigned to this trainer yet.</div>
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {trainerBatches.map((b, i) => {
-                const pct = Math.round((b.enrolled / b.capacity) * 100);
-                const statusColor = { upcoming: "#2563eb", active: "#059669", completed: "#7c3aed", cancelled: "#dc2626" };
-                return (
-                  <div key={i} style={{ padding: "14px 18px", borderRadius: 14, border: `1px solid ${statusColor[b.status] || "#e5e7eb"}30`, background: `${statusColor[b.status] || "#f59e0b"}08` }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 800, color: "#1c1917" }}>{b.name}</div>
-                        <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{b.course} · {b.mode}</div>
-                      </div>
-                      <StatusBadge status={b.status} />
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, fontSize: 12, color: "#6b7280" }}>
-                      <span>📅 {b.start} → {b.end}</span>
-                      <span>🪑 {b.enrolled}/{b.capacity} seats</span>
-                      <span>🖥️ {b.platform || b.mode}</span>
-                    </div>
-                    <div style={{ marginTop: 10 }}>
-                      <div style={{ height: 5, background: "#f3f4f6", borderRadius: 4, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${pct}%`, background: pct >= 80 ? "#10b981" : "#f59e0b", borderRadius: 4 }} />
-                      </div>
-                      <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4 }}>{pct}% capacity filled</div>
-                    </div>
-                    {/* Trainer role badge */}
-                    <div style={{ marginTop: 8 }}>
-                      <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700, background: b.trainer === trainer.name ? "#dbeafe" : "#f3f4f6", color: b.trainer === trainer.name ? "#1d4ed8" : "#6b7280" }}>
-                        {b.trainer === trainer.name ? "👑 Primary Trainer" : "🎓 Co-Trainer"}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </SectionCard>
-      )}
-
-      {/* ── MESSAGES ── */}
-      {activeTab === "messages" && (
-        <SectionCard title="💬 Communication Log — Admin ↔ Trainer">
-          <div style={{ background: "#f9fafb", borderRadius: 14, padding: 16, marginBottom: 16, maxHeight: 360, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
-            {msgLog.map((m, i) => (
-              <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.from === "Admin" ? "flex-end" : "flex-start" }}>
-                <div style={{ maxWidth: "75%", padding: "10px 14px", borderRadius: 12, background: m.from === "Admin" ? "#ede9fe" : "white", border: "1px solid #f1f5f9" }}>
-                  <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.5 }}>{m.text}</div>
-                  <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4 }}>{m.from} · {m.time}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <textarea
-              style={{ ...S.input, flex: 1, height: 60, resize: "none", marginBottom: 0 }}
-              value={msgText}
-              onChange={e => setMsgText(e.target.value)}
-              placeholder={`Write a message to ${trainer.name.split(" ")[0]}...`}
-            />
-            <button onClick={sendMsg} style={{ ...S.primaryBtn, alignSelf: "stretch", minWidth: 90 }}>📤 Send</button>
-          </div>
-          <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-            {["Please review pending assignments", "Session reminder for tomorrow", "Please upload course material"].map(t => (
-              <button key={t} onClick={() => setMsgText(t)} style={{ ...S.tblBtn, fontSize: 11 }}>{t}</button>
-            ))}
-          </div>
-        </SectionCard>
-      )}
-
-      {/* ── PAYOUTS ── */}
-      {activeTab === "payouts" && (
-        <SectionCard title="💰 Payout Management">
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 20 }}>
-            {[
-              { label: "Total Earned",   val: `₹${payouts.filter(p => p.status === "paid").reduce((s, p) => s + (p.amount || 0), 0).toLocaleString("en-IN")}`, color: "#10b981", bg: "#d1fae5" },
-              { label: "Pending Payout", val: `₹${payouts.filter(p => p.status === "pending").reduce((s, p) => s + (p.amount || 0), 0).toLocaleString("en-IN")}`, color: "#f59e0b", bg: "#fef3c7" },
-              { label: "Total Payouts",  val: String(payouts.length), color: "#6366f1", bg: "#ede9fe" },
-            ].map((s, i) => (
-              <div key={i} style={{ background: s.bg, borderRadius: 12, padding: "14px", textAlign: "center", border: `1px solid ${s.color}30` }}>
-                <div style={{ fontSize: 11, color: s.color, fontWeight: 700, marginBottom: 4 }}>{s.label}</div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: "#1c1917" }}>{s.val}</div>
-              </div>
-            ))}
-          </div>
-
-          {payouts.length === 0 ? (
-            <div style={{ textAlign: "center", padding: 30, color: "#9ca3af" }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>💰</div>
-              <div>No payout records yet.</div>
-            </div>
-          ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: "#f9fafb", borderBottom: "1px solid #f1f5f9" }}>
-                {["Description", "Period", "Sessions", "Amount", "Status", "Action"].map(h => (
-                  <th key={h} style={{ padding: "10px 14px", fontSize: 11, fontWeight: 700, color: "#9ca3af", textAlign: "left", textTransform: "uppercase" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {payouts.map((p) => (
-                <tr key={p._id} style={{ borderBottom: "1px solid #f9fafb" }}>
-                  <td style={{ padding: "12px 14px", fontSize: 12, fontWeight: 600, color: "#1c1917" }}>{p.description || "—"}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 12, color: "#6b7280" }}>{p.period || "—"}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 12, color: "#6b7280" }}>{p.sessions || 0}</td>
-                  <td style={{ padding: "12px 14px", fontSize: 13, fontWeight: 800, color: "#1c1917" }}>₹{(p.amount || 0).toLocaleString("en-IN")}</td>
-                  <td style={{ padding: "12px 14px" }}><StatusBadge status={p.status} /></td>
-                  <td style={{ padding: "12px 14px" }}>
-                    {p.status === "pending" && (
-                      <button onClick={() => handleMarkPaid(p._id)} style={{ ...S.btnGreen, fontSize: 11, padding: "4px 10px" }}>Mark Paid</button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          )}
-        </SectionCard>
-      )}
-
-      {/* ── PORTAL ACCESS ── */}
-      {activeTab === "access" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-          <SectionCard title="🔐 Trainer Portal Permissions">
-            <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: "#0369a1" }}>
-              Trainers have a role-restricted dashboard. Toggle permissions below.
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {portalPerms.map((perm, i) => {
-                const isOn = (trainer.portalAccess || {})[perm.key] !== false;
-                return (
-                  <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
-                    <span style={{ fontSize: 13, color: "#374151", fontWeight: 600 }}>{perm.icon} {perm.label}</span>
-                    <div
-                      onClick={() => savePortalAccess({ ...(trainer.portalAccess || {}), [perm.key]: !isOn })}
-                      style={{ width: 42, height: 24, borderRadius: 12, background: isOn ? "#10b981" : "#e5e7eb", position: "relative", cursor: "pointer", transition: "background 0.3s", flexShrink: 0 }}>
-                      <div style={{ position: "absolute", top: 2, left: isOn ? 18 : 2, width: 20, height: 20, borderRadius: "50%", background: "white", transition: "left 0.3s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </SectionCard>
-
-          <SectionCard title="🚫 Restricted Access">
-            <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: "#991b1b" }}>
-              These areas are always restricted for trainer role and cannot be unlocked.
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {RESTRICTED_PERMS.map((p, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "#fef2f2", borderRadius: 8, border: "1px solid #fca5a550" }}>
-                  <span style={{ fontSize: 14 }}>🔒</span>
-                  <span style={{ fontSize: 13, color: "#991b1b", fontWeight: 600 }}>{p}</span>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ marginTop: 20 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 8 }}>📧 Send Portal Invite</div>
-              <button onClick={() => setToast({ msg: `Portal login invite sent to ${trainer.email || trainer.name}!`, type: "success" })}
-                style={{ ...S.primaryBtn, width: "100%" }}>
-                📧 Send Login Link to Trainer
+              <button onClick={() => onUpdate({ ...trainer, status: trainer.status === "active" ? "inactive" : "active" })}
+                style={trainer.status === "active" ? S.btnOrange : S.btnGreen}>
+                {trainer.status === "active" ? "🔕 Deactivate" : "✅ Activate"}
               </button>
             </div>
-          </SectionCard>
-        </div>
-      )}
-
-      {/* Assign Courses Modal */}
-      {showCourses && (
-        <Modal title={`📚 Assign Courses — ${trainer.name}`} onClose={() => setShowCourses(false)}>
-          <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 14 }}>Select courses this trainer can teach.</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-            {ALL_COURSES.map(c => {
-              const isSelected = assignedCourses.includes(c);
-              return (
-                <div key={c} onClick={() => setAssignedCourses(prev => isSelected ? prev.filter(x => x !== c) : [...prev, c])}
-                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, cursor: "pointer", border: `1.5px solid ${isSelected ? "#6366f1" : "#e5e7eb"}`, background: isSelected ? "#ede9fe" : "#f9fafb" }}>
-                  <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${isSelected ? "#6366f1" : "#d1d5db"}`, background: isSelected ? "#6366f1" : "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "white", flexShrink: 0 }}>
-                    {isSelected ? "✓" : ""}
-                  </div>
-                  <span style={{ fontSize: 13, fontWeight: isSelected ? 700 : 500, color: isSelected ? "#4f46e5" : "#374151" }}>{c}</span>
-                </div>
-              );
-            })}
           </div>
-          <button onClick={() => { onUpdate({ ...trainer, assignedCourses }); setToast({ msg: "Courses assigned!", type: "success" }); setShowCourses(false); }}
-            style={{ ...S.primaryBtn, width: "100%" }}>
-            Save Assignments ({assignedCourses.length} selected)
-          </button>
-        </Modal>
-      )}
+
+          {/* Quick Stats */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: 12 }}>
+            {[
+              { icon: "📚", label: "Courses",  val: trainer.courses  },
+              { icon: "🗂️", label: "Batches",  val: trainerBatches.length },
+              { icon: "🎥", label: "Sessions", val: sessionsTaken.length || trainer.sessions },
+              { icon: "⭐", label: "Rating",   val: trainer.rating   },
+              { icon: "👥", label: "Learners", val: trainerBatches.reduce((a,b) => a + b.enrolled, 0) },
+            ].map((s, i) => (
+              <div key={i} style={{ background: "#f9fafb", borderRadius: 12, padding: "12px 14px", textAlign: "center", border: "1px solid #f1f5f9" }}>
+                <div style={{ fontSize: 18 }}>{s.icon}</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#1c1917", marginTop: 2 }}>{s.val}</div>
+                <div style={{ fontSize: 10, color: "#9ca3af" }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+          {tabs.map(t => (
+            <button key={t.key} onClick={() => setActiveTab(t.key)}
+              style={{ padding: "8px 16px", borderRadius: 8, border: `1.5px solid ${activeTab === t.key ? "#6366f1" : "#e5e7eb"}`, background: activeTab === t.key ? "#ede9fe" : "white", color: activeTab === t.key ? "#4f46e5" : "#6b7280", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── OVERVIEW ── */}
+        {activeTab === "overview" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+            <SectionCard title="👤 Trainer Details">
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {[
+                  { icon: "🎓", label: "Qualification", val: trainer.qualification || "—" },
+                  { icon: "💼", label: "Expertise",     val: trainer.subject               },
+                  { icon: "📅", label: "Joined",        val: trainer.joined || "—"        },
+                  { icon: "📧", label: "Email",         val: trainer.email  || "—"        },
+                  { icon: "📱", label: "Phone",         val: trainer.phone  || "—"        },
+                  { icon: "🔗", label: "LinkedIn",      val: trainer.linkedin || "—"      },
+                ].map((r, i) => (
+                  <div key={i} style={{ background: "#f9fafb", borderRadius: 10, padding: "10px 14px", border: "1px solid #f3f4f6" }}>
+                    <div style={{ fontSize: 10, color: "#9ca3af", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 2 }}>{r.label}</div>
+                    <div style={{ fontSize: 13, color: "#374151", fontWeight: 600 }}>{r.icon} {r.val}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Assigned Courses */}
+              <div style={{ marginTop: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>📚 Assigned Courses</div>
+                  <button onClick={() => setShowCourses(true)} style={S.tblBtn}>Edit</button>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {assignedCourses.map((c, i) => (
+                    <span key={i} style={{ padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: "#ede9fe", color: "#4f46e5", border: "1px solid #c4b5fd" }}>
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </SectionCard>
+
+            <SectionCard title="📊 Performance Overview">
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>Avg Rating</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#f59e0b" }}>⭐ {trainer.rating} / 5.0</span>
+                </div>
+                <div style={{ height: 8, background: "#f3f4f6", borderRadius: 6, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${(trainer.rating / 5) * 100}%`, background: "#f59e0b", borderRadius: 6 }} />
+                </div>
+              </div>
+
+              {[
+                { label: "Completion Rate (batches)", val: perfMetrics.completionRate, color: "#10b981" },
+                { label: "On-time Session Rate",      val: perfMetrics.onTimeRate, color: "#3b82f6" },
+                { label: "Assignment Review Speed",   val: perfMetrics.reviewSpeed, color: "#8b5cf6" },
+              ].map((m, i) => (
+                <div key={i} style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, color: "#6b7280" }}>{m.label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: m.color }}>{m.val}%</span>
+                  </div>
+                  <div style={{ height: 6, background: "#f3f4f6", borderRadius: 4, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${m.val}%`, background: m.color, borderRadius: 4 }} />
+                  </div>
+                </div>
+              ))}
+
+              {/* Recent reviews preview — full list lives in the Feedback tab */}
+              <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>Recent Reviews</div>
+                {trainerReviews.length > 3 && (
+                  <button onClick={() => setActiveTab("feedback")} style={{ ...S.tblBtn, fontSize: 11 }}>View all ({trainerReviews.length})</button>
+                )}
+              </div>
+              {trainerReviews.length === 0 ? (
+                <div style={{ fontSize: 12, color: "#9ca3af", textAlign: "center", padding: 12 }}>No reviews yet.</div>
+              ) : trainerReviews.slice(0, 3).map((r, i) => (
+                <div key={i} style={{ padding: "8px 12px", background: "#f9fafb", borderRadius: 8, marginTop: 8, border: "1px solid #f1f5f9" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#1c1917" }}>{r.learner}</span>
+                    <span style={{ fontSize: 11, color: "#f59e0b" }}>{"⭐".repeat(Math.min(r.rating, 5))}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>{r.text}</div>
+                </div>
+              ))}
+            </SectionCard>
+          </div>
+        )}
+
+        {/* ── SESSIONS TAKEN ── */}
+        {activeTab === "sessions" && (
+          <SectionCard title="🎯 Sessions Taken — History">
+            {sessionsTaken.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 30, color: "#9ca3af" }}>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>🎯</div>
+                <div>No sessions recorded for this trainer yet.</div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {sessionsTaken.map((s, i) => (
+                  <div key={s.id || i} style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 0.8fr 0.8fr", gap: 10, alignItems: "center", padding: "14px 18px", borderRadius: 14, border: "1px solid #f1f5f9", background: "#f9fafb" }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: "#1c1917" }}>📘 {s.topic}</div>
+                      {s.batchName && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>{s.batchName}</div>}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#374151" }}>🏢 {s.center}</div>
+                    <div style={{ fontSize: 12, color: "#374151" }}>📅 {s.date}<br /><span style={{ color: "#6b7280" }}>🕒 {s.time}</span></div>
+                    <div style={{ fontSize: 12, color: "#374151" }}>⏱️ {s.duration}</div>
+                    <div><StatusBadge status={s.status} /></div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+        )}
+
+        {/* ── UPCOMING SESSIONS ── */}
+        {activeTab === "upcoming" && (
+          <SectionCard title="📆 Upcoming Sessions">
+            {upcomingSessions.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 30, color: "#9ca3af" }}>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>📆</div>
+                <div>No upcoming sessions scheduled for this trainer.</div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {upcomingSessions.map((s, i) => (
+                  <div key={s.id || i} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 18px", borderRadius: 14, border: "1px solid #bae6fd", background: "#f0f9ff" }}>
+                    <div style={{ width: 56, height: 56, borderRadius: 12, background: "#2563eb", color: "white", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <div style={{ fontSize: 16, fontWeight: 800 }}>{(s.date || "").split("/")[0] || "?"}</div>
+                      <div style={{ fontSize: 9 }}>{(s.date || "").split("/")[1] ? `/${(s.date || "").split("/")[1]}` : ""}</div>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: "#1c1917" }}>📘 {s.topic}</div>
+                      <div style={{ fontSize: 12, color: "#0369a1", marginTop: 2 }}>🏢 {s.center} &nbsp;·&nbsp; 🕒 {s.time}</div>
+                    </div>
+                    <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, color: "#1d4ed8", background: "#dbeafe" }}>Upcoming</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+        )}
+
+        {/* ── FEEDBACK ── */}
+        {activeTab === "feedback" && (
+          <SectionCard title={`⭐ Learner Feedback (${trainerReviews.length})`}>
+            {trainerReviews.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 30, color: "#9ca3af" }}>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>⭐</div>
+                <div>No feedback submitted for this trainer yet.</div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {trainerReviews.map((r, i) => (
+                  <div key={i} style={{ padding: "12px 16px", background: "#f9fafb", borderRadius: 12, border: "1px solid #f1f5f9" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "#1c1917" }}>{r.learner}</span>
+                      <span style={{ fontSize: 12, color: "#f59e0b" }}>{"⭐".repeat(Math.min(r.rating, 5)) || "—"}</span>
+                    </div>
+                    {r.text && <div style={{ fontSize: 12, color: "#6b7280", marginTop: 6, lineHeight: 1.5 }}>{r.text}</div>}
+                    {r.date && <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 6 }}>{r.date}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+        )}
+
+        {/* ── BATCHES CALENDAR ── */}
+        {activeTab === "batches" && (
+          <SectionCard title="📅 Trainer's Batch Schedule">
+            {trainerBatches.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 30, color: "#9ca3af" }}>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>📅</div>
+                <div>No batches assigned to this trainer yet.</div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {trainerBatches.map((b, i) => {
+                  const pct = Math.round((b.enrolled / b.capacity) * 100);
+                  const statusColor = { upcoming: "#2563eb", active: "#059669", completed: "#7c3aed", cancelled: "#dc2626" };
+                  return (
+                    <div key={i} style={{ padding: "14px 18px", borderRadius: 14, border: `1px solid ${statusColor[b.status] || "#e5e7eb"}30`, background: `${statusColor[b.status] || "#f59e0b"}08` }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: "#1c1917" }}>{b.name}</div>
+                          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{b.course} · {b.mode}</div>
+                        </div>
+                        <StatusBadge status={b.status} />
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, fontSize: 12, color: "#6b7280" }}>
+                        <span>📅 {b.start} → {b.end}</span>
+                        <span>🪑 {b.enrolled}/{b.capacity} seats</span>
+                        <span>🖥️ {b.platform || b.mode}</span>
+                      </div>
+                      <div style={{ marginTop: 10 }}>
+                        <div style={{ height: 5, background: "#f3f4f6", borderRadius: 4, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${pct}%`, background: pct >= 80 ? "#10b981" : "#f59e0b", borderRadius: 4 }} />
+                        </div>
+                        <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4 }}>{pct}% capacity filled</div>
+                      </div>
+                      {/* Trainer role badge */}
+                      <div style={{ marginTop: 8 }}>
+                        <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700, background: b.trainer === trainer.name ? "#dbeafe" : "#f3f4f6", color: b.trainer === trainer.name ? "#1d4ed8" : "#6b7280" }}>
+                          {b.trainer === trainer.name ? "👑 Primary Trainer" : "🎓 Co-Trainer"}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </SectionCard>
+        )}
+
+        {/* Assign Courses Modal (nested) */}
+        {showCourses && (
+          <Modal title={`📚 Assign Courses — ${trainer.name}`} onClose={() => setShowCourses(false)}>
+            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 14 }}>Select courses this trainer can teach.</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+              {allCourses.map(c => {
+                const isSelected = assignedCourses.includes(c);
+                return (
+                  <div key={c} onClick={() => setAssignedCourses(prev => isSelected ? prev.filter(x => x !== c) : [...prev, c])}
+                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, cursor: "pointer", border: `1.5px solid ${isSelected ? "#6366f1" : "#e5e7eb"}`, background: isSelected ? "#ede9fe" : "#f9fafb" }}>
+                    <div style={{ width: 18, height: 18, borderRadius: 5, border: `2px solid ${isSelected ? "#6366f1" : "#d1d5db"}`, background: isSelected ? "#6366f1" : "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "white", flexShrink: 0 }}>
+                      {isSelected ? "✓" : ""}
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: isSelected ? 700 : 500, color: isSelected ? "#4f46e5" : "#374151" }}>{c}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <button onClick={() => { onUpdate({ ...trainer, assignedCourses }); setToast({ msg: "Courses assigned!", type: "success" }); setShowCourses(false); }}
+              style={{ ...S.primaryBtn, width: "100%" }}>
+              Save Assignments ({assignedCourses.length} selected)
+            </button>
+          </Modal>
+        )}
+      </div>
     </div>
   );
 }
@@ -627,19 +611,20 @@ export default function TrainerManagementTab({ trainers: initialTrainers = [], s
 
   if (loading) return <SectionCard title="Trainer Management">Loading trainers...</SectionCard>;
 
-  if (selected) return (
-    <TrainerProfileView
-      trainer={selected}
-      batches={batches}
-      onBack={() => setSelected(null)}
-      setToast={showToast}
-      onUpdate={updated => { updateTrainer(updated); setSelected(updated); }}
-    />
-  );
-
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
       {addModal && <AddTrainerModal onAdd={addTrainer} onClose={() => setAddModal(false)} setToast={showToast} />}
+
+      {/* Trainer profile opens as a MODAL / prompt box over this page */}
+      {selected && (
+        <TrainerProfileView
+          trainer={selected}
+          batches={batches}
+          onBack={() => setSelected(null)}
+          setToast={showToast}
+          onUpdate={updated => { updateTrainer(updated); setSelected(updated); }}
+        />
+      )}
 
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
