@@ -6122,6 +6122,8 @@ app.use("/api/parent-modules", parentModulesRouter);
 import parentSessionAssignmentsRouter from "./routes/parentSessionAssignments.js";
 app.use("/api/parent-session-assignments", parentSessionAssignmentsRouter);
 
+import parentModuleAssignmentsRouter from "./routes/parentModuleAssignments.js";
+app.use("/api/parent-module-assignments", parentModuleAssignmentsRouter);
 import mentorTrackingRouter from "./routes/mentorTracking.js";
 import mentorCurriculumRouter from "./routes/mentorCurriculum.js";
 app.use("/api/mentor/tracking", requireAuth, requireRole("mentor"), mentorTrackingRouter);
