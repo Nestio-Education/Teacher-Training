@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Modal, S, SectionCard, StatCard, StatusBadge } from "../components/Shared";
 import { getAdminDashboard, getAdminTeachers, getTrainers, getCourses, getAdminUsers, getPortalSettings, updatePortalSettings, testSmtpEmail, updateAdminLanguage } from "../services/api";
 import { setLanguage, getCurrentLanguage } from "../services/i18n";
+import NotificationsTab from "./NotificationsTab";
 
 const safeBool = (val, defaultVal = false) => {
   if (typeof val === "boolean") return val;
@@ -15,7 +16,7 @@ const safeNum = (val, defaultVal = 0) => {
   return Number.isFinite(n) ? n : defaultVal;
 };
 
-export default function SettingsTab({ setToast }) {
+export default function SettingsTab({ setToast, teachers }) {
   const [activeSection, setActiveSection] = useState("portal");
   const [settings, setSettings] = useState({
     portalName: "SpacECE Teacher Training Portal",
@@ -315,6 +316,7 @@ export default function SettingsTab({ setToast }) {
     { key: "security", label: "🔒 Security" },
     { key: "grading", label: "📊 Grading" },
     { key: "roles", label: "🛡️ Roles" },
+    { key: "notifications", label: "🔔 Notifications" },
   ];
 
   const openUserModal = (roleLabel) => {
@@ -758,6 +760,13 @@ export default function SettingsTab({ setToast }) {
                 ))}
               </div>
             </SectionCard>
+          )}
+
+          {/* Notifications */}
+          {activeSection === "notifications" && (
+            <div style={{ marginTop: 20 }}>
+              <NotificationsTab teachers={teachers || []} setToast={setToast} />
+            </div>
           )}
 
           {dirty && (
