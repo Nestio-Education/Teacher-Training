@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import { SectionCard, S, Badge } from "../components/Shared";
 import { getTeacherMe, getTeacherChildren, getChildAttendance, saveChildAttendance, deleteChildAttendance, deleteTeacherChild, createTeacherChild, getTeacherClasses, createTeacherChildrenBulk } from "../services/api";
 import * as XLSX from "xlsx";
+// Prajwal start
+import ChildDashboardModal from "./ChildDashboardModal";
+// Prajwal end
 // End: Dnyaneshwari Thorat
 
 const EMAILJS_SERVICE_ID  = "service_ckzt1le";
@@ -13,7 +16,7 @@ const generateOTP   = () => String(Math.floor(100000 + Math.random() * 900000));
 
 let emailJsLoaded = false;
 
-export default function AttendanceManager({ user }) {
+export default function AttendanceManager({ user, onRosterChange }) {
   const [teacherProfile, setTeacherProfile] = useState(null);
   const [classes, setClasses] = useState([]);
   const [selectedClassId, setSelectedClassId] = useState("");
@@ -27,11 +30,15 @@ export default function AttendanceManager({ user }) {
   const [bulkText, setBulkText] = useState("");
   const [excelStudents, setExcelStudents] = useState([]);
   // End: Dnyaneshwari Thorat
+  // Prajwal start
+  const [viewChild, setViewChild] = useState(null);
+  // Prajwal end
   const [newStudentName, setNewStudentName] = useState("");
   const [newStudentAge, setNewStudentAge] = useState("");
   const [newStudentGender, setNewStudentGender] = useState("");
   const [newStudentParentName, setNewStudentParentName] = useState("");
   const [newStudentParentPhone, setNewStudentParentPhone] = useState("");
+  const [newStudentClassId, setNewStudentClassId] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [loading, setLoading] = useState(true);
@@ -270,6 +277,7 @@ export default function AttendanceManager({ user }) {
           saveAttendanceToDb(updatedDict)
             .then(() => {
               triggerToast("✅ OTP verified and attendance updated in database!");
+              onRosterChange?.();
             })
             .catch(err => {
               console.error("Error saving attendance:", err);
@@ -401,6 +409,7 @@ export default function AttendanceManager({ user }) {
         triggerToast(`Bulk enrolled ${childrenList.length} children successfully!`);
         setExcelStudents([]);
         setRosterVersion(v => v + 1);
+        onRosterChange?.();
       })
       .catch(err => {
         console.error("Bulk enroll error:", err);
@@ -411,7 +420,8 @@ export default function AttendanceManager({ user }) {
 
   const handleAddStudent = (e) => {
     e.preventDefault();
-    const classId = selectedClassId || (teacherProfile?.teacherProfile?.classes || [])[0]?._id || (teacherProfile?.teacherProfile?.classes || [])[0];
+    const fallbackClassId = selectedClassId || (teacherProfile?.teacherProfile?.classes || [])[0]?._id || (teacherProfile?.teacherProfile?.classes || [])[0];
+    const classId = newStudentClassId || fallbackClassId;
 
     // Start: Dnyaneshwari Thorat
     if (bulkMode) {
@@ -435,6 +445,7 @@ export default function AttendanceManager({ user }) {
           setExcelStudents([]);
           setShowAddModal(false);
           setRosterVersion(v => v + 1);
+          onRosterChange?.();
         })
         .catch(err => {
           console.error("Bulk enroll error:", err);
@@ -462,8 +473,10 @@ export default function AttendanceManager({ user }) {
         setNewStudentGender("");
         setNewStudentParentName("");
         setNewStudentParentPhone("");
+        setNewStudentClassId("");
         setShowAddModal(false);
         setRosterVersion(v => v + 1);
+        onRosterChange?.();
       })
       .catch(err => {
         console.error("Error adding child:", err);
@@ -476,6 +489,7 @@ export default function AttendanceManager({ user }) {
       .then(() => {
         setIsSavedRecord(true);
         triggerToast(`Attendance sheet submitted to database for ${selectedDate}`);
+        onRosterChange?.();
       })
       .catch(err => {
         console.error("Error saving attendance:", err);
@@ -501,6 +515,7 @@ export default function AttendanceManager({ user }) {
         setIsSavedRecord(false);
         setRosterVersion(v => v + 1);
         triggerToast("Attendance record deleted successfully.");
+        onRosterChange?.();
       })
       .catch(err => {
         console.error("Error deleting attendance:", err);
@@ -518,6 +533,7 @@ export default function AttendanceManager({ user }) {
       .then(() => {
         setRosterVersion(v => v + 1);
         triggerToast(`${childName || "Child"} removed successfully.`);
+        onRosterChange?.();
       })
       .catch(err => {
         console.error("Error deleting child:", err);
@@ -792,24 +808,28 @@ export default function AttendanceManager({ user }) {
                         >
                           Absent
                         </button>
+                        {/* Prajwal start — Leave button replaced with View button.
+                            Clicking it opens the Child Dashboard (Child Profile /
+                            Child Assessment / Activity Suggestions) per Module 1 spec. */}
                         <button
                           type="button"
-                          onClick={() => handleStatusToggle(st.id, "L")}
+                          onClick={() => setViewChild(st)}
                           style={{
                             flex: 1,
                             padding: "6px 0",
                             borderRadius: 8,
                             border: "none",
-                            background: status === "L" ? "#eab308" : "#f1f5f9",
-                            color: status === "L" ? "white" : "#64748b",
+                            background: "#f1f5f9",
+                            color: "#64748b",
                             fontWeight: 700,
                             fontSize: 12,
                             cursor: "pointer",
                             transition: "all 0.15s"
                           }}
                         >
-                          Leave
+                          View
                         </button>
+                        {/* Prajwal end */}
                       </div>
                     </div>
                   );
@@ -882,6 +902,19 @@ export default function AttendanceManager({ user }) {
                 </div>
               ) : (
                 <div>
+                  <label style={S.label}>Assign Class *</label>
+                  <select
+                    required
+                    style={{ ...S.input, marginBottom: 12 }}
+                    value={newStudentClassId}
+                    onChange={e => setNewStudentClassId(e.target.value)}
+                  >
+                    <option value="">Select a class…</option>
+                    {classes.map(c => (
+                      <option key={c._id || c.id} value={c._id || c.id}>{c.name} ({c.ageGroup || "All Ages"})</option>
+                    ))}
+                  </select>
+
                   <label style={S.label}>Student Full Name *</label>
                   <input
                     required
@@ -1037,6 +1070,12 @@ export default function AttendanceManager({ user }) {
           </div>
         </div>
       )}
+
+      {/* Prajwal start — Child Dashboard modal (View button) */}
+      {viewChild && (
+        <ChildDashboardModal child={viewChild} onClose={() => setViewChild(null)} />
+      )}
+      {/* Prajwal end */}
     </div>
   );
 }

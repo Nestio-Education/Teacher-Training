@@ -721,8 +721,8 @@ export function TeacherManagementList({ setToast }) {
         <div style={{ position: "absolute", top: -30, right: -30, width: 160, height: 160, borderRadius: "50%", background: "rgba(255,255,255,0.12)" }} />
         <div style={{ position: "relative", zIndex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#fffbeb", letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 6 }}>{t("Teacher Management")}</div>
-            <h1 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 4px" }}>{t("All Teachers")}</h1>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#fffbeb", letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 6 }}>{t("User Management")}</div>
+            <h1 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 4px" }}>{t("All Users")}</h1>
             <p style={{ fontSize: 12, margin: 0, color: "rgba(255,255,255,0.85)" }}>{teachers.filter(t=>t.status==="approved").length} {t("approved")} · {pending} {t("pending")} · {teachers.length} {t("total")}</p>
           </div>
           <button onClick={() => setAddModal(true)} style={S.primaryBtn}>+ {t("Add Teacher")}</button>

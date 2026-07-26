@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 const activitySubmissionSchema = new mongoose.Schema(
   {
     teacher: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    mentor: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
     center: { type: mongoose.Schema.Types.ObjectId, ref: "Center" },
     class: { type: mongoose.Schema.Types.ObjectId, ref: "Class" },
     lessonPlan: { type: mongoose.Schema.Types.ObjectId, ref: "LessonPlan" },

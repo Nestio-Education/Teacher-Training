@@ -1,7 +1,7 @@
 // CenterManagementTab.jsx
 import { useState, useEffect } from "react";
 import { Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
-import { getCenters, createCenter, updateCenter, deleteCenter, getAdminTeachers, updateTeacherProfile, getClasses, createClass, updateClass, deleteClass, getClassLogs, getCenterTeacherAssignments, validateCenterAssignments } from "../services/api";
+import { getCenters, createCenter, updateCenter, deleteCenter, getAdminTeachers, updateTeacherProfile, getClasses, createClass, updateClass, deleteClass, getClassLogs, getCenterTeacherAssignments, validateCenterAssignments, getAdminMentors } from "../services/api";
 
 const mapCenterFromApi = (c) => ({
   id: c._id || c.id,
@@ -16,6 +16,7 @@ const mapCenterFromApi = (c) => ({
   teachers: c.teachers || [],
   children: c.children || 0,
   classes: c.classes || 0,
+  mentor: c.mentor?._id || c.mentor || null,
 });
 
 const mapCenterToApi = (c) => ({
@@ -29,12 +30,14 @@ const mapCenterToApi = (c) => ({
   status: c.status,
   teachers: c.teachers,
   classes: c.classes || [],
+  mentor: c.mentor || null,
 });
 
 const EMPTY_FORM = {
   name: "", location: "", city: "", pincode: "",
   phone: "", email: "", contactPerson: "",
   status: "active", teachers: [], children: 0, classes: 0,
+  mentor: null,
 };
 
 /* ── Add / Edit Modal ── */
@@ -42,6 +45,15 @@ function CenterFormModal({ center, allTeachers = [], onSave, onClose, setToast }
   const isEdit = !!center;
   const [form, setForm] = useState(center ? { ...center } : { ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
+  const [allMentors, setAllMentors] = useState([]);
+
+  useEffect(() => {
+    getAdminMentors()
+      .then(res => {
+        setAllMentors(res.mentors || []);
+      })
+      .catch(err => console.error("Failed to load mentors:", err));
+  }, []);
   
   // Classes state for creating classes during center creation
   const [classesList, setClassesList] = useState([]);
@@ -295,6 +307,17 @@ function CenterFormModal({ center, allTeachers = [], onSave, onClose, setToast }
         <input style={{ ...S.input, marginBottom: 12 }} value={form.contactPerson}
           onChange={e => setForm({ ...form, contactPerson: e.target.value })}
           placeholder="e.g. Mrs. Rekha Iyer" />
+
+        <label style={S.label}>Center Mentor / Admin</label>
+        <select style={{ ...S.input, marginBottom: 12 }} value={form.mentor || ""}
+          onChange={e => setForm({ ...form, mentor: e.target.value || null })}>
+          <option value="">-- No Mentor Assigned --</option>
+          {allMentors.map(m => (
+            <option key={m._id || m.id} value={m._id || m.id}>
+              {m.name} ({m.email})
+            </option>
+          ))}
+        </select>
 
         <label style={S.label}>Status</label>
         <select style={{ ...S.input, marginBottom: 16 }} value={form.status}
@@ -1475,6 +1498,11 @@ export default function CenterManagementTab({ setToast }) {
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 800, color: "#1c1917", marginBottom: 4 }}>{c.name}</div>
                 <div style={{ fontSize: 11, color: "#9ca3af" }}>📍 {c.city}{c.pincode ? ` · ${c.pincode}` : ""}</div>
+                {c.mentor && (
+                  <div style={{ fontSize: 11, color: "#4f46e5", fontWeight: 700, marginTop: 4 }}>
+                    🎓 Mentor: {typeof c.mentor === "object" ? c.mentor.name : "Assigned"}
+                  </div>
+                )}
               </div>
               <StatusBadge status={c.status} />
             </div>
@@ -1486,6 +1514,11 @@ export default function CenterManagementTab({ setToast }) {
               <div style={{ fontSize: 12, color: "#6b7280" }}>📱 {c.phone}</div>
               {c.email && <div style={{ fontSize: 12, color: "#6b7280" }}>📧 {c.email}</div>}
               {c.contactPerson && <div style={{ fontSize: 12, color: "#6b7280" }}>👤 {c.contactPerson}</div>}
+              {c.mentor && (
+                <div style={{ fontSize: 12, color: "#4f46e5", fontWeight: 600 }}>
+                  🎓 Mentor: {typeof c.mentor === "object" ? c.mentor.name : "Assigned"}
+                </div>
+              )}
               <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>📍 {c.location}</div>
             </div>
 

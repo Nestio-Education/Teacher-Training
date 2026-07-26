@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Modal, S } from "../components/Shared";
-import { generateAILessonPlan } from "../services/api";
+import { Modal, S, StatusBadge } from "../components/Shared";
+import { generateAILessonPlan, getAIActivities, saveAIActivity, updateAIActivityStatus, deleteAIActivity } from "../services/api";
 
 const AGE_GROUPS = [
   "2–3 years (Toddler)",
@@ -11,15 +11,20 @@ const AGE_GROUPS = [
 ];
 
 const DURATIONS = ["20 minutes", "30 minutes", "45 minutes", "60 minutes", "90 minutes"];
-const STORAGE_KEY = "spaceece_lesson_planner_activities";
 
-function loadSavedActivities() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+function mapActivityItem(item) {
+  const status = item.status === "completed" ? "completed" : "pending";
+  return {
+    ...item,
+    id: item._id || item.id,
+    activity: item.activities?.[0] || item.activity,
+    teacherName: item.teacher?.name || "Unknown",
+    teacherEmail: item.teacher?.email || "",
+    creatorRole: item.teacher?.role || "teacher",
+    addedAt: item.savedAt || item.createdAt,
+    status,
+    completedAt: item.completedAt || null,
+  };
 }
 
 function formatAddedDate(iso) {
@@ -39,19 +44,38 @@ function formatAddedDate(iso) {
 /**
  * Lesson Planner — generate plan, show cards, Add Activity with confirm → saved card list.
  */
-export default function LessonPlannerTab({ setToast }) {
+export default function LessonPlannerTab({ setToast, user }) {
+  const isTeacher = user?.role === "teacher";
+  const isAdmin = user?.role === "admin";
+  const canMarkComplete = isTeacher || isAdmin;
   const [ageGroup, setAgeGroup] = useState(AGE_GROUPS[1]);
   const [topic, setTopic] = useState("");
   const [duration, setDuration] = useState(DURATIONS[1]);
   const [generating, setGenerating] = useState(false);
   const [draftText, setDraftText] = useState("");
   const [plan, setPlan] = useState(null);
-  const [savedActivities, setSavedActivities] = useState(loadSavedActivities);
+  const [savedActivities, setSavedActivities] = useState([]);
+  const [loadingActivities, setLoadingActivities] = useState(true);
   const [pendingActivity, setPendingActivity] = useState(null);
+  const [completeTarget, setCompleteTarget] = useState(null);
+  const [activityFilter, setActivityFilter] = useState("all");
+  const [teacherFilter, setTeacherFilter] = useState("all");
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(savedActivities));
-  }, [savedActivities]);
+    const loadActivities = async () => {
+      try {
+        const res = await getAIActivities();
+        const activities = (res.activities || []).map(mapActivityItem);
+        setSavedActivities(activities);
+      } catch (err) {
+        console.error("Failed to load AI activities:", err);
+        setToast?.({ msg: "Could not load saved activities.", type: "error" });
+      } finally {
+        setLoadingActivities(false);
+      }
+    };
+    loadActivities();
+  }, [setToast]);
 
   const handleGenerate = async (e) => {
     e.preventDefault();
@@ -130,28 +154,99 @@ export default function LessonPlannerTab({ setToast }) {
     });
   };
 
-  const confirmAddActivity = () => {
+  const confirmAddActivity = async () => {
     if (!pendingActivity) return;
-    const entry = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      activity: pendingActivity.text,
-      activityIndex: pendingActivity.index,
-      topic: pendingActivity.topic,
-      ageGroup: pendingActivity.ageGroup,
-      duration: pendingActivity.duration,
-      objective: pendingActivity.objective,
-      materials: pendingActivity.materials || [],
-      addedAt: new Date().toISOString(),
-    };
-    setSavedActivities((prev) => [entry, ...prev]);
-    setPendingActivity(null);
-    setToast?.({ msg: "Activity added to your list.", type: "success" });
+    try {
+      const res = await saveAIActivity({
+        topic: pendingActivity.topic,
+        ageGroup: pendingActivity.ageGroup,
+        duration: pendingActivity.duration,
+        objective: pendingActivity.objective,
+        activities: [pendingActivity.text],
+        materials: pendingActivity.materials || [],
+        provider: plan?.provider || "local",
+        generatedAt: plan?.generatedAt || new Date().toISOString(),
+      });
+      const newActivity = mapActivityItem({
+        ...res.activity,
+        activityIndex: pendingActivity.index,
+      });
+      setSavedActivities((prev) => [newActivity, ...prev]);
+      setPendingActivity(null);
+      setToast?.({ msg: "Activity added to your list.", type: "success" });
+    } catch (err) {
+      setToast?.({ msg: err.message || "Failed to save activity.", type: "error" });
+    }
   };
 
-  const removeSaved = (id) => {
-    setSavedActivities((prev) => prev.filter((a) => a.id !== id));
-    setToast?.({ msg: "Activity removed.", type: "success" });
+  const removeSaved = async (id) => {
+    try {
+      await deleteAIActivity(id);
+      setSavedActivities((prev) => prev.filter((a) => a.id !== id));
+      setToast?.({ msg: "Activity removed.", type: "success" });
+    } catch (err) {
+      setToast?.({ msg: err.message || "Failed to remove activity.", type: "error" });
+    }
   };
+
+  const confirmMarkComplete = async () => {
+    if (!completeTarget) return;
+    try {
+      await updateAIActivityStatus(completeTarget.id, "completed");
+      setSavedActivities((prev) =>
+        prev.map((item) =>
+          item.id === completeTarget.id
+            ? mapActivityItem({
+                ...item,
+                status: "completed",
+                completedAt: new Date().toISOString(),
+              })
+            : item
+        )
+      );
+      setCompleteTarget(null);
+      setToast?.({ msg: "Activity marked as complete.", type: "success" });
+    } catch (err) {
+      setToast?.({ msg: err.message || "Failed to mark activity as complete.", type: "error" });
+    }
+  };
+
+  const pendingCount = savedActivities.filter((a) => a.status !== "completed").length;
+  const completedCount = savedActivities.filter((a) => a.status === "completed").length;
+
+  const teacherOptions = [...new Map(
+    savedActivities.map((item) => [
+      item.teacherEmail || item.teacherName,
+      { name: item.teacherName, email: item.teacherEmail },
+    ])
+  ).values()];
+
+  const filteredActivities = savedActivities.filter((item) => {
+    if (activityFilter === "pending" && item.status === "completed") return false;
+    if (activityFilter === "completed" && item.status !== "completed") return false;
+    if (isAdmin && teacherFilter !== "all") {
+      const key = item.teacherEmail || item.teacherName;
+      if (key !== teacherFilter) return false;
+    }
+    return true;
+  });
+
+  const filterBtn = (key, label, count) => (
+    <button
+      key={key}
+      type="button"
+      onClick={() => setActivityFilter(key)}
+      style={{
+        ...S.tblBtn,
+        background: activityFilter === key ? "#dbeafe" : "white",
+        color: activityFilter === key ? "#1e40af" : "#475569",
+        borderColor: activityFilter === key ? "#93c5fd" : "#e2e8f0",
+        fontWeight: activityFilter === key ? 700 : 600,
+      }}
+    >
+      {label} ({count})
+    </button>
+  );
 
   const handleClearPlan = () => {
     setDraftText("");
@@ -170,10 +265,11 @@ export default function LessonPlannerTab({ setToast }) {
     <div style={{ animation: "fadeIn 0.3s ease" }}>
       <h1 style={S.pageTitle}>✏️ Lesson Planner</h1>
       <p style={S.pageSub}>
-        Generate a lesson plan, review it as cards, then add activities to your list below.
+        {isAdmin
+          ? "Generate lesson plans or review activities saved by teachers — filter by teacher or status below."
+          : "Generate a lesson plan, review it as cards, then add activities to your list below."}
       </p>
 
-      {/* Form */}
       <form
         onSubmit={handleGenerate}
         style={{
@@ -353,16 +449,39 @@ export default function LessonPlannerTab({ setToast }) {
 
       {/* Added activities list */}
       <section>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
           <h2 style={{ fontSize: 16, fontWeight: 800, color: "#0f172a", margin: 0 }}>
-            Added activities
+            {isAdmin ? "All activities" : "Added activities"}
           </h2>
-          <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>
-            {savedActivities.length} saved
-          </span>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            {isAdmin && teacherOptions.length > 0 && (
+              <select
+                style={{ ...S.input, width: "auto", minWidth: 180, padding: "6px 10px", fontSize: 12 }}
+                value={teacherFilter}
+                onChange={(e) => setTeacherFilter(e.target.value)}
+              >
+                <option value="all">All teachers</option>
+                {teacherOptions.map((t) => {
+                  const key = t.email || t.name;
+                  return (
+                    <option key={key} value={key}>
+                      {t.name}
+                    </option>
+                  );
+                })}
+              </select>
+            )}
+            {filterBtn("all", "All", savedActivities.length)}
+            {filterBtn("pending", "Pending", pendingCount)}
+            {filterBtn("completed", "Completed", completedCount)}
+          </div>
         </div>
 
-        {savedActivities.length === 0 ? (
+        {loadingActivities ? (
+          <div style={{ ...cardStyle, textAlign: "center", color: "#64748b", fontSize: 13, padding: 28 }}>
+            Loading activities...
+          </div>
+        ) : savedActivities.length === 0 ? (
           <div
             style={{
               ...cardStyle,
@@ -373,20 +492,74 @@ export default function LessonPlannerTab({ setToast }) {
               padding: 28,
             }}
           >
-            No activities added yet. Generate a plan and click <b>Add Activity</b> on a card.
+            {isAdmin
+              ? "No teacher activities saved yet. Activities appear here when teachers add them from Lesson Planner."
+              : <>No activities added yet. Generate a plan and click <b>Add Activity</b> on a card.</>}
+          </div>
+        ) : filteredActivities.length === 0 ? (
+          <div
+            style={{
+              ...cardStyle,
+              borderStyle: "dashed",
+              textAlign: "center",
+              color: "#94a3b8",
+              fontSize: 13,
+              padding: 28,
+            }}
+          >
+            {isAdmin ? "No activities match the selected filters." : `No ${activityFilter} activities.`}
           </div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
-            {savedActivities.map((item) => (
-              <div key={item.id} style={{ ...cardStyle, borderTop: "3px solid #8b5cf6" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: "#7c3aed" }}>
-                    ACTIVITY {item.activityIndex || ""}
-                  </span>
+            {filteredActivities.map((item) => {
+              const isCompleted = item.status === "completed";
+              return (
+              <div
+                key={item.id}
+                style={{
+                  ...cardStyle,
+                  borderTop: `3px solid ${isCompleted ? "#10b981" : "#8b5cf6"}`,
+                  opacity: isCompleted ? 0.92 : 1,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: isCompleted ? "#059669" : "#7c3aed" }}>
+                      ACTIVITY {item.activityIndex || ""}
+                    </span>
+                    <StatusBadge status={isCompleted ? "completed" : "pending"} />
+                  </div>
                   <span style={{ fontSize: 10, color: "#94a3b8", whiteSpace: "nowrap" }}>
                     Added {formatAddedDate(item.addedAt)}
                   </span>
                 </div>
+                {isAdmin && (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      marginBottom: 10,
+                      padding: "8px 10px",
+                      background: item.creatorRole === "admin" ? "#fef3c7" : "#eff6ff",
+                      border: `1px solid ${item.creatorRole === "admin" ? "#fbbf24" : "#bfdbfe"}`,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <span style={{ fontSize: 16 }}>{item.creatorRole === "admin" ? "👤" : "👩‍🏫"}</span>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: item.creatorRole === "admin" ? "#92400e" : "#1e40af" }}>
+                        {item.teacherName}
+                        <span style={{ fontWeight: 600, marginLeft: 6, fontSize: 10 }}>
+                          ({item.creatorRole === "admin" ? "Admin" : "Teacher"})
+                        </span>
+                      </div>
+                      {item.teacherEmail && (
+                        <div style={{ fontSize: 10, color: "#64748b" }}>{item.teacherEmail}</div>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", marginBottom: 8 }}>
                   {item.topic}
                 </div>
@@ -396,6 +569,11 @@ export default function LessonPlannerTab({ setToast }) {
                 <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.5, marginBottom: 12 }}>
                   <div><b>Age group:</b> {item.ageGroup}</div>
                   <div><b>Duration:</b> {item.duration}</div>
+                  {isCompleted && item.completedAt && (
+                    <div style={{ marginTop: 6, color: "#059669", fontWeight: 600 }}>
+                      <b>Completed:</b> {formatAddedDate(item.completedAt)}
+                    </div>
+                  )}
                   {item.objective && (
                     <div style={{ marginTop: 6 }}><b>Objective:</b> {item.objective}</div>
                   )}
@@ -405,10 +583,19 @@ export default function LessonPlannerTab({ setToast }) {
                     </div>
                   )}
                 </div>
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button type="button" style={S.tblBtn} onClick={() => handleCopy(item.activity, "Activity")}>
                     📋 Copy
                   </button>
+                  {canMarkComplete && !isCompleted && (
+                    <button
+                      type="button"
+                      style={{ ...S.btnGreen, padding: "5px 10px", fontSize: 11 }}
+                      onClick={() => setCompleteTarget(item)}
+                    >
+                      ✅ Mark Complete
+                    </button>
+                  )}
                   <button
                     type="button"
                     style={{ ...S.btnRed, padding: "5px 10px", fontSize: 11 }}
@@ -418,10 +605,43 @@ export default function LessonPlannerTab({ setToast }) {
                   </button>
                 </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </section>
+
+      {/* Confirm Mark Complete */}
+      {completeTarget && (
+        <Modal title="Mark Activity Complete" onClose={() => setCompleteTarget(null)}>
+          <p style={{ fontSize: 14, color: "#334155", lineHeight: 1.6, margin: "0 0 16px" }}>
+            Do you want to mark this activity as complete?
+          </p>
+          <div
+            style={{
+              background: "#f0fdf4",
+              border: "1px solid #bbf7d0",
+              borderRadius: 10,
+              padding: 14,
+              fontSize: 13,
+              color: "#1c1917",
+              lineHeight: 1.55,
+              marginBottom: 18,
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>{completeTarget.topic}</div>
+            {completeTarget.activity}
+          </div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button type="button" style={S.exportBtn} onClick={() => setCompleteTarget(null)}>
+              No
+            </button>
+            <button type="button" style={S.primaryBtn} onClick={confirmMarkComplete}>
+              Yes, mark complete
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {/* Confirm Add Activity */}
       {pendingActivity && (
