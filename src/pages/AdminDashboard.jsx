@@ -237,92 +237,88 @@ export default function AdminDashboard({ user, onLogout }) {
           >⏻</button>
         </div>
       </div>
+{/* Main Content */}
+<div style={{ flex:1, padding:"28px 32px", overflowY:"auto", maxHeight:"100vh" }}>
+  {/* Top bar with User Guide button + Admin name and 3-dots menu */}
+  <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginBottom:16, position:"relative" }}>
+    
+    <button
+      onClick={() => setShowGuide(true)}
+      title={t("User Guide")}
+      style={{
+        display:"flex",
+        alignItems:"center",
+        gap:6,
+        padding:"8px 16px",
+        borderRadius:10,
+        border:"1px solid #fbbf24",
+        background:"white",
+        color:"#92400e",
+        fontSize:12,
+        fontWeight:700,
+        fontFamily:"inherit",
+        cursor:"pointer",
+        transition:"all 0.18s",
+        boxShadow:"0 1px 3px rgba(0,0,0,0.04)",
+      }}
+      onMouseEnter={(e)=>{ e.currentTarget.style.background="#fffbeb"; }}
+      onMouseLeave={(e)=>{ e.currentTarget.style.background="white"; }}
+    >
+      <span style={{ fontSize:14, lineHeight:1 }}>📖</span>
+      {t("User Guide")}
+    </button>
 
-      {/* Main Content */}
-      <div style={{ flex:1, padding:"28px 32px", overflowY:"auto", maxHeight:"100vh" }}>
-        {/* Top bar with Admin name and 3-dots menu */}
-        <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:16, position:"relative" }}>
-          <div 
-            onClick={() => setMenuOpen(!menuOpen)}
-            style={{ 
-              display:"flex", alignItems:"center", gap: 10, cursor:"pointer", 
-              padding:"6px 12px", borderRadius:20, background:"#fef3c7", 
-              boxShadow:"0 1px 3px rgba(0,0,0,0.1)", border:"1px solid #fbbf24",
-              transition:"all 0.2s ease"
-        {/* Top bar with User Guide + Logout buttons, top-right corner */}
-        <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginBottom:16 }}>
-          <button
-            onClick={() => setShowGuide(true)}
-            title={t("User Guide")}
-            style={{
-              display:"flex",
-              alignItems:"center",
-              gap:6,
-              padding:"8px 16px",
-              borderRadius:10,
-              border:"1px solid #fbbf24",
-              background:"white",
-              color:"#92400e",
-              fontSize:12,
-              fontWeight:700,
-              fontFamily:"inherit",
-              cursor:"pointer",
-              transition:"all 0.18s",
-              boxShadow:"0 1px 3px rgba(0,0,0,0.04)",
-            }}
-            onMouseEnter={(e)=>{ e.currentTarget.style.background="#fffbeb"; }}
-            onMouseLeave={(e)=>{ e.currentTarget.style.background="white"; }}
-          >
-            <span style={{ fontSize:14, lineHeight:1 }}>📖</span>
-            {t("User Guide")}
-          </button>
+    <div
+      onClick={() => setMenuOpen(!menuOpen)}
+      style={{
+        display:"flex", alignItems:"center", gap: 10, cursor:"pointer",
+        padding:"6px 12px", borderRadius:20, background:"#fef3c7",
+        boxShadow:"0 1px 3px rgba(0,0,0,0.1)", border:"1px solid #fbbf24",
+        transition:"all 0.2s ease"
+      }}
+      onMouseEnter={(e)=>e.currentTarget.style.background="#fde68a"}
+      onMouseLeave={(e)=>e.currentTarget.style.background="#fef3c7"}
+    >
+      <div style={{ fontSize:14, fontWeight:700, color:"#92400e" }}>Admin</div>
+      <div style={{ fontSize: 18, fontWeight: 700, paddingBottom: 6, color:"#92400e" }}>⋮</div>
+    </div>
 
-        
-            }}
-            onMouseEnter={(e)=>e.currentTarget.style.background="#fde68a"}
-            onMouseLeave={(e)=>e.currentTarget.style.background="#fef3c7"}
-          >
-            <div style={{ fontSize:14, fontWeight:700, color:"#92400e" }}>Admin</div>
-            <div style={{ fontSize: 18, fontWeight: 700, paddingBottom: 6, color:"#92400e" }}>⋮</div>
+    {menuOpen && (
+      <div style={{
+        position:"absolute", top: 48, right: 0, background:"white",
+        border:"1px solid #e5e7eb", borderRadius: 12, boxShadow:"0 10px 25px rgba(0, 0, 0, 0.1)",
+        zIndex: 50, minWidth: 180, display: "flex", flexDirection: "column", overflow: "hidden"
+      }}>
+        <button
+          onClick={() => { setActiveTab("settings"); setMenuOpen(false); }}
+          style={{ display:"flex", alignItems:"center", gap: 12, padding:"12px 18px", border:"none", background:"white", textAlign:"left", cursor:"pointer", borderBottom:"1px solid #f3f4f6", fontSize:14, fontWeight:600, color:"#374151", transition: "background 0.2s" }}
+          onMouseEnter={(e)=>e.currentTarget.style.background="#f8fafc"}
+          onMouseLeave={(e)=>e.currentTarget.style.background="white"}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: "#e0e7ff" }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
           </div>
-          
-          {menuOpen && (
-            <div style={{
-              position:"absolute", top: 48, right: 0, background:"white",
-              border:"1px solid #e5e7eb", borderRadius: 12, boxShadow:"0 10px 25px rgba(0, 0, 0, 0.1)",
-              zIndex: 50, minWidth: 180, display: "flex", flexDirection: "column", overflow: "hidden"
-            }}>
-              <button
-                onClick={() => { setActiveTab("settings"); setMenuOpen(false); }}
-                style={{ display:"flex", alignItems:"center", gap: 12, padding:"12px 18px", border:"none", background:"white", textAlign:"left", cursor:"pointer", borderBottom:"1px solid #f3f4f6", fontSize:14, fontWeight:600, color:"#374151", transition: "background 0.2s" }}
-                onMouseEnter={(e)=>e.currentTarget.style.background="#f8fafc"}
-                onMouseLeave={(e)=>e.currentTarget.style.background="white"}
-              >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: "#e0e7ff" }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                </div>
-                <span style={{ color: "#374151", fontWeight: 700 }}>Settings & Roles</span>
-              </button>
-              <button
-                onClick={onLogout}
-                style={{ display:"flex", alignItems:"center", gap: 12, padding:"12px 18px", border:"none", background:"white", textAlign:"left", cursor:"pointer", color:"#dc2626", fontSize:14, fontWeight:600, transition: "background 0.2s" }}
-                onMouseEnter={(e)=>e.currentTarget.style.background="#fef2f2"}
-                onMouseLeave={(e)=>e.currentTarget.style.background="white"}
-              >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: "#fee2e2" }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                </div>
-                <span style={{ color: "#dc2626", fontWeight: 700 }}>Logout</span>
-              </button>
-            </div>
-          )}
-        </div>
-
-
-        {renderContent()}
+          <span style={{ color: "#374151", fontWeight: 700 }}>Settings & Roles</span>
+        </button>
+        <button
+          onClick={onLogout}
+          style={{ display:"flex", alignItems:"center", gap: 12, padding:"12px 18px", border:"none", background:"white", textAlign:"left", cursor:"pointer", color:"#dc2626", fontSize:14, fontWeight:600, transition: "background 0.2s" }}
+          onMouseEnter={(e)=>e.currentTarget.style.background="#fef2f2"}
+          onMouseLeave={(e)=>e.currentTarget.style.background="white"}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: "#fee2e2" }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+          </div>
+          <span style={{ color: "#dc2626", fontWeight: 700 }}>Logout</span>
+        </button>
       </div>
+    )}
+  </div>
 
-      {showGuide && <AdminUserGuide onClose={() => setShowGuide(false)} />}
+  {renderContent()}
+</div>
+
+{showGuide && <AdminUserGuide onClose={() => setShowGuide(false)} />}
     </div>
   );
 }
