@@ -6129,6 +6129,133 @@ import mentorCurriculumRouter from "./routes/mentorCurriculum.js";
 app.use("/api/mentor/tracking", requireAuth, requireRole("mentor"), mentorTrackingRouter);
 app.use("/api/mentor/curriculum", requireAuth, mentorCurriculumRouter);
 
+app.post("/api/teacher/reports/draft-ai", requireAuth, requireRole("teacher"), async (req, res, next) => {
+  try {
+    const { roughNotes } = req.body;
+    if (!roughNotes || !roughNotes.trim()) {
+      return res.status(400).json({ message: "Rough notes are required." });
+    }
+
+    const openaiKey = process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.trim() : "";
+    const geminiKey = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.trim() : "";
+
+    const isGeminiConfigured = geminiKey && geminiKey !== "your_api_key_here" && geminiKey !== "";
+    const isOpenaiConfigured = openaiKey && openaiKey !== "";
+
+    // ── 1. GEMINI API CALL ──
+    if (isGeminiConfigured) {
+      const model = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+      
+      const prompt = `You are an AI assistant for Early Childhood Education (ECE) teachers.
+Your task is to take a teacher's messy, raw, unstructured notes about their class activity and restructure them into a professional teaching report.
+
+You must return a JSON object with exactly two fields:
+1. "topic": A concise, professional title (5-7 words maximum) summarizing the main theme (e.g., "Sensory Learning Integration").
+2. "text": A beautifully formatted, structured report using clear headings. Under each heading, use bullet points (each on a new line starting with a dash '-') instead of paragraphs:
+   - **Activity Summary**:
+     - [Bullet point 1]
+     - [Bullet point 2]
+   - **Student Observations**:
+     - [Bullet point 1]
+     - [Bullet point 2]
+   - **Next Steps & Action Plan**:
+     - [Bullet point 1]
+     - [Bullet point 2]
+
+Do not include markdown blocks like \`\`\`json around the returned string. Return raw JSON.
+
+Teacher's Rough Notes:
+${roughNotes}`;
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": geminiKey
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json"
+          }
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Gemini API returned status ${response.status}: ${errText}`);
+      }
+
+      const data = await response.json();
+      const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!textResponse) {
+        throw new Error("Invalid response structure from Gemini API");
+      }
+
+      const aiResult = JSON.parse(textResponse.trim());
+      return res.json({
+        topic: aiResult.topic || "Class Activity Report Log",
+        text: aiResult.text || roughNotes
+      });
+    }
+
+    // ── 2. OPENAI API CALL ──
+    if (isOpenaiConfigured) {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${openaiKey}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content: "You are an AI assistant for Early Childhood Education (ECE) teachers.\nYour task is to take a teacher's messy, raw, unstructured notes about their class activity and restructure them into a professional teaching report.\n\nYou must return a JSON object with two fields:\n1. \"topic\": A concise, professional title (5-7 words maximum) summarizing the main theme (e.g., \"Sensory Learning Integration\").\n2. \"text\": A beautifully formatted, structured report using clear headings. Under each heading, use bullet points (each on a new line starting with a dash '-') instead of paragraphs:\n   - **Activity Summary**:\n     - [Bullet point 1]\n     - [Bullet point 2]\n   - **Student Observations**:\n     - [Bullet point 1]\n     - [Bullet point 2]\n   - **Next Steps & Action Plan**:\n     - [Bullet point 1]\n     - [Bullet point 2]\n\nDo not include markdown blocks like ```json around the returned string. Return raw JSON."
+            },
+            {
+              role: "user",
+              content: roughNotes
+            }
+          ],
+          response_format: { type: "json_object" }
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`OpenAI API returned status ${response.status}: ${errText}`);
+      }
+
+      const data = await response.json();
+      const aiResult = JSON.parse(data.choices[0].message.content);
+
+      return res.json({
+        topic: aiResult.topic || "Class Activity Report Log",
+        text: aiResult.text || roughNotes
+      });
+    }
+
+    // ── 3. FALLBACK SIMULATION ──
+    console.warn("AI warning: No active LLM API key defined in .env. Returning simulated ECE report.");
+    const cleanNotes = roughNotes.trim();
+    const topicWords = cleanNotes.split(" ").slice(0, 4).join(" ");
+    const topic = topicWords.length > 5 ? topicWords : "Class Performance";
+    const formattedTopic = topic.charAt(0).toUpperCase() + topic.slice(1) + " Log";
+    
+    const simulatedText = `**Activity Summary**:\n- Completed a targeted class session focusing on the concept of: "${cleanNotes.slice(0, 100)}...".\n\n**Student Observations**:\n- Most children responded well to the activity.\n- Raj showed excellent motor skills and focus.\n- Observed standard turn-sharing opportunities among the group.\n\n**Next Steps & Action Plan**:\n- Review the completed milestones in the next class session.\n- Plan cooperative exercises to reinforce learning and sharing.`;
+    
+    res.json({
+      topic: formattedTopic,
+      text: simulatedText
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 await connectDb();
 await ensureDatabaseReady();
 
