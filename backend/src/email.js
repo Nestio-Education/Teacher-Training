@@ -151,30 +151,41 @@ export async function sendNotificationEmail({ recipient, title, body, category =
   return { success: false, error: "SMTP not configured" };
 }
 
+// Start: Dnyaneshwari Thorat
 /**
- * Load Twilio config — first from env vars, then from DB as fallback.
+ * Load Messaging provider configuration (Twilio, Vonage, Fast2SMS).
  */
-export async function getTwilioConfig() {
-  // Env vars take priority
-  if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER) {
-    return {
-      sid: process.env.TWILIO_ACCOUNT_SID,
-      token: process.env.TWILIO_AUTH_TOKEN,
-      from: process.env.TWILIO_FROM_NUMBER,
-    };
-  }
-
-  // Fall back to DB settings
-  const keys = ["twilioSid", "twilioToken", "twilioFrom"];
+export async function getMessagingConfig() {
+  const keys = [
+    "messagingProvider",
+    "twilioSid", "twilioToken", "twilioFrom",
+    "vonageApiKey", "vonageApiSecret", "vonageFrom",
+    "fast2smsKey"
+  ];
   const docs = await PortalSetting.find({ key: { $in: keys } });
   const map = {};
   docs.forEach((d) => { map[d.key] = d.value; });
 
-  if (!map.twilioSid || !map.twilioToken || !map.twilioFrom) return null;
-
   return {
-    sid: String(map.twilioSid),
-    token: String(map.twilioToken),
-    from: String(map.twilioFrom),
+    provider: String(map.messagingProvider || process.env.MESSAGING_PROVIDER || "twilio"),
+    twilioSid: String(map.twilioSid || process.env.TWILIO_ACCOUNT_SID || ""),
+    twilioToken: String(map.twilioToken || process.env.TWILIO_AUTH_TOKEN || ""),
+    twilioFrom: String(map.twilioFrom || process.env.TWILIO_FROM_NUMBER || ""),
+    vonageApiKey: String(map.vonageApiKey || process.env.VONAGE_API_KEY || ""),
+    vonageApiSecret: String(map.vonageApiSecret || process.env.VONAGE_API_SECRET || ""),
+    vonageFrom: String(map.vonageFrom || process.env.VONAGE_FROM || "SpacECE"),
+    fast2smsKey: String(map.fast2smsKey || process.env.FAST2SMS_KEY || ""),
   };
 }
+
+// Keep getTwilioConfig as fallback for backward compatibility
+export async function getTwilioConfig() {
+  const conf = await getMessagingConfig();
+  if (conf.provider !== "twilio" || !conf.twilioSid || !conf.twilioToken) return null;
+  return {
+    sid: conf.twilioSid,
+    token: conf.twilioToken,
+    from: conf.twilioFrom
+  };
+}
+// End: Dnyaneshwari Thorat

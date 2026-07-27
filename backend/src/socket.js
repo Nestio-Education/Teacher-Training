@@ -104,18 +104,24 @@ export function emitToCourse(courseId, event, data) {
 /**
  * Create a notification and emit it in real-time
  */
+// Start: Dnyaneshwari Thorat
 export async function createAndEmitNotification({ recipientId, title, body, type = "in_app", metadata = {} }) {
   const { Notification } = await import("./models/Notification.js");
   
+  const validChannels = ["in_app", "email", "sms", "push", "whatsapp"];
+  const channel = validChannels.includes(type) ? type : "in_app";
+
   const notification = await Notification.create({
     recipient: recipientId,
+    type,
     title,
     body,
-    channel: type === "course_assigned" || type === "assignment_reviewed" ? "in_app" : type,
+    channel,
     status: "delivered",
     sentAt: new Date(),
-    metadata: { ...metadata, category: type === "course_assigned" ? "course" : type === "assignment_reviewed" ? "assignment" : "system", priority: "normal" },
+    metadata: { ...metadata, category: type === "course" ? "course" : type === "assignment" ? "assignment" : "system", priority: "normal" },
   });
+// End: Dnyaneshwari Thorat
 
   // Populate for real-time display
   const populated = await Notification.findById(notification._id)

@@ -68,42 +68,42 @@ export default function GeotagAttendance({ user }) {
             }
             
             map[dateKey] = {
-              checkedIn: parsedNote.checkedIn || (record.status === "present"),
-              checkedOut: parsedNote.checkedOut || false,
-              checkInTime: parsedNote.checkInTime || (record.status === "present" ? "09:00 AM" : ""),
-              checkOutTime: parsedNote.checkOutTime || "",
-              snapshot: parsedNote.snapshot || null,
-              distanceOffset: parsedNote.distanceOffset || 0
+              checkedIn: record.checkedIn ?? (parsedNote.checkedIn || (record.status === "present")),
+              checkedOut: record.checkedOut ?? (parsedNote.checkedOut || false),
+              checkInTime: record.checkInTime || parsedNote.checkInTime || (record.status === "present" ? "09:00 AM" : ""),
+              checkOutTime: record.checkOutTime || parsedNote.checkOutTime || "",
+              snapshot: record.snapshot || parsedNote.snapshot || null,
+              distanceOffset: record.distanceOffset ?? (parsedNote.distanceOffset || 0)
             };
             
             const dateStr = dateObj.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
             
-            if (parsedNote.checkInTime) {
+            if (map[dateKey].checkInTime) {
               logs.push({
                 id: `GEO-${record._id}-in`,
                 type: "checkin",
                 date: dateStr,
-                time: parsedNote.checkInTime,
+                time: map[dateKey].checkInTime,
                 coords: parsedNote.coords || `${record.latitude || CAMPUS_LAT}, ${record.longitude || CAMPUS_LNG}`,
                 status: "Verified Attendance Logged",
-                snapshot: parsedNote.snapshot || null,
-                distanceOffset: parsedNote.distanceOffset || 0
+                snapshot: map[dateKey].snapshot,
+                distanceOffset: map[dateKey].distanceOffset
               });
             }
-            if (parsedNote.checkOutTime) {
+            if (map[dateKey].checkOutTime) {
               logs.push({
                 id: `GEO-${record._id}-out`,
                 type: "checkout",
                 date: dateStr,
-                time: parsedNote.checkOutTime,
+                time: map[dateKey].checkOutTime,
                 coords: parsedNote.coords || `${record.latitude || CAMPUS_LAT}, ${record.longitude || CAMPUS_LNG}`,
                 status: "Verified Attendance Logged",
-                snapshot: parsedNote.snapshotOut || parsedNote.snapshot || null,
-                distanceOffset: parsedNote.distanceOffsetOut || parsedNote.distanceOffset || 0
+                snapshot: record.snapshotOut || parsedNote.snapshotOut || map[dateKey].snapshot,
+                distanceOffset: record.distanceOffsetOut ?? (parsedNote.distanceOffsetOut || map[dateKey].distanceOffset)
               });
             }
             
-            if (!parsedNote.checkInTime && record.status === "present") {
+            if (!map[dateKey].checkInTime && record.status === "present") {
               logs.push({
                 id: `GEO-${record._id}`,
                 type: "checkin",
@@ -273,7 +273,15 @@ export default function GeotagAttendance({ user }) {
         source: "geo",
         latitude: lat,
         longitude: lng,
-        note: JSON.stringify(updatedRecord)
+        checkInTime: updatedRecord.checkInTime,
+        checkOutTime: updatedRecord.checkOutTime,
+        checkedIn: updatedRecord.checkedIn,
+        checkedOut: updatedRecord.checkedOut,
+        distanceOffset: updatedRecord.distanceOffset,
+        distanceOffsetOut: updatedRecord.distanceOffsetOut,
+        snapshot: updatedRecord.snapshot,
+        snapshotOut: updatedRecord.snapshotOut,
+        note: JSON.stringify({ coords: coordStr })
       });
 
       // Update local states

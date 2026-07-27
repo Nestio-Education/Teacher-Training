@@ -44,18 +44,24 @@ const MAX_WARNINGS = 5;
 
 /* Course title -> library id, used as a fallback match when the course
    object from getTeacherProgress() doesn't carry a `libraryId` field. */
+// Start: Dnyaneshwari Thorat
 const LIBRARY_TITLES = {
-  "Foundations of Early Childhood Care and Education (ECCE)": "cse-001",
-  "Child Growth and Development (0-6 Years)": "cse-002",
-  "Play-Based Learning and Pedagogy": "cse-003",
-  "Curriculum Planning and Lesson Design for Pre-Primary": "cse-004",
-  "Classroom Management and Positive Discipline": "cse-005",
-  "Language and Early Literacy Development": "cse-006",
-  "Numeracy and Early Mathematical Thinking": "cse-007",
-  "Health, Nutrition, Safety and Hygiene in ECCE": "cse-008",
-  "Inclusive Education and Special Needs in Early Years": "cse-009",
-  "Assessment, Observation and Parent-Teacher Communication": "cse-010",
+  "Child Development & Milestones": "cse-002",
+  "Early Literacy and Language Development": "cse-006",
+  "Play-based Learning Pedagogy": "cse-003",
+  "Classroom Management and Safety": "cse-008",
+  "Special Education & Inclusion Basics": "cse-009",
+  "Creative Arts and Crafts for Early Years": "cse-001",
+  "Introduction to STEM in Preschool": "cse-007",
+  "Observational Methods and Assessment": "cse-010",
+  "Parent-Teacher Communication Guidelines": "cse-010",
+  "Sensory Play and Cognitive Development": "cse-003",
+  "Digital Literacy for Modern Educators": "cse-004",
+  "Preschool Nutrition and Health Basics": "cse-008",
+  "Storytelling and Puppetry Techniques": "cse-001",
+  "Conflict Resolution & Peer Play Guidance": "cse-005"
 };
+// End: Dnyaneshwari Thorat
 
 function resolveLibraryId(course) {
   if (!course) return null;
@@ -84,6 +90,19 @@ function saveStoredAttempt(assignmentId, result) {
   } catch (err) {
     console.error("Failed to persist attempt locally:", err);
   }
+}
+
+function canUseStoredAttempt(assignment) {
+  return !!(
+    assignment &&
+    (
+      assignment.progressPercent === 100 ||
+      assignment.status === "completed" ||
+      assignment.status === "approved" ||
+      assignment.status === "reviewed" ||
+      assignment.assessmentCompletedAt
+    )
+  );
 }
 
 const ASSESSMENT_BANK = {
@@ -329,7 +348,7 @@ export default function ProctoredAssessment({ assignments = [] }) {
           warnings: a.assessmentWarnings || 0, forced: !!a.assessmentForced,
           courseTitle: a.course?.title,
         };
-      } else {
+      } else if (canUseStoredAttempt(a)) {
         const stored = loadStoredAttempt(a._id);
         if (stored) map[a._id] = stored;
       }
@@ -345,7 +364,7 @@ export default function ProctoredAssessment({ assignments = [] }) {
           const next = { ...prev };
           (res.results || []).forEach((r) => {
             const matching = assignments.find((a) => (a.course?.title || a.course?._id) === (r.courseTitle || r.course?.title || r.course?._id));
-            if (matching && !next[matching._id]) next[matching._id] = r;
+            if (matching && !next[matching._id] && canUseStoredAttempt(matching)) next[matching._id] = r;
           });
           return next;
         });
@@ -415,59 +434,80 @@ export default function ProctoredAssessment({ assignments = [] }) {
 
     const courseTitle = activeAssignment?.course?.title || "Course";
     
-    // Auto-grade via backend
-    const formattedAnswers = questions.map((q, i) => {
-      const userAns = answers[i] !== undefined ? answers[i] : "";
-      return {
-        question: q.question || q.q,
-        type: q.type || "MCQ",
-        correct_answer: q.correct_answer || (q.opts ? q.opts[q.ans] : ""),
-        expected_answer_points: q.expected_answer_points || [],
-        user_answer: (q.type === "MCQ" || !q.type) && typeof userAns === "number" ? (q.options || q.opts)[userAns] : userAns
-      };
-    });
-
-    let gradeResult;
-    try {
-      gradeResult = await autoGradeAssessment(formattedAnswers);
-    } catch (err) {
-      console.error("AI grading failed", err);
-      // Fallback
-      gradeResult = { score: 0, max_score: 0, percentage: 0, grade: "F", results: [] };
-    }
-
+    // Start: Dnyaneshwari Thorat
+    // Grade MCQ questions locally for absolute accuracy and instant results without offline service dependency
     let correctCount = 0;
     let wrongCount = 0;
     let unansweredCount = 0;
+    const results = [];
 
-    (gradeResult.results || []).forEach((r, i) => {
-      if (!answers[i]) {
+    questions.forEach((q, i) => {
+      const userAns = answers[i];
+      const isAnswered = userAns !== undefined;
+      const isCorrect = isAnswered && userAns === q.ans;
+
+      if (!isAnswered) {
         unansweredCount++;
-      } else if (r.score > 0) {
+      } else if (isCorrect) {
         correctCount++;
       } else {
         wrongCount++;
       }
+
+      results.push({
+        question: q.q || q.question,
+        score: isCorrect ? 1 : 0,
+        feedback: isCorrect ? "Correct!" : `Incorrect. Correct answer was Option: ${q.opts ? q.opts[q.ans] : "N/A"}`
+      });
     });
 
+    const totalQuestions = questions.length;
+    const score = correctCount;
+    const percentage = totalQuestions > 0 ? Math.round((score / totalQuestions) * 100) : 0;
+    const grade = percentage >= 90 ? "A+" : percentage >= 80 ? "A" : percentage >= 70 ? "B" : percentage >= 60 ? "C" : percentage >= 50 ? "D" : "F";
+
+    // Start: Dnyaneshwari Thorat
+    let strengths = ["Completed the AI assessment"];
+    let improvements = [];
+    let recommendation = "Review the course materials.";
+
+    if (percentage >= 90) {
+      strengths = ["Excellent mastery of the subject matter", "Highly consistent performance", "Strong conceptual retention"];
+      improvements = ["Keep updating knowledge with advanced ECE research"];
+      recommendation = "Fantastic! You have shown exemplary understanding of this course.";
+    } else if (percentage >= 80) {
+      strengths = ["Solid understanding of early childhood pedagogical concepts", "Strong critical thinking in ECE scenarios"];
+      improvements = ["Fine-tune minor conceptual gaps in early years development", "Review incorrect responses in the assessment details"];
+      recommendation = "Great job! A little extra reading on child-centric pedagogy will make your skills flawless.";
+    } else if (percentage >= 60) {
+      strengths = ["Basic understanding of core early childhood theories", "Willingness to apply positive discipline & safety techniques"];
+      improvements = ["Strengthen knowledge in child growth milestones", "Review classroom management strategies and observational methods"];
+      recommendation = "Good effort! We recommend revising the module slides and reading notes before practical implementation.";
+    } else {
+      strengths = ["Initiated early childhood teacher training path", "Completed the assessment attempt"];
+      improvements = ["Core pedagogical concepts require deep revision", "Need to focus on learning outcomes and instructional strategies", "Review all wrong answers and re-read the module materials"];
+      recommendation = "We suggest restarting the course or taking time to thoroughly study each module's detailed notes before attempting the assessment again.";
+    }
+
     const finalResult = {
-      score: gradeResult.score,
-      total: gradeResult.max_score,
-      percentage: gradeResult.percentage,
-      grade: gradeResult.grade,
-      performance: `You scored ${gradeResult.score}/${gradeResult.max_score} (${gradeResult.percentage}%) on "${courseTitle}".`,
-      strengths: ["Completed the AI assessment"],
-      improvements: [],
-      recommendation: gradeResult.percentage >= 70 ? "Great work!" : "Review the course materials.",
+      score: score,
+      total: totalQuestions,
+      percentage: percentage,
+      grade: grade,
+      performance: `You scored ${score}/${totalQuestions} (${percentage}%) on "${courseTitle}".`,
+      strengths,
+      improvements,
+      recommendation,
       forced,
       warnings: warnRef.current,
       answers,
       courseTitle,
-      results: gradeResult.results,
+      results,
       correct: correctCount,
       wrong: wrongCount,
       unanswered: unansweredCount
     };
+    // End: Dnyaneshwari Thorat
     
     const assignmentId = activeAssignment?._id;
 
@@ -480,10 +520,10 @@ export default function ProctoredAssessment({ assignments = [] }) {
           completedContent: activeAssignment.completedContent,
           progressPercent: activeAssignment.progressPercent,
           status: activeAssignment.status,
-          assessmentScore: gradeResult.score,
-          assessmentTotal: gradeResult.max_score,
-          assessmentPercentage: gradeResult.percentage,
-          assessmentGrade: gradeResult.grade,
+          assessmentScore: score,
+          assessmentTotal: totalQuestions,
+          assessmentPercentage: percentage,
+          assessmentGrade: grade,
           assessmentCompletedAt: new Date().toISOString(),
           assessmentWarnings: warnRef.current,
           assessmentForced: forced,
@@ -566,10 +606,11 @@ export default function ProctoredAssessment({ assignments = [] }) {
 
   /* No network call here anymore — questions resolve instantly and
      locally, so "Start Exam" can never fail with "Request failed". */
-  const startAssessmentFor = async (assignment) => {
+  // Start: Dnyaneshwari Thorat
+  const startAssessmentFor = async (assignment, forceRetake = false) => {
     if (warnRef.current >= MAX_WARNINGS) return;
 
-    if (myResults[assignment._id] || assignment.assessmentCompletedAt) {
+    if (!forceRetake && (myResults[assignment._id] || assignment.assessmentCompletedAt)) {
       const stored = loadStoredAttempt(assignment._id) || myResults[assignment._id];
       if (stored) {
         setActiveAssignment(assignment);
@@ -580,6 +621,7 @@ export default function ProctoredAssessment({ assignments = [] }) {
       }
       return;
     }
+  // End: Dnyaneshwari Thorat
 
     try {
       const res = await getCourseAssessment(assignment.course.id || assignment.course._id);
@@ -663,18 +705,31 @@ export default function ProctoredAssessment({ assignments = [] }) {
                       </div>
                     )}
                   </div>
+                  {/* Start: Dnyaneshwari Thorat */}
                   {attempt ? (
-                    <button
-                      onClick={() => { setActiveAssignment(a); setResult({ ...attempt, courseTitle: title }); setScreen("result"); }}
-                      style={{ ...S.exportBtn, fontSize: 12, color: "#1d4ed8", borderColor: "#bfdbfe" }}
-                    >
-                      📄 View Result
-                    </button>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        onClick={() => { setActiveAssignment(a); setResult({ ...attempt, courseTitle: title }); setScreen("result"); }}
+                        style={{ ...S.exportBtn, fontSize: 12, color: "#1d4ed8", borderColor: "#bfdbfe" }}
+                      >
+                        📄 View Result
+                      </button>
+                      <button
+                        onClick={() => {
+                          localStorage.removeItem("spacece_assessment_attempt_" + a._id);
+                          startAssessmentFor(a, true);
+                        }}
+                        style={{ ...S.primaryBtn, background: "linear-gradient(135deg,#10b981,#059669)", fontSize: 12, cursor: "pointer" }}
+                      >
+                        🔄 Retake Exam
+                      </button>
+                    </div>
                   ) : (
                     <button onClick={() => startAssessmentFor(a)} style={{ ...S.primaryBtn, background: "linear-gradient(135deg,#10b981,#059669)", fontSize: 12, cursor: "pointer" }}>
                       Start Exam →
                     </button>
                   )}
+                  {/* End: Dnyaneshwari Thorat */}
                 </div>
               </div>
             );

@@ -505,6 +505,65 @@ export function setLanguage(lang) {
   window.dispatchEvent(new CustomEvent(LANG_CHANGE_EVENT, { detail: { lang } }));
 }
 
+// Start: Dnyaneshwari Thorat
+let domObserver = null;
+
+export function startDOMTranslation() {
+  if (domObserver) domObserver.disconnect();
+
+  const currentLang = getCurrentLanguage();
+  if (currentLang === "English") return;
+
+  const dict = translations[currentLang];
+  if (!dict) return;
+
+  // Build a lowercase, trimmed dictionary for flexible case-insensitive matching
+  const lowerDict = {};
+  Object.keys(dict).forEach((key) => {
+    lowerDict[key.toLowerCase().trim()] = dict[key];
+  });
+
+  const translateNode = (node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const rawVal = node.nodeValue;
+      const trimmed = rawVal.trim();
+      if (trimmed) {
+        const lowerTxt = trimmed.toLowerCase();
+        if (lowerDict[lowerTxt]) {
+          // Replace matching part while preserving surrounding whitespace
+          node.nodeValue = rawVal.replace(trimmed, lowerDict[lowerTxt]);
+        }
+      }
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const tag = node.tagName.toLowerCase();
+      if (["script", "style", "textarea", "input"].includes(tag)) return;
+      node.childNodes.forEach(translateNode);
+    }
+  };
+
+  // Run initial scan
+  translateNode(document.body);
+
+  // Observe and translate newly added DOM elements dynamically
+  domObserver = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      mutation.addedNodes.forEach((node) => {
+        translateNode(node);
+      });
+    });
+  });
+
+  domObserver.observe(document.body, { childList: true, subtree: true });
+}
+
+export function stopDOMTranslation() {
+  if (domObserver) {
+    domObserver.disconnect();
+    domObserver = null;
+  }
+}
+// End: Dnyaneshwari Thorat
+
 export function t(key) {
   const currentLang = getCurrentLanguage();
   const dict = translations[currentLang] || translations.English;

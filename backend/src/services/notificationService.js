@@ -1,4 +1,4 @@
-import { sendEmail, getTwilioConfig } from "../email.js";
+import { sendEmail, getTwilioConfig, getMessagingConfig } from "../email.js";
 import { Notification } from "../models/Notification.js";
 import { User } from "../models/User.js";
 import mongoose from "mongoose";
@@ -100,57 +100,128 @@ function normalizePhoneE164(phone, defaultCountryCode = "91") {
   return cleaned;
 }
 
-// ── Send SMS via Twilio ──
+// Start: Dnyaneshwari Thorat
+function normalizeWhatsAppAddress(value) {
+  if (!value) return value;
+  const trimmed = String(value).trim();
+  if (trimmed.startsWith("whatsapp:")) return trimmed;
+  return `whatsapp:${normalizePhoneE164(trimmed)}`;
+}
+// End: Dnyaneshwari Thorat
+
+// Start: Dnyaneshwari Thorat
 async function sendSms(phone, message) {
-  const twilioConf = await getTwilioConfig();
-  if (!twilioConf) return { success: false, error: "Twilio not configured" };
-
+  const conf = await getMessagingConfig();
   const cleanPhone = normalizePhoneE164(phone);
-  const twilioBase = `https://api.twilio.com/2010-04-01/Accounts/${twilioConf.sid}/Messages.json`;
 
-  try {
-    const resp = await fetch(twilioBase, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Authorization: "Basic " + Buffer.from(`${twilioConf.sid}:${twilioConf.token}`).toString("base64"),
-      },
-      body: new URLSearchParams({ To: cleanPhone, From: twilioConf.from, Body: message }).toString(),
-    });
-    const data = await resp.json();
-    return resp.ok ? { success: true, sid: data.sid } : { success: false, error: data.message };
-  } catch (err) {
-    return { success: false, error: err.message };
+  if (conf.provider === "twilio") {
+    if (!conf.twilioSid || !conf.twilioToken) return { success: false, error: "Twilio not configured" };
+    const twilioBase = `https://api.twilio.com/2010-04-01/Accounts/${conf.twilioSid}/Messages.json`;
+    try {
+      const resp = await fetch(twilioBase, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Authorization: "Basic " + Buffer.from(`${conf.twilioSid}:${conf.twilioToken}`).toString("base64"),
+        },
+        body: new URLSearchParams({ To: cleanPhone, From: conf.twilioFrom, Body: message }).toString(),
+      });
+      const data = await resp.json();
+      return resp.ok ? { success: true, sid: data.sid } : { success: false, error: data.message };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  } else if (conf.provider === "vonage") {
+    if (!conf.vonageApiKey || !conf.vonageApiSecret) return { success: false, error: "Vonage not configured" };
+    try {
+      const resp = await fetch("https://rest.nexmo.com/sms/json", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          api_key: conf.vonageApiKey,
+          api_secret: conf.vonageApiSecret,
+          to: cleanPhone,
+          from: conf.vonageFrom || "SpacECE",
+          text: message
+        })
+      });
+      const data = await resp.json();
+      if (resp.ok && data.messages?.[0]?.status === "0") {
+        return { success: true, sid: data.messages[0]["message-id"] };
+      } else {
+        return { success: false, error: data.messages?.[0]?.["error-text"] || "Vonage delivery failed" };
+      }
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  } else if (conf.provider === "fast2sms") {
+    if (!conf.fast2smsKey) return { success: false, error: "Fast2SMS not configured" };
+    try {
+      const cleanPhoneNoCountry = cleanPhone.replace("+91", "").replace("91", "");
+      const resp = await fetch(`https://www.fast2sms.com/dev/bulkV2?authorization=${conf.fast2smsKey}&route=q&message=${encodeURIComponent(message)}&language=english&flash=0&numbers=${cleanPhoneNoCountry}`);
+      const data = await resp.json();
+      return data.return ? { success: true, sid: data.request_id } : { success: false, error: data.message || "Fast2SMS error" };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
   }
+
+  return { success: false, error: "No messaging provider configured" };
 }
 
-// ── Send WhatsApp via Twilio ──
 async function sendWhatsApp(phone, message) {
-  const twilioConf = await getTwilioConfig();
-  if (!twilioConf) return { success: false, error: "Twilio not configured" };
-
+  const conf = await getMessagingConfig();
   const cleanPhone = normalizePhoneE164(phone);
-  const twilioBase = `https://api.twilio.com/2010-04-01/Accounts/${twilioConf.sid}/Messages.json`;
 
-  try {
-    const resp = await fetch(twilioBase, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Authorization: "Basic " + Buffer.from(`${twilioConf.sid}:${twilioConf.token}`).toString("base64"),
-      },
-      body: new URLSearchParams({
-        To: `whatsapp:${cleanPhone}`,
-        From: `whatsapp:${twilioConf.from}`,
-        Body: message,
-      }).toString(),
-    });
-    const data = await resp.json();
-    return resp.ok ? { success: true, sid: data.sid } : { success: false, error: data.message };
-  } catch (err) {
-    return { success: false, error: err.message };
+  if (conf.provider === "twilio") {
+    if (!conf.twilioSid || !conf.twilioToken) return { success: false, error: "Twilio not configured" };
+    const twilioBase = `https://api.twilio.com/2010-04-01/Accounts/${conf.twilioSid}/Messages.json`;
+    try {
+      const resp = await fetch(twilioBase, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Authorization: "Basic " + Buffer.from(`${conf.twilioSid}:${conf.twilioToken}`).toString("base64"),
+        },
+        body: new URLSearchParams({
+          To: normalizeWhatsAppAddress(cleanPhone),
+          From: normalizeWhatsAppAddress(conf.twilioFrom),
+          Body: message,
+        }).toString(),
+      });
+      const data = await resp.json();
+      return resp.ok ? { success: true, sid: data.sid } : { success: false, error: data.message };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  } else if (conf.provider === "vonage") {
+    if (!conf.vonageApiKey || !conf.vonageApiSecret) return { success: false, error: "Vonage not configured" };
+    try {
+      const resp = await fetch("https://api.nexmo.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Basic " + Buffer.from(`${conf.vonageApiKey}:${conf.vonageApiSecret}`).toString("base64"),
+        },
+        body: JSON.stringify({
+          from: conf.vonageFrom || "14157386102",
+          to: cleanPhone,
+          message_type: "text",
+          text: message,
+          channel: "whatsapp"
+        })
+      });
+      const data = await resp.json();
+      return resp.ok ? { success: true, sid: data.message_uuid } : { success: false, error: data.detail || "Vonage WhatsApp error" };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
   }
+
+  // Fast2SMS doesn't support WhatsApp, fallback to SMS
+  return sendSms(phone, `[WhatsApp] ${message}`);
 }
+// End: Dnyaneshwari Thorat
 
 /**
  * Send notification across multiple channels
@@ -314,6 +385,7 @@ export {
   broadcastNotification,
   sendSms,
   sendWhatsApp,
+  normalizeWhatsAppAddress,
   getTemplate,
   CHANNELS,
   PRIORITY,

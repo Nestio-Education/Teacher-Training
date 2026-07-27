@@ -1,19 +1,24 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Logo, Toast, Badge, StatusBadge, StatCard, SectionCard, S, globalCSS } from "../components/Shared";
 import { t, setLanguage, getLanguageList, getCurrentLanguage, LANG_CHANGE_EVENT } from "../services/i18n";
-import { updateTeacherNotificationPreference } from "../services/api";
+// Start: Snehal change
+import { updateTeacherNotificationPreference, getParentModules, getParentSessionAssignments, submitParentSessionFeedback } from "../services/api";
+// End: Snehal change
 import AttendanceManager from "./AttendanceManager";
 import TrainingAndClassroomManager from "./TrainingAndClassroomManager";
 import GeotagAttendance from "./GeotagAttendance";
 import ProctoredAssessment from "./Proctoredassessment";      // now reading/notes based, same filename
 import TeacherCourseNotes from "./TeacherCourseNotes";    // NEW — replaces the old video CoursesTab
 import LessonPlannerTab from "./LessonPlannerTab";     
+import TeacherUserGuide from "./teacheruserguide";
+import CurriculumTab from "./CurriculumTab";
 import {
   getTeacherProgress,
   getNotifications,
   markNotificationRead,
   askTeacherChatbot,
   updateCourseAssignmentProgress,
+  resetCourseAssignmentProgress,
   updateTeacherMe,
   getTeacherMe,
   uploadFile,
@@ -23,10 +28,15 @@ import {
   updateTeacherLanguage,
   getTeacherCertificates,
   getTeacherChildren,
-  createTeacherChild,
+  deleteCourseAssignment,
   getTeacherClasses
 } from "../services/api";
-import { downloadCertificatePdf } from "../services/api";
+// Start: Dnyaneshwari Thorat
+import { downloadCertificatePdf, viewCertificatePdf } from "../services/api";
+// Start: Dnyaneshwari Thorat
+import { onSocketEvent } from "../services/socket";
+// End: Dnyaneshwari Thorat
+// End: Dnyaneshwari Thorat
 
 /* Resolve a profile photo path to a full URL */
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
@@ -93,9 +103,26 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
   const attColor   = attendance>=85 ? "#10b981" : attendance>=70 ? "#f59e0b" : "#ef4444";
   const photoUrl = getTeacherPhotoUrl(user);
 
-  const certificatesCount = courses.filter(c => c.status === "completed" || c.progressPercent === 100).length;
-  const pendingTasksCount = assignments.filter(a => a.status === "assigned" || a.status === "revision").length;
-  const gradedAssignments = assignments.filter(a => a.score !== null && a.score !== undefined);
+  // Start: Dnyaneshwari Thorat
+  const isVisibleCourse = (item) => {
+    const title = item?.course?.title || item?.title || "";
+    return !title.toLowerCase().includes("ai testing");
+  };
+
+  const isFinishedCourse = (item) =>
+    item?.status === "completed" ||
+    item?.status === "approved" ||
+    item?.progressPercent === 100;
+
+  const visibleAssignments = assignments.filter(isVisibleCourse);
+  const activeAssignments = visibleAssignments.filter((item) => !isFinishedCourse(item));
+  const featuredAssignments = visibleAssignments.slice(0, 5);
+  const featuredCourseProgress = visibleAssignments.slice(0, 3);
+  // End: Dnyaneshwari Thorat
+
+  const certificatesCount = courses.filter(c => (c.status === "completed" || c.progressPercent === 100) && c.score !== null && c.score !== undefined).length;
+  const pendingTasksCount = activeAssignments.filter(a => a.status === "assigned" || a.status === "revision").length;
+  const gradedAssignments = visibleAssignments.filter(a => a.score !== null && a.score !== undefined);
   const averageScore = gradedAssignments.length ? Math.round(gradedAssignments.reduce((sum, a) => sum + Number(a.score || 0), 0) / gradedAssignments.length) : 0;
   const centerName = user.teacherProfile?.center
     ? [user.teacherProfile.center.name, user.teacherProfile.center.city].filter(Boolean).join(", ")
@@ -111,8 +138,8 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
     <div style={{ animation: "fadeIn 0.3s ease" }}>
       <div style={{ background: "linear-gradient(135deg,#f59e0b,#d97706)", borderRadius: 20, padding: "24px 28px", marginBottom: 24, color: "white", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 6px", letterSpacing: "-0.3px" }}>Good morning, {user.name?.split(" ")[0] || "Teacher"}!</h1>
-          <p style={{ fontSize: 13, margin: 0, opacity: 0.88 }}>{user.subject || user.teacherProfile?.subject || "Teacher"} - {className} - {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long"})}</p>
+          <h1 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 6px", letterSpacing: "-0.3px" }}>Good morning, {user.name?.split(" ")[0] || (user.role === "fellow" ? "Fellow" : "Teacher")}!</h1>
+          <p style={{ fontSize: 13, margin: 0, opacity: 0.88 }}>{user.subject || user.teacherProfile?.subject || (user.role === "fellow" ? "Fellow" : "Teacher")} - {className} - {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long"})}</p>
         </div>
         <div style={{ position: "relative", flexShrink: 0 }}>
           <div style={{ width: 48, height: 48, borderRadius: "50%", overflow: "hidden", border: "3px solid rgba(255,255,255,0.3)", background: "#f59e0b", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -130,6 +157,57 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
         <span style={{ fontSize: 18 }}>@</span>
         <span>Working Center: {centerName}</span>
       </div>
+
+      {/* ── My Mentor Section ── */}
+      {user.role === 'fellow' && (
+        <div style={{ marginBottom: 20, marginTop: 20 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#1c1917", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 18 }}>🎓</span> My Mentor
+          </div>
+          
+          {user.assignedMentor ? (
+            <div style={{
+              background: "white", borderRadius: 14, padding: "16px",
+              border: "1px solid #e5e7eb", boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+              borderLeft: "4px solid #3b82f6", display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center", justifyContent: "space-between"
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{
+                  width: 48, height: 48, borderRadius: "50%",
+                  background: "linear-gradient(135deg,#dbeafe,#93c5fd)",
+                  display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
+                  fontSize: 18, flexShrink: 0, border: "2px solid #bfdbfe"
+                }}>
+                  {user.assignedMentor.photoUrl ? (
+                    <img src={user.assignedMentor.photoUrl.startsWith('http') ? user.assignedMentor.photoUrl : `${API_BASE_URL}${user.assignedMentor.photoUrl}`} alt={user.assignedMentor.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    "👨‍🏫"
+                  )}
+                </div>
+                <div>
+                  <h4 style={{ margin: "0 0 4px", fontSize: 16, color: "#1e293b" }}>{user.assignedMentor.name}</h4>
+                  <div style={{ fontSize: 12, color: "#64748b", display: "flex", alignItems: "center", gap: 6 }}>
+                    <span>✉️ {user.assignedMentor.email}</span>
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <a href={`mailto:${user.assignedMentor.email}`} style={{ padding: "8px 12px", background: "#f8fafc", color: "#334155", borderRadius: 8, textDecoration: "none", fontSize: 12, fontWeight: 600, border: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 6 }}>
+                  ✉️ Message
+                </a>
+              </div>
+            </div>
+          ) : (
+            <div style={{ background: "#f8fafc", padding: "16px", borderRadius: 14, border: "1px dashed #cbd5e1", display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>⏳</div>
+              <div>
+                <h4 style={{ margin: "0 0 4px", fontSize: 14, color: "#334155" }}>Pending Mentor Assignment</h4>
+                <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>An admin or mentor will review your profile and claim you as a mentee shortly.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── My Assigned Class Section ── */}
       <div style={{ marginBottom: 20, marginTop: 20 }}>
@@ -202,10 +280,9 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
           const d = l.lessonPlan?.scheduleDate ? new Date(l.lessonPlan.scheduleDate).toISOString().split("T")[0] : "";
           return d === today;
         });
-        const todayAssignments = assignments.filter(a => {
-          if (a.status === "completed" || a.status === "approved") return false;
-          return true;
-        }).slice(0, 5);
+        // Start: Dnyaneshwari Thorat
+        const todayAssignments = featuredAssignments;
+        // End: Dnyaneshwari Thorat
         if (todayLessons.length === 0 && todayAssignments.length === 0) return null;
         return (
           <div style={{ background: "linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%)", borderRadius: 16, border: "1px solid #fcd34d", padding: 20, marginBottom: 20 }}>
@@ -231,12 +308,16 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
               )}
               {todayAssignments.length > 0 && (
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#92400e", marginBottom: 8 }}>📝 Pending Tasks ({todayAssignments.length})</div>
+                  {/* Start: Dnyaneshwari Thorat */}
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#92400e", marginBottom: 8 }}>📘 Assigned Courses ({todayAssignments.length})</div>
+                  {/* End: Dnyaneshwari Thorat */}
                   {todayAssignments.map((a, i) => (
                     <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: "white", borderRadius: 8, marginBottom: 6, border: "1px solid #fde68a" }}>
                       <div style={{ width: 6, height: 6, borderRadius: "50%", background: a.status === "revision" ? "#ef4444" : "#f59e0b", flexShrink: 0 }} />
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: "#1c1917" }}>{(a.title || a.course?.title || "Task").substring(0, 30)}</div>
+                        {/* Start: Dnyaneshwari Thorat */}
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "#1c1917" }}>{(a.course?.title || a.title || "Task").substring(0, 30)}</div>
+                        {/* End: Dnyaneshwari Thorat */}
                       </div>
                       <StatusBadge status={a.status} />
                     </div>
@@ -265,7 +346,9 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
           {courses.length === 0 ? (
             <div style={{ padding: 20, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>No assigned courses yet.</div>
           ) : (
-            courses.slice(0, 3).map((c, i) => {
+            // Start: Dnyaneshwari Thorat
+            featuredCourseProgress.map((c, i) => {
+            // End: Dnyaneshwari Thorat
               const progress = c.progressPercent || 0;
               return (
                 <div key={i} style={{ marginBottom: 14 }}>
@@ -316,7 +399,7 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
                   <div style={{ fontSize: 10, color: "#9ca3af" }}>Due: {a.dueDate ? new Date(a.dueDate).toLocaleDateString() : "No due date"}</div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  {a.score !== null && a.score !== undefined && <span style={{ fontSize: 11, fontWeight: 800, color: "#10b981" }}>{a.score}/100</span>}
+                  {a.score !== null && a.score !== undefined && <span style={{ fontSize: 11, fontWeight: 800, color: "#10b981" }}>{a.score}/{a.assessmentTotal !== undefined && a.assessmentTotal !== null ? a.assessmentTotal : 100}</span>}
                   <StatusBadge status={a.status}/>
                 </div>
               </div>
@@ -453,7 +536,12 @@ function GradesTab({ assignments = [] }) {
                 <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 5 }}>{t("Reviewed:")} {formatTeacherDate(item.reviewedAt || item.updatedAt || item.createdAt)}</div>
               </div>
               <div style={{ minWidth: 92, textAlign: "right" }}>
-                <div style={{ fontSize: 24, fontWeight: 900, color: Number(item.score) >= 75 ? "#10b981" : Number(item.score) >= 60 ? "#f59e0b" : "#ef4444" }}>{item.score}/100</div>
+                {(() => {
+                  const total = item.assessmentTotal !== undefined && item.assessmentTotal !== null ? item.assessmentTotal : 100;
+                  const scorePercent = total > 0 ? (Number(item.score) / total) * 100 : 0;
+                  const scoreColor = scorePercent >= 75 ? "#10b981" : scorePercent >= 60 ? "#f59e0b" : "#ef4444";
+                  return <div style={{ fontSize: 24, fontWeight: 900, color: scoreColor }}>{item.score}/{total}</div>;
+                })()}
                 <StatusBadge status={item.status}/>
               </div>
             </div>
@@ -579,7 +667,7 @@ function AssignmentsTab({ assignments = [], onSubmitAssignment }) {
                   <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{a.course?.title} · Due: {a.dueDate ? new Date(a.dueDate).toLocaleDateString() : "No deadline"}</div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  {a.score !== null && a.score !== undefined && <span style={{ fontSize: 16, fontWeight: 800, color: "#10b981" }}>{a.score}/100</span>}
+                  {a.score !== null && a.score !== undefined && <span style={{ fontSize: 16, fontWeight: 800, color: "#10b981" }}>{a.score}/{a.assessmentTotal !== undefined && a.assessmentTotal !== null ? a.assessmentTotal : 100}</span>}
                   <StatusBadge status={a.status}/>
                   {(a.status==="revision"||a.status==="assigned"||a.status==="pending") &&
                     <button
@@ -649,8 +737,12 @@ function AssignmentsTab({ assignments = [], onSubmitAssignment }) {
 }
 
 function CertificatesTab({ assignments = [], certificates: certs = [] }) {
-  const displayCerts = certs.length > 0 ? certs : 
-    assignments.filter((item) => item.status === "completed" || item.progressPercent === 100 || item.status === "approved");
+  const displayCerts = certs.length > 0 
+    ? certs.filter((c) => c.score !== null && c.score !== undefined)
+    : assignments.filter((item) => 
+        (item.status === "completed" || item.progressPercent === 100 || item.status === "approved") && 
+        item.score !== null && item.score !== undefined
+      );
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
@@ -671,19 +763,32 @@ function CertificatesTab({ assignments = [], certificates: certs = [] }) {
               <div style={{ fontSize: 15, fontWeight: 800, color: "#1c1917", marginBottom: 8, lineHeight: 1.4 }}>{courseTitle}</div>
               <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
                 {isRealCert && item.grade && <Badge children={`Grade: ${item.grade}`} color="#059669" bg="#d1fae5"/>}
-                {item.score !== null && item.score !== undefined && <Badge children={`Score: ${item.score}/100`} color="#059669" bg="#d1fae5"/>}
+                {item.score !== null && item.score !== undefined && (() => {
+                  const certTotal = item.assessmentTotal !== undefined && item.assessmentTotal !== null ? item.assessmentTotal : (item.assignment?.assessmentTotal !== undefined && item.assignment?.assessmentTotal !== null ? item.assignment.assessmentTotal : (item.score <= 10 ? 10 : 100));
+                  return <Badge children={`Score: ${item.score}/${certTotal}`} color="#059669" bg="#d1fae5"/>;
+                })()}
                 <Badge children={issuedDate ? new Date(issuedDate).toLocaleDateString("en-IN") : "Date pending"} color="#d97706" bg="#fef3c7"/>
                 {isRealCert && <Badge children={item.status === "issued" ? "Issued" : item.status} color="#7c3aed" bg="#ede9fe"/>}
               </div>
               <div style={{ fontSize: 11, color: "#6b7280" }}>Credential ID: {certId}</div>
+              {/* Start: Dnyaneshwari Thorat */}
               {isRealCert && (
-  <button
-    onClick={() => downloadCertificatePdf(item._id, `Certificate-${item.certificateNumber}.pdf`)}
-    style={{ marginTop: 12, width: "100%", padding: "8px 0", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "white", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
-  >
-    ⬇ Download Certificate
-  </button>
-)}
+                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                  <button
+                    onClick={() => viewCertificatePdf(item._id)}
+                    style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "1px solid #d97706", background: "white", color: "#d97706", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+                  >
+                    👁️ View Certificate
+                  </button>
+                  <button
+                    onClick={() => downloadCertificatePdf(item._id, `Certificate-${item.certificateNumber}.pdf`)}
+                    style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "white", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+                  >
+                    ⬇️ Download
+                  </button>
+                </div>
+              )}
+              {/* End: Dnyaneshwari Thorat */}
             </div>
           );
         })}
@@ -1249,7 +1354,29 @@ function ProfileTab({ user, onWorkingCenterChange, onUserUpdate }) {
 }
 
 function NotificationsTab({ notifications = [], onMarkRead, onMarkAllRead }) {
-  const icons = { session: "📹", assignment: "📝", approval: "✅", certificate: "🏆", course: "📚" };
+  // Start: Dnyaneshwari Thorat
+  const icons = {
+    // course-related
+    course: "📚", course_assigned: "📚", course_allocated: "📚",
+    // certificate
+    certificate: "🏆", certificate_issued: "🏆", certificate_generated: "🏆",
+    // lesson / session
+    session: "📹", lesson: "📖", lesson_assigned: "📖",
+    // assignment / task
+    assignment: "📝", task: "📝", daily_task: "📝",
+    // approvals
+    approval: "✅", approved: "✅", status: "✅",
+    // attendance
+    attendance: "📋", attendance_alert: "⚠️",
+    // general
+    info: "ℹ️", warning: "⚠️", alert: "🔔", system: "⚙️",
+  };
+  const getIcon = (type) => {
+    if (!type) return "🔔";
+    const lower = String(type).toLowerCase();
+    return icons[lower] || "🔔";
+  };
+  // End: Dnyaneshwari Thorat
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
@@ -1268,7 +1395,7 @@ function NotificationsTab({ notifications = [], onMarkRead, onMarkAllRead }) {
         ) : (
           notifications.map(n=>(
             <div key={n.id} onClick={()=>!n.read && onMarkRead(n.id)} style={{ background: n.read?"white":"#fffbeb", borderRadius: 14, padding: "14px 18px", border: `1px solid ${n.read?"#f1f5f9":"#fbbf24"}`, display: "flex", alignItems: "center", gap: 14, cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", borderLeft: `4px solid ${n.read?"#e5e7eb":"#f59e0b"}` }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: n.read?"#f3f4f6":"#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{icons[n.type] || "🔔"}</div>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: n.read?"#f3f4f6":"#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{getIcon(n.type)}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: n.read?500:700, color: "#1c1917" }}>{n.msg}</div>
                 <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>{n.time}</div>
@@ -1440,14 +1567,360 @@ function TeacherFeedbackTab({ user, setToast }) {
     </div>
   );
 }
+// Snehal change: real sessions + status tracking + feedback connected to backend
+/* ═══════════════════════════════════════════
+   PARENT CAPACITY BUILDING TAB
+═══════════════════════════════════════════ */
+function ParentCapacityBuildingTab({ user, setToast }) {
+  const [modules, setModules] = useState([]);
+  const [selectedModuleId, setSelectedModuleId] = useState("");
+  const [sessionLang, setSessionLang] = useState("en");
 
+  useEffect(() => {
+    getParentModules({ lang: sessionLang })
+      .then(res => {
+        const list = res?.modules || [];
+        setModules(list);
+        if (list.length) setSelectedModuleId(prev => prev || list[0]._id);
+      })
+      .catch(() => setToast?.({ msg: "Failed to load modules.", type: "error" }));
+  }, [sessionLang]);
+
+  const selectedModule = modules.find(m => m._id === selectedModuleId);
+
+  // Snehal change: real per-teacher session status, fetched from backend
+  const [sessionAssignments, setSessionAssignments] = useState([]);
+  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
+
+  const loadAssignments = () => {
+    if (!selectedModuleId) return;
+    setAssignmentsLoading(true);
+    getParentSessionAssignments(selectedModuleId)
+      .then(res => setSessionAssignments(res?.assignments || []))
+      .catch(() => setToast?.({ msg: "Failed to load session status.", type: "error" }))
+      .finally(() => setAssignmentsLoading(false));
+  };
+
+  useEffect(() => {
+    loadAssignments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedModuleId]);
+
+  const getAssignment = (sessionNumber) =>
+    sessionAssignments.find(a => a.sessionNumber === sessionNumber);
+
+  const [selectedSession, setSelectedSession] = useState(null);
+  const [selectedAssignment, setSelectedAssignment] = useState(null);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+
+  const [sessionDetails, setSessionDetails] = useState({ date: "", duration: "", venue: "", parentsPresent: "" });
+  const [participants, setParticipants] = useState([{ parentName: "", childName: "", contact: "", attendance: "Present" }]);
+  const [feedback, setFeedback] = useState({
+    parentParticipation: 0, parentEngagement: 0, understandingLevel: "Good",
+    questionsAsked: "", challengesFaced: "", suggestions: "", overallRating: 0, remarks: ""
+  });
+  const [submitting, setSubmitting] = useState(false);
+
+  // Snehal change: photo + attendance sheet upload state
+  const [photoFile, setPhotoFile] = useState(null);
+  const [attendanceFile, setAttendanceFile] = useState(null);
+  const photoInputRef = useRef(null);
+  const attendanceInputRef = useRef(null);
+
+  const statusColor = (status) => {
+    if (status === "Completed") return { c: "#059669", bg: "#d1fae5" };
+    if (status === "In Progress") return { c: "#2563eb", bg: "#dbeafe" };
+    return { c: "#d97706", bg: "#fef3c7" };
+  };
+
+  const openFeedback = (sess) => {
+    const assignment = getAssignment(sess.sessionNumber);
+    setSelectedSession(sess);
+    setSelectedAssignment(assignment);
+    setSessionDetails({ date: new Date().toISOString().split("T")[0], duration: "", venue: "", parentsPresent: "" });
+    setParticipants([{ parentName: "", childName: "", contact: "", attendance: "Present" }]);
+    setFeedback({ parentParticipation: 0, parentEngagement: 0, understandingLevel: "Good", questionsAsked: "", challengesFaced: "", suggestions: "", overallRating: 0, remarks: "" });
+    setPhotoFile(null);
+    setAttendanceFile(null);
+    setFeedbackOpen(true);
+  };
+
+  const handleAddParticipant = () => {
+    setParticipants([...participants, { parentName: "", childName: "", contact: "", attendance: "Present" }]);
+  };
+
+  const handleParticipantChange = (idx, field, value) => {
+    const updated = [...participants];
+    updated[idx][field] = value;
+    setParticipants(updated);
+  };
+
+  // Snehal change: real submit — uploads files, then saves feedback + marks Completed
+  const handleSubmitFeedback = async () => {
+    if (!feedback.overallRating) {
+      setToast?.({ msg: "Please give an overall session rating.", type: "error" });
+      return;
+    }
+    if (!selectedAssignment?._id) {
+      setToast?.({ msg: "Session assignment not found. Please refresh and try again.", type: "error" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      let photoUploadId, attendanceSheetUploadId;
+
+      if (photoFile) {
+        const photoRes = await uploadFile(photoFile);
+        photoUploadId = photoRes?.asset?._id;
+      }
+      if (attendanceFile) {
+        const attRes = await uploadFile(attendanceFile);
+        attendanceSheetUploadId = attRes?.asset?._id;
+      }
+
+      await submitParentSessionFeedback(selectedAssignment._id, {
+        sessionDetails,
+        participants,
+        feedback,
+        photoUploadId,
+        attendanceSheetUploadId
+      });
+
+      setToast?.({ msg: "Feedback submitted successfully!", type: "success" });
+      setFeedbackOpen(false);
+      setSelectedSession(null);
+      setSelectedAssignment(null);
+      loadAssignments();
+    } catch (err) {
+      setToast?.({ msg: err.message || "Failed to submit feedback.", type: "error" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const stars = (value, onChange, size = 22) => (
+    <div style={{ display: "flex", gap: 4, cursor: "pointer" }}>
+      {[1, 2, 3, 4, 5].map(i => (
+        <span key={i} onClick={() => onChange(i)} style={{ fontSize: size, color: i <= value ? "#f59e0b" : "#e5e7eb" }}>{i <= value ? "★" : "☆"}</span>
+      ))}
+    </div>
+  );
+
+  return (
+    <div style={{ animation: "fadeIn 0.3s ease" }}>
+      <h1 style={S.pageTitle}>Parent Capacity Building</h1>
+      <p style={S.pageSub}>Sessions assigned to you by the admin</p>
+
+      <div style={{ marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <select
+          style={{ ...S.input, maxWidth: 340, border: "1.5px solid #e2e8f0", borderRadius: 10, padding: "10px 14px", background: "white", fontWeight: 600, fontSize: 13, color: "#1c1917", boxShadow: "0 1px 3px rgba(0,0,0,0.04)", cursor: "pointer", outline: "none" }}
+          value={selectedModuleId}
+          onChange={e => setSelectedModuleId(e.target.value)}
+        >
+          {modules.map(m => (
+            <option key={m._id} value={m._id}>Module {m.moduleNumber}: {m.title}</option>
+          ))}
+        </select>
+
+        <select
+          style={{ ...S.input, maxWidth: 160, border: "1.5px solid #e2e8f0", borderRadius: 10, padding: "10px 14px", background: "white", fontWeight: 600, fontSize: 13, color: "#1c1917", boxShadow: "0 1px 3px rgba(0,0,0,0.04)", cursor: "pointer", outline: "none" }}
+          value={sessionLang}
+          onChange={e => setSessionLang(e.target.value)}
+        >
+          <option value="en">English</option>
+          <option value="hi">हिंदी</option>
+          <option value="mr">मराठी</option>
+        </select>
+      </div>
+
+      {selectedModule && (
+        <SectionCard title="">
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {selectedModule.sessions.map(sess => {
+              // Snehal change: pull real status for this session
+              const assignment = getAssignment(sess.sessionNumber);
+              const status = assignment?.status || "Pending";
+              const sc = statusColor(status);
+              return (
+                <div key={sess.sessionNumber} style={{ background: "white", border: "1px solid #f1f5f9", borderRadius: 14, padding: "16px 20px", borderLeft: "4px solid #3b82f6" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#1c1917" }}>Session {sess.sessionNumber}: {sess.title}</div>
+                      <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>{sess.objective}</div>
+                    </div>
+                    <Badge children={status} color={sc.c} bg={sc.bg} />
+                  </div>
+
+                  <table style={{ width: "100%", marginTop: 10, borderCollapse: "collapse", fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: "#fef3c7", textAlign: "left" }}>
+                        <th style={{ padding: "6px 8px" }}>Time</th>
+                        <th style={{ padding: "6px 8px" }}>Activity</th>
+                        <th style={{ padding: "6px 8px" }}>Key Focus</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sess.activities.map((a, i) => (
+                        <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                          <td style={{ padding: "6px 8px" }}>{a.time}</td>
+                          <td style={{ padding: "6px 8px" }}>{a.activity}</td>
+                          <td style={{ padding: "6px 8px" }}>{a.keyFocus}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {sess.homePractice && (
+                    <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 8 }}>Home Practice: {sess.homePractice}</div>
+                  )}
+
+                  {/* Snehal change: Mark as Completed / Start Session button */}
+                  <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+                    {status === "Completed" ? (
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#059669" }}>✓ Session Completed</span>
+                    ) : (
+                      <button
+                        onClick={() => openFeedback(sess)}
+                        disabled={assignmentsLoading}
+                        style={{ ...S.primaryBtn, padding: "8px 16px", fontSize: 12 }}
+                      >
+                        Mark as Completed
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </SectionCard>
+      )}
+
+      {feedbackOpen && selectedSession && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999, backdropFilter: "blur(4px)" }}>
+          <div style={{ background: "white", borderRadius: 20, padding: "28px", width: "100%", maxWidth: 600, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.2)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <h3 style={{ fontSize: 17, fontWeight: 800, color: "#1c1917", margin: 0 }}>Session Feedback — {selectedSession.title}</h3>
+              <button onClick={() => setFeedbackOpen(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af" }}>✕</button>
+            </div>
+
+            <h4 style={{ fontSize: 13, fontWeight: 800, color: "#1c1917", marginBottom: 10 }}>Session Details</h4>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+              <div>
+                <label style={S.label}>Session Date</label>
+                <input style={S.input} type="date" value={sessionDetails.date} onChange={e => setSessionDetails({ ...sessionDetails, date: e.target.value })} />
+              </div>
+              <div>
+                <label style={S.label}>Duration</label>
+                <input style={S.input} placeholder="e.g. 90 mins" value={sessionDetails.duration} onChange={e => setSessionDetails({ ...sessionDetails, duration: e.target.value })} />
+              </div>
+              <div>
+                <label style={S.label}>Venue</label>
+                <input style={S.input} value={sessionDetails.venue} onChange={e => setSessionDetails({ ...sessionDetails, venue: e.target.value })} />
+              </div>
+              <div>
+                <label style={S.label}>Number of Parents Present</label>
+                <input style={S.input} type="number" min="0" value={sessionDetails.parentsPresent} onChange={e => setSessionDetails({ ...sessionDetails, parentsPresent: e.target.value })} />
+              </div>
+            </div>
+
+            <h4 style={{ fontSize: 13, fontWeight: 800, color: "#1c1917", marginBottom: 10 }}>Participants</h4>
+            {participants.map((p, idx) => (
+              <div key={idx} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 100px", gap: 8, marginBottom: 8 }}>
+                <input style={S.input} placeholder="Parent Name" value={p.parentName} onChange={e => handleParticipantChange(idx, "parentName", e.target.value)} />
+                <input style={S.input} placeholder="Child Name" value={p.childName} onChange={e => handleParticipantChange(idx, "childName", e.target.value)} />
+                <input style={S.input} placeholder="Contact Number" value={p.contact} onChange={e => handleParticipantChange(idx, "contact", e.target.value)} />
+                <select style={S.input} value={p.attendance} onChange={e => handleParticipantChange(idx, "attendance", e.target.value)}>
+                  <option value="Present">Present</option>
+                  <option value="Absent">Absent</option>
+                </select>
+              </div>
+            ))}
+            <button onClick={handleAddParticipant} style={{ ...S.exportBtn, marginBottom: 20 }}>+ Add Participant</button>
+
+            {/* Snehal change: Photo + Attendance Sheet upload */}
+            <h4 style={{ fontSize: 13, fontWeight: 800, color: "#1c1917", marginBottom: 10 }}>Uploads</h4>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+              <div>
+                <label style={S.label}>Session Photo</label>
+                <input type="file" ref={photoInputRef} accept="image/*" style={{ display: "none" }}
+                  onChange={e => setPhotoFile(e.target.files?.[0] || null)} />
+                <div onClick={() => photoInputRef.current?.click()} style={{ border: "2px dashed #fbbf24", borderRadius: 10, padding: "14px", textAlign: "center", cursor: "pointer", background: "#fffbeb" }}>
+                  <div style={{ fontSize: 20 }}>📷</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: photoFile ? "#059669" : "#92400e" }}>
+                    {photoFile ? photoFile.name : "Upload photo"}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label style={S.label}>Attendance Sheet</label>
+                <input type="file" ref={attendanceInputRef} accept="image/*,.pdf" style={{ display: "none" }}
+                  onChange={e => setAttendanceFile(e.target.files?.[0] || null)} />
+                <div onClick={() => attendanceInputRef.current?.click()} style={{ border: "2px dashed #fbbf24", borderRadius: 10, padding: "14px", textAlign: "center", cursor: "pointer", background: "#fffbeb" }}>
+                  <div style={{ fontSize: 20 }}>📋</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: attendanceFile ? "#059669" : "#92400e" }}>
+                    {attendanceFile ? attendanceFile.name : "Upload attendance sheet"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <h4 style={{ fontSize: 13, fontWeight: 800, color: "#1c1917", marginBottom: 10 }}>Teacher Feedback</h4>
+            <div style={{ marginBottom: 12 }}>
+              <label style={S.label}>Parent Participation Rating</label>
+              {stars(feedback.parentParticipation, (v) => setFeedback({ ...feedback, parentParticipation: v }))}
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={S.label}>Parent Engagement Rating</label>
+              {stars(feedback.parentEngagement, (v) => setFeedback({ ...feedback, parentEngagement: v }))}
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={S.label}>Understanding Level</label>
+              <select style={S.input} value={feedback.understandingLevel} onChange={e => setFeedback({ ...feedback, understandingLevel: e.target.value })}>
+                <option>Excellent</option>
+                <option>Good</option>
+                <option>Average</option>
+                <option>Poor</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={S.label}>Questions Asked</label>
+              <textarea style={{ ...S.input, height: 60 }} value={feedback.questionsAsked} onChange={e => setFeedback({ ...feedback, questionsAsked: e.target.value })} />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={S.label}>Challenges Faced</label>
+              <textarea style={{ ...S.input, height: 60 }} value={feedback.challengesFaced} onChange={e => setFeedback({ ...feedback, challengesFaced: e.target.value })} />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={S.label}>Suggestions</label>
+              <textarea style={{ ...S.input, height: 60 }} value={feedback.suggestions} onChange={e => setFeedback({ ...feedback, suggestions: e.target.value })} />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={S.label}>Overall Session Rating *</label>
+              {stars(feedback.overallRating, (v) => setFeedback({ ...feedback, overallRating: v }), 26)}
+            </div>
+            <div style={{ marginBottom: 20 }}>
+              <label style={S.label}>Additional Remarks</label>
+              <textarea style={{ ...S.input, height: 60 }} value={feedback.remarks} onChange={e => setFeedback({ ...feedback, remarks: e.target.value })} />
+            </div>
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button style={S.exportBtn} onClick={() => setFeedbackOpen(false)}>Cancel</button>
+              <button style={S.primaryBtn} disabled={submitting} onClick={handleSubmitFeedback}>{submitting ? "Submitting..." : "Submit Feedback"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 /* ═══════════════════════════════════════════
    MAIN TEACHER DASHBOARD
 ═══════════════════════════════════════════ */
 export default function TeacherDashboard({ user, onLogout }) {
   const [activeTab, setActiveTab]         = useState("overview");
+  const [menuOpen, setMenuOpen]           = useState(false);
   const [toast, setToast]                 = useState({ msg: "", type: "" });
   const [currentUser, setCurrentUser]     = useState(user);
+  const [showGuide, setShowGuide]         = useState(false);
   const [workingCenter, setWorkingCenter] = useState(() => {
     const center = user?.teacherProfile?.center;
     if (typeof center === "object" && center?.name) {
@@ -1487,7 +1960,14 @@ export default function TeacherDashboard({ user, onLogout }) {
         getTeacherClasses(),
       ]);
       if (progressRes) {
-        setCourses(progressRes.courses || []);
+        // Start: Dnyaneshwari Thorat
+        const filteredCourses = (progressRes.courses || []).filter(c => {
+          if (!c.course) return false;
+          const title = c.course.title || "";
+          return !title.toLowerCase().includes("ai testing");
+        });
+        setCourses(filteredCourses);
+        // End: Dnyaneshwari Thorat
         setLessons(progressRes.lessons || []);
         setActivities(progressRes.activities || []);
         setSummary(progressRes.summary || {});
@@ -1537,6 +2017,32 @@ export default function TeacherDashboard({ user, onLogout }) {
     refreshCoreData().finally(() => setLoading(false));
   }, [user]);
 
+  // Start: Dnyaneshwari Thorat
+  useEffect(() => {
+    const unsubscribe = onSocketEvent("notification:new", (newNotif) => {
+      let timeVal = "Just now";
+      const mapped = {
+        id: newNotif._id,
+        type: newNotif.type || "info",
+        msg: newNotif.body ? `${newNotif.title}: ${newNotif.body}` : newNotif.title || "",
+        time: timeVal,
+        read: newNotif.read
+      };
+      setNotifications((prev) => [mapped, ...prev]);
+      setToast({ msg: `🔔 ${newNotif.title}`, type: "info" });
+      
+      // Dynamically refresh the dashboard if it's an approval, claim, or status update
+      if (["status_update", "approval", "mentor_assigned"].includes(newNotif.type) || newNotif.title?.includes("Mentor Assigned")) {
+        refreshCoreData();
+      }
+    });
+
+    return () => {
+      if (typeof unsubscribe === "function") unsubscribe();
+    };
+  }, []);
+  // End: Dnyaneshwari Thorat
+
   useEffect(() => {
     if (selectedChildClassId) {
       getTeacherChildren(selectedChildClassId)
@@ -1566,6 +2072,35 @@ export default function TeacherDashboard({ user, onLogout }) {
     setToast({ msg: "Assignment submitted successfully! 📤", type: "success" });
     refreshCoreData();
   };
+
+  const handleRestartCourse = async (assignment) => {
+    if (!assignment?._id) return;
+    const title = assignment?.course?.title || assignment?.title || "this course";
+    if (!window.confirm(`Restart ${title}? This will remove the certificate and reset course progress back to 0%.`)) return;
+    try {
+      await resetCourseAssignmentProgress(assignment._id);
+      setToast({ msg: `Course restarted: ${title}`, type: "success" });
+      await refreshCoreData();
+    } catch (err) {
+      console.error("Failed to reset course:", err);
+      setToast({ msg: err.message || "Failed to restart course.", type: "error" });
+    }
+  };
+
+  const handleRemoveCourse = async (assignment) => {
+    if (!assignment?._id) return;
+    const title = assignment?.course?.title || assignment?.title || "this course";
+    if (!window.confirm(`Are you sure you want to remove "${title}" from your courses?`)) return;
+    try {
+      await deleteCourseAssignment(assignment._id);
+      setToast({ msg: `Course removed: ${title}`, type: "success" });
+      await refreshCoreData();
+    } catch (err) {
+      console.error("Failed to remove course:", err);
+      setToast({ msg: err.message || "Failed to remove course.", type: "error" });
+    }
+  };
+  // End: Dnyaneshwari Thorat
 
   const handleMarkNotifRead = async (notifId) => {
     try {
@@ -1611,21 +2146,25 @@ export default function TeacherDashboard({ user, onLogout }) {
   const pendingAssignmentsCount = courses.filter(a=>a.status==="assigned"||a.status==="revision").length;
 
   const navItems = [
-    { key: "overview",      label: "Teacher's Dashboard", icon: "📊" },
+    { key: "overview",      label: currentUser?.role === "fellow" ? "Fellow's Dashboard" : "Teacher's Dashboard", icon: "📊" },
     { key: "children_att",  label: "Daily Attendance",    icon: "📋" },
     { key: "geotag",        label: "Geotag Attendance",   icon: "📍" },
     { key: "training",      label: "Training & Lessons",  icon: "🎓" },
-    { key: "lesson_planner", label: "Lesson Planner", icon: "🗓️" },
+    { key: "planner",       label: "AI Lesson Planner", icon: "✏️" },
     { key: "courses",       label: "My Courses",          icon: "📚" },
+    { key: "parent_capacity", label: "Parent Capacity Building", icon: "👪" },
     { key: "assessment",    label: "Assessments",         icon: "📝" },
-    //{ key: "schedule",      label: "Schedule",            icon: "📅" },
-    //{ key: "grades",        label: "Grades",              icon: "📊" },
-    //{ key: "assignments",   label: "Assignments",         icon: "✏️", badge: pendingAssignmentsCount },
     { key: "certificates",  label: "Certificates",        icon: "🏆" },
-    { key: "notifications", label: "Notifications",       icon: "🔔", badge: unreadCount },
     { key: "feedback",      label: "Feedback",             icon: "💬" },
-    { key: "profile",       label: "My Profile",          icon: "👤" },
   ];
+
+  // Start: Fellow-only tabs
+  if (currentUser?.role === "fellow") {
+    navItems.splice(navItems.length - 1, 0,
+      { key: "curriculum", label: "Curriculum", icon: "📖" }
+    );
+  }
+  // End: Fellow-only tabs
 
   const enrichedUser = { ...currentUser, workingCenter };
 
@@ -1633,7 +2172,7 @@ export default function TeacherDashboard({ user, onLogout }) {
   // Every other page shows an "Under Construction" placeholder instead.
   // "courses" and "assessment" are now notes/assessment based (no video) —
   // both are fully wired, so they're included here.
-  const WORKING_TABS = new Set(["overview", "children_att", "geotag", "profile", "training", "courses", "assessment", "certificates", "notifications", "feedback","lesson_planner"]);
+  const WORKING_TABS = new Set(["overview", "children_att", "geotag", "profile", "training", "courses", "assessment", "certificates", "notifications", "feedback","lesson_planner", "parent_capacity", "curriculum","planner"]);
 
   const renderContent = () => {
     if (loading) {
@@ -1658,16 +2197,18 @@ export default function TeacherDashboard({ user, onLogout }) {
 
     switch(activeTab) {
       case "overview":      return <OverviewTab user={enrichedUser} setActiveTab={handleTabSwitch} courses={courses} assignments={courses} lessons={lessons} activities={activities} summary={summary}/>;
-      case "children_att":  return <AttendanceManager user={enrichedUser}/>;
+      case "children_att":  return <AttendanceManager user={enrichedUser} onRosterChange={refreshCoreData}/>;
       case "geotag":        return <GeotagAttendance user={enrichedUser}/>;
       case "training":      return <TrainingAndClassroomManager user={enrichedUser}/>;
-      case "lesson_planner": return <LessonPlannerTab user={enrichedUser} />;
+      case "planner":       return <LessonPlannerTab setToast={setToast} user={enrichedUser}/>;
       case "courses":
         return (
           <TeacherCourseNotes
             assignments={courses}
             onMarkDone={handleMarkDone}
             onGoToAssessment={() => handleTabSwitch("assessment")}
+            onRestartCourse={handleRestartCourse}
+            onRemoveCourse={handleRemoveCourse}
           />
         );
       case "assessment":
@@ -1675,6 +2216,8 @@ export default function TeacherDashboard({ user, onLogout }) {
       case "schedule":      return <ScheduleTab user={enrichedUser} lessons={lessons}/>;
       case "grades":        return <GradesTab assignments={courses}/>;
       case "assignments":   return <AssignmentsTab assignments={courses} onSubmitAssignment={handleSubmitAssignment}/>;
+      case "parent_capacity": return <ParentCapacityBuildingTab user={enrichedUser} setToast={setToast} />;
+      case "curriculum":    return <CurriculumTab user={enrichedUser} />;
       case "certificates":  return <CertificatesTab assignments={courses} certificates={certificates}/>;
       case "notifications": return <NotificationsTab notifications={notifications} onMarkRead={handleMarkNotifRead} onMarkAllRead={handleMarkAllNotifRead}/>;
       case "feedback":      return <TeacherFeedbackTab user={enrichedUser} setToast={setToast}/>;
@@ -1684,18 +2227,18 @@ export default function TeacherDashboard({ user, onLogout }) {
   };
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#f8fafc", fontFamily: "'Segoe UI','Inter',-apple-system,sans-serif" }}>
+    <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "#f8fafc", fontFamily: "'Segoe UI','Inter',-apple-system,sans-serif" }}>
       <style>{globalCSS}</style>
       <Toast msg={toast.msg} type={toast.type} onClose={()=>setToast({msg:"",type:""})}/>
 
-      <div style={{ width: 240, background: "white", borderRight: "1px solid #f1f5f9", display: "flex", flexDirection: "column", flexShrink: 0, boxShadow: "2px 0 12px rgba(0,0,0,0.04)", position: "sticky", top: 0, height: "100vh", overflowY: "auto" }}>
+      <div style={{ width: 240, background: "white", borderRight: "1px solid #f1f5f9", display: "flex", flexDirection: "column", flexShrink: 0, boxShadow: "2px 0 12px rgba(0,0,0,0.04)", position: "relative", height: "100vh" }}>
         <div style={{ padding: "20px 16px 12px" }}>
           <Logo size={120}/>
           <div style={{ textAlign: "center", padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "#dbeafe", color: "#1e40af", border: "1px solid #bfdbfe", margin: "6px auto 0", display: "inline-block", width: "fit-content" }}>
-            🎓 {t("Teacher Panel")}
+            🎓 {t(currentUser?.role === "fellow" ? "Fellow Panel" : "Teacher Panel")}
           </div>
         </div>
-        <nav style={{ padding: "4px 10px", flex: 1 }}>
+        <nav style={{ padding: "4px 10px", flex: 1, overflowY: "auto", marginBottom: 80 }}>
           {navItems.map(item=>(
             <button key={item.key} onClick={()=>setActiveTab(item.key)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", border: "none", borderRadius: 10, background: activeTab===item.key?"#dbeafe":"transparent", color: activeTab===item.key?"#1e40af":"#6b7280", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", textAlign: "left", marginBottom: 2, transition: "all 0.18s" }}>
               <span style={{ fontSize: 15 }}>{item.icon}</span>
@@ -1704,35 +2247,122 @@ export default function TeacherDashboard({ user, onLogout }) {
             </button>
           ))}
         </nav>
-        <div style={{ padding: "12px 16px", borderTop: "1px solid #f1f5f9", display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ 
+          position: "fixed", bottom: 0, left: 0, width: 240,
+          padding: "12px 16px", borderTop: "1px solid #f1f5f9", 
+          display: "flex", alignItems: "center", gap: 10, background: "white", zIndex: 50
+        }}>
           <SidebarAvatar teacher={currentUser} size={34} />
           <div style={{ flex: 1, overflow: "hidden" }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: "#1c1917" }}>{currentUser.name?.split(" ")[0]}</div>
             <div style={{ fontSize: 10, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser.subject}</div>
           </div>
-          <button onClick={onLogout} title={t("Sign Out")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "#9ca3af", padding: 4 }}>⏻</button>
+          <button onClick={onLogout} title={t("Sign Out")} 
+            style={{ 
+              background:"transparent", border:"none", cursor:"pointer", 
+              fontSize:22, color:"#ef4444", padding:"8px", 
+              borderRadius: "8px", transition: "all 0.2s ease",
+              display: "flex", alignItems: "center", justifyContent: "center"
+            }}
+            onMouseEnter={(e)=>e.currentTarget.style.background="#fee2e2"}
+            onMouseLeave={(e)=>e.currentTarget.style.background="transparent"}
+          >⏻</button>
         </div>
       </div>
 
       <div style={{ flex: 1, width: "0px", minWidth: "0px", padding: "28px 32px", overflowY: "auto", maxHeight: "100vh" }}>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginBottom: 16, position: "relative" }}>
           <button
-            onClick={() => setActiveTab("profile")}
-            title={t("My Profile")}
+            onClick={() => setShowGuide(true)}
+            title={t("User Guide")}
             style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "6px 12px", borderRadius: 20,
-              border: "1px solid #e2e8f0", background: "white",
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "6px 14px", borderRadius: 20,
+              border: "1px solid #bfdbfe", background: "white",
+              color: "#1e40af", fontSize: 12, fontWeight: 600,
               cursor: "pointer", fontFamily: "inherit",
               boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
               transition: "all 0.18s",
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#3b82f6"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(59,130,246,0.15)"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#e2e8f0"; e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.06)"; }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "#eff6ff"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "white"; }}
           >
-            <SidebarAvatar teacher={currentUser} size={28} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{currentUser.name?.split(" ")[0]}</span>
+            <span style={{ fontSize: 14, lineHeight: 1 }}>📖</span>
+            {t("User Guide")}
           </button>
+
+          <div
+            onClick={() => setMenuOpen(!menuOpen)}
+            style={{
+              display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
+              padding: "6px 12px", borderRadius: 20, background: "#fef3c7",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.1)", border: "1px solid #fbbf24",
+              transition: "all 0.2s ease", position: "relative"
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = "#fde68a"}
+            onMouseLeave={(e) => e.currentTarget.style.background = "#fef3c7"}
+          >
+            {unreadCount > 0 && (
+              <span style={{
+                position: "absolute", top: -4, right: -4, background: "#ef4444", color: "white",
+                borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center",
+                justifyContent: "center", fontSize: 10, fontWeight: "bold", border: "2px solid white"
+              }}>
+                {unreadCount}
+              </span>
+            )}
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#92400e" }}>{currentUser.name?.split(" ")[0] || (currentUser.role === "fellow" ? "Fellow" : "Teacher")}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, paddingBottom: 6, color: "#92400e" }}>⋮</div>
+          </div>
+
+          {menuOpen && (
+            <div style={{
+              position:"absolute", top: 48, right: 0, background:"white",
+              border:"1px solid #e5e7eb", borderRadius: 12, boxShadow:"0 10px 25px rgba(0, 0, 0, 0.1)",
+              zIndex: 50, minWidth: 180, display: "flex", flexDirection: "column", overflow: "hidden"
+            }}>
+              <button
+                onClick={() => { setActiveTab("notifications"); setMenuOpen(false); }}
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding:"12px 18px", border:"none", background:"white", textAlign:"left", cursor:"pointer", borderBottom:"1px solid #f3f4f6", fontSize:14, fontWeight:600, color:"#374151", transition: "background 0.2s" }}
+                onMouseEnter={(e)=>e.currentTarget.style.background="#f8fafc"}
+                onMouseLeave={(e)=>e.currentTarget.style.background="white"}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: "#fef3c7" }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                  </div>
+                  <span style={{ color: "#374151", fontWeight: 700 }}>Notifications</span>
+                </div>
+                {unreadCount > 0 && (
+                  <span style={{ background: "#ef4444", color: "white", borderRadius: 10, padding: "2px 8px", fontSize: 11, fontWeight: "bold" }}>
+                    {unreadCount} New
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => { setActiveTab("profile"); setMenuOpen(false); }}
+                style={{ display:"flex", alignItems:"center", gap: 12, padding:"12px 18px", border:"none", background:"white", textAlign:"left", cursor:"pointer", borderBottom:"1px solid #f3f4f6", fontSize:14, fontWeight:600, color:"#374151", transition: "background 0.2s" }}
+                onMouseEnter={(e)=>e.currentTarget.style.background="#f8fafc"}
+                onMouseLeave={(e)=>e.currentTarget.style.background="white"}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: "#e0e7ff" }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                </div>
+                <span style={{ color: "#374151", fontWeight: 700 }}>My Profile</span>
+              </button>
+              <button
+                onClick={onLogout}
+                style={{ display:"flex", alignItems:"center", gap: 12, padding:"12px 18px", border:"none", background:"white", textAlign:"left", cursor:"pointer", color:"#dc2626", fontSize:14, fontWeight:600, transition: "background 0.2s" }}
+                onMouseEnter={(e)=>e.currentTarget.style.background="#fef2f2"}
+                onMouseLeave={(e)=>e.currentTarget.style.background="white"}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: "#fee2e2" }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                </div>
+                <span style={{ color: "#dc2626", fontWeight: 700 }}>Logout</span>
+              </button>
+            </div>
+          )}
         </div>
         {renderContent()}
       </div>
@@ -1818,6 +2448,8 @@ export default function TeacherDashboard({ user, onLogout }) {
           💬
         </button>
       </div>
+
+      {showGuide && <TeacherUserGuide onClose={() => setShowGuide(false)} />}
     </div>
   );
 }

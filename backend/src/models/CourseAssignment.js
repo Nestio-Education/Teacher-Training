@@ -50,7 +50,10 @@ const courseAssignmentSchema = new mongoose.Schema(
     assessmentForced: { type: Boolean, default: false },
     assessmentWarnings: { type: Number, default: 0 },
     assessmentCompletedAt: Date,
-    grade: { type: String, default: "" }
+    grade: { type: String, default: "" },
+    // Start: Dnyaneshwari Thorat
+    locked: { type: Boolean, default: false }
+    // End: Dnyaneshwari Thorat
   },
   { timestamps: true }
 );

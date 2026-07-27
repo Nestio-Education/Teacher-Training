@@ -246,6 +246,25 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
     await patchAssignment(id, { notified: true }, "Teacher notified.");
   };
 
+  const handleResetReview = async (id) => {
+    if (!window.confirm("Are you sure you want to remove the review record for this assignment? This will reset it back to submitted state.")) return;
+    await patchAssignment(
+      id,
+      {
+        status: "submitted",
+        score: null,
+        feedback: "",
+        rubric: [],
+        annotations: [],
+        notified: false,
+        reviewedBy: null,
+        reviewedAt: null,
+        trainer: ""
+      },
+      "Assignment review reset successfully."
+    );
+  };
+
   const handleAssignReviewer = async (id) => {
     if (!assignReviewer) {
       setToast({ msg: "Select a reviewer.", type: "error" });
@@ -832,6 +851,9 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
                   )}
                   {!item.notified && (item.status === "approved" || item.status === "revision" || item.status === "reviewed") && (
                     <button onClick={() => handleNotify(assignmentId(item))} style={{ ...AR_BTN_GHOST, color: "#8b5cf6", borderColor: "#c4b5fd" }}>Notify</button>
+                  )}
+                  {(item.status === "approved" || item.status === "revision" || item.status === "reviewed" || item.status === "completed") && (
+                    <button onClick={() => handleResetReview(assignmentId(item))} style={{ ...AR_BTN_GHOST, color: "#dc2626", borderColor: "#fca5a5", background: "#fff1f2" }}>Reset Review</button>
                   )}
                 </div>
               </div>

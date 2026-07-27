@@ -7,7 +7,7 @@ import { Notification } from "../models/Notification.js";
 const router = express.Router();
 
 // Teacher: get my schedules
-router.get("/teacher", requireAuth, requireRole("teacher"), async (req, res, next) => {
+router.get("/teacher", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const items = await Schedule.find({ teacher: req.user.id })
       .populate("teacher", "name email")

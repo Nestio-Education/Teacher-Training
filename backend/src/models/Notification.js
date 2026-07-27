@@ -3,6 +3,9 @@ import mongoose from "mongoose";
 const notificationSchema = new mongoose.Schema(
   {
     recipient: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
+    // Start: Dnyaneshwari Thorat
+    type: { type: String, default: "info" },
+    // End: Dnyaneshwari Thorat
     channel: { type: String, enum: ["in_app", "email", "sms", "push", "whatsapp"], default: "in_app" },
     title: { type: String, required: true },
     body: { type: String, required: true },

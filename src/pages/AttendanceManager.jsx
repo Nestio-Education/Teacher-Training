@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { SectionCard, S, Badge } from "../components/Shared";
-import { getTeacherMe, getTeacherChildren, getChildAttendance, saveChildAttendance, createTeacherChild, getTeacherClasses } from "../services/api";
+import { getTeacherMe, getTeacherChildren, getChildAttendance, saveChildAttendance, deleteChildAttendance, deleteTeacherChild, createTeacherChild, getTeacherClasses, createTeacherChildrenBulk } from "../services/api";
+import * as XLSX from "xlsx";
+// Prajwal start
+import ChildDashboardModal from "./ChildDashboardModal";
+// Prajwal end
+// End: Dnyaneshwari Thorat
 
 const EMAILJS_SERVICE_ID  = "service_ckzt1le";
 const EMAILJS_TEMPLATE_ID = "template_xycsvf7";
@@ -11,7 +16,7 @@ const generateOTP   = () => String(Math.floor(100000 + Math.random() * 900000));
 
 let emailJsLoaded = false;
 
-export default function AttendanceManager({ user }) {
+export default function AttendanceManager({ user, onRosterChange }) {
   const [teacherProfile, setTeacherProfile] = useState(null);
   const [classes, setClasses] = useState([]);
   const [selectedClassId, setSelectedClassId] = useState("");
@@ -20,11 +25,20 @@ export default function AttendanceManager({ user }) {
   const [attendanceDict, setAttendanceDict] = useState({});
   const [isSavedRecord, setIsSavedRecord] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  // Start: Dnyaneshwari Thorat
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkText, setBulkText] = useState("");
+  const [excelStudents, setExcelStudents] = useState([]);
+  // End: Dnyaneshwari Thorat
+  // Prajwal start
+  const [viewChild, setViewChild] = useState(null);
+  // Prajwal end
   const [newStudentName, setNewStudentName] = useState("");
   const [newStudentAge, setNewStudentAge] = useState("");
   const [newStudentGender, setNewStudentGender] = useState("");
   const [newStudentParentName, setNewStudentParentName] = useState("");
   const [newStudentParentPhone, setNewStudentParentPhone] = useState("");
+  const [newStudentClassId, setNewStudentClassId] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [loading, setLoading] = useState(true);
@@ -197,27 +211,11 @@ export default function AttendanceManager({ user }) {
     }
   };
 
-  const handleStatusToggle = (childId, currentStatus) => {
-    const nextStatus = currentStatus === "P" ? "A" : currentStatus === "A" ? "L" : "P";
-    if (isSavedRecord) {
-      const student = students.find(s => s.id === childId);
-      const change = {
-        childId,
-        nextStatus,
-        currentStatus,
-        studentName: student?.name || `Child #${childId}`
-      };
-      setPendingChange(change);
-      setShowOtpModal(true);
-      setOtpInput(["","","","","",""]);
-      setOtpError("");
-      setOtpExpiry(null);
-      setTimeLeft(null);
-      doSendOtp(change.studentName, currentStatus, nextStatus);
-    } else {
-      setAttendanceDict(prev => ({ ...prev, [childId]: nextStatus }));
-    }
+  // Start: Dnyaneshwari Thorat
+  const handleStatusToggle = (childId, targetStatus) => {
+    setAttendanceDict(prev => ({ ...prev, [childId]: targetStatus }));
   };
+  // End: Dnyaneshwari Thorat
 
   const handleOtpDigit = (index, value) => {
     if (!/^\d*$/.test(value)) return;
@@ -279,6 +277,7 @@ export default function AttendanceManager({ user }) {
           saveAttendanceToDb(updatedDict)
             .then(() => {
               triggerToast("✅ OTP verified and attendance updated in database!");
+              onRosterChange?.();
             })
             .catch(err => {
               console.error("Error saving attendance:", err);
@@ -316,11 +315,148 @@ export default function AttendanceManager({ user }) {
     clearInterval(cooldownRef.current);
   };
 
+  // Start: Dnyaneshwari Thorat
+  const handleExcelUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = evt.target.result;
+        const workbook = XLSX.read(data, { type: "binary" });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const parsedData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        
+        const rows = parsedData.filter(row => row && row.length > 0);
+        if (rows.length === 0) {
+          triggerToast("The Excel sheet is empty.", true);
+          return;
+        }
+        
+        let startIndex = 0;
+        let nameIdx = 0, ageIdx = 1, genderIdx = 2, parentNameIdx = 3, parentPhoneIdx = 4;
+        
+        const firstRow = rows[0].map(c => String(c || "").toLowerCase().trim());
+        const hasHeader = firstRow.some(val => val.includes("name") || val.includes("age") || val.includes("gender") || val.includes("parent"));
+        
+        if (hasHeader) {
+          startIndex = 1;
+          firstRow.forEach((val, idx) => {
+            if (val.includes("parent name") || val.includes("parent_name") || val.includes("guardian name") || val.includes("father") || val.includes("mother")) {
+              parentNameIdx = idx;
+            } else if (val.includes("phone") || val.includes("contact") || val.includes("mobile") || val.includes("parent phone")) {
+              parentPhoneIdx = idx;
+            } else if (val.includes("name") || val.includes("student") || val.includes("full name")) {
+              nameIdx = idx;
+            } else if (val.includes("age") || val.includes("years")) {
+              ageIdx = idx;
+            } else if (val.includes("gender") || val.includes("sex")) {
+              genderIdx = idx;
+            }
+          });
+        }
+        
+        const parsedStudents = [];
+        for (let i = startIndex; i < rows.length; i++) {
+          const row = rows[i];
+          if (!row || row.length === 0) continue;
+          
+          const name = row[nameIdx] ? String(row[nameIdx]).trim() : "";
+          if (!name) continue;
+          
+          const age = row[ageIdx] ? parseInt(row[ageIdx], 10) : "";
+          let gender = row[genderIdx] ? String(row[genderIdx]).trim() : "Male";
+          gender = gender.toLowerCase().startsWith("f") ? "Female" : "Male";
+          const parentName = row[parentNameIdx] ? String(row[parentNameIdx]).trim() : "";
+          const parentPhone = row[parentPhoneIdx] ? String(row[parentPhoneIdx]).trim() : "";
+          
+          parsedStudents.push({ name, age, gender, parentName, parentPhone });
+        }
+        
+        if (parsedStudents.length === 0) {
+          triggerToast("No students could be parsed from the Excel file.", true);
+        } else {
+          setExcelStudents(parsedStudents);
+          triggerToast(`Parsed ${parsedStudents.length} students from Excel file!`);
+        }
+      } catch (err) {
+        console.error("Excel parse error:", err);
+        triggerToast("Failed to parse Excel file. Make sure it is valid.", true);
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleExcelBulkSubmit = () => {
+    const classId = selectedClassId || (teacherProfile?.teacherProfile?.classes || [])[0]?._id || (teacherProfile?.teacherProfile?.classes || [])[0];
+    if (!classId) {
+      triggerToast("No class selected.", true);
+      return;
+    }
+    const childrenList = excelStudents.map(st => ({
+      fullName: st.name,
+      age: st.age ? Number(st.age) : undefined,
+      gender: st.gender || "Male",
+      guardianName: st.parentName || undefined,
+      guardianPhone: st.parentPhone || undefined,
+      classId,
+      status: "active"
+    }));
+
+    createTeacherChildrenBulk(childrenList)
+      .then(() => {
+        triggerToast(`Bulk enrolled ${childrenList.length} children successfully!`);
+        setExcelStudents([]);
+        setRosterVersion(v => v + 1);
+        onRosterChange?.();
+      })
+      .catch(err => {
+        console.error("Bulk enroll error:", err);
+        triggerToast("Failed bulk enrollment: " + err.message, true);
+      });
+  };
+  // End: Dnyaneshwari Thorat
+
   const handleAddStudent = (e) => {
     e.preventDefault();
+    const fallbackClassId = selectedClassId || (teacherProfile?.teacherProfile?.classes || [])[0]?._id || (teacherProfile?.teacherProfile?.classes || [])[0];
+    const classId = newStudentClassId || fallbackClassId;
+
+    // Start: Dnyaneshwari Thorat
+    if (bulkMode) {
+      if (excelStudents.length === 0) {
+        triggerToast("Please upload a valid Excel file first.", true);
+        return;
+      }
+      const childrenList = excelStudents.map(st => ({
+        fullName: st.name,
+        age: st.age ? Number(st.age) : undefined,
+        gender: st.gender || "Male",
+        guardianName: st.parentName || undefined,
+        guardianPhone: st.parentPhone || undefined,
+        classId,
+        status: "active"
+      }));
+
+      createTeacherChildrenBulk(childrenList)
+        .then(() => {
+          triggerToast(`Bulk enrolled ${childrenList.length} children successfully!`);
+          setExcelStudents([]);
+          setShowAddModal(false);
+          setRosterVersion(v => v + 1);
+          onRosterChange?.();
+        })
+        .catch(err => {
+          console.error("Bulk enroll error:", err);
+          triggerToast("Failed bulk enrollment: " + err.message, true);
+        });
+      return;
+    }
+    // End: Dnyaneshwari Thorat
+
     if (!newStudentName.trim()) return;
 
-    const classId = selectedClassId || (teacherProfile?.teacherProfile?.classes || [])[0]?._id || (teacherProfile?.teacherProfile?.classes || [])[0];
     createTeacherChild({
       fullName: newStudentName.trim(),
       age: newStudentAge ? Number(newStudentAge) : undefined,
@@ -337,8 +473,10 @@ export default function AttendanceManager({ user }) {
         setNewStudentGender("");
         setNewStudentParentName("");
         setNewStudentParentPhone("");
+        setNewStudentClassId("");
         setShowAddModal(false);
         setRosterVersion(v => v + 1);
+        onRosterChange?.();
       })
       .catch(err => {
         console.error("Error adding child:", err);
@@ -351,6 +489,7 @@ export default function AttendanceManager({ user }) {
       .then(() => {
         setIsSavedRecord(true);
         triggerToast(`Attendance sheet submitted to database for ${selectedDate}`);
+        onRosterChange?.();
       })
       .catch(err => {
         console.error("Error saving attendance:", err);
@@ -358,21 +497,50 @@ export default function AttendanceManager({ user }) {
       });
   };
 
-  const handleClearSheetRecord = () => {
-    if (!window.confirm("Reset this attendance record to defaults?")) return;
-    const resetDict = {};
-    students.forEach(st => { resetDict[st.id] = "P"; });
-    setAttendanceDict(resetDict);
-    saveAttendanceToDb(resetDict)
+  // Start: Dnyaneshwari Thorat
+  const handleDeleteSheetRecord = () => {
+    const classId = selectedClassId || (teacherProfile?.teacherProfile?.classes || [])[0]?._id || (teacherProfile?.teacherProfile?.classes || [])[0];
+    if (!classId) {
+      triggerToast("No class selected.", true);
+      return;
+    }
+
+    if (!window.confirm("Delete this saved attendance record? You can add a new one after this.")) return;
+
+    deleteChildAttendance({ classId, attendanceDate: selectedDate })
       .then(() => {
+        const resetDict = {};
+        students.forEach(st => { resetDict[st.id] = "P"; });
+        setAttendanceDict(resetDict);
         setIsSavedRecord(false);
-        triggerToast("Attendance record reset to defaults.");
+        setRosterVersion(v => v + 1);
+        triggerToast("Attendance record deleted successfully.");
+        onRosterChange?.();
       })
       .catch(err => {
-        console.error("Error resetting sheet:", err);
-        triggerToast("Failed to reset record: " + err.message, true);
+        console.error("Error deleting attendance:", err);
+        triggerToast("Failed to delete record: " + err.message, true);
       });
   };
+  // End: Dnyaneshwari Thorat
+
+  // Start: Dnyaneshwari Thorat
+  const handleDeleteChild = (childId, childName) => {
+    if (!childId) return;
+    if (!window.confirm(`Remove ${childName || "this child"} from the register? This will also remove their attendance record.`)) return;
+
+    deleteTeacherChild(childId)
+      .then(() => {
+        setRosterVersion(v => v + 1);
+        triggerToast(`${childName || "Child"} removed successfully.`);
+        onRosterChange?.();
+      })
+      .catch(err => {
+        console.error("Error deleting child:", err);
+        triggerToast("Failed to remove child: " + err.message, true);
+      });
+  };
+  // End: Dnyaneshwari Thorat
 
   const maskedEmail = user.email
     ? user.email.replace(/(.{2})(.*)(@.*)/, (_, a, b, c) => a + "*".repeat(Math.min(b.length, 5)) + c)
@@ -416,6 +584,89 @@ export default function AttendanceManager({ user }) {
         </div>
       )}
 
+      {/* Start: Dnyaneshwari Thorat */}
+      <SectionCard title="📁 Excel Bulk Enrollment">
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>
+            Upload an Excel or CSV file to enroll multiple children at once. No manual writing required!
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <label style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "24px",
+              border: "2px dashed #fbbf24",
+              borderRadius: "16px",
+              background: "#fffbeb",
+              cursor: "pointer",
+              transition: "all 0.2s ease",
+              textAlign: "center"
+            }}>
+              <span style={{ fontSize: "36px", marginBottom: "8px" }}>📊</span>
+              <span style={{ fontSize: "14px", fontWeight: "700", color: "#b45309" }}>Upload Excel or CSV spreadsheet</span>
+              <span style={{ fontSize: "11px", color: "#d97706", marginTop: "4px" }}>Drag and drop file here, or click to browse</span>
+              <input
+                type="file"
+                accept=".xlsx, .xls, .csv"
+                onChange={handleExcelUpload}
+                style={{ display: "none" }}
+              />
+            </label>
+            {excelStudents.length > 0 && (
+              <button
+                onClick={handleExcelBulkSubmit}
+                style={{
+                  ...S.primaryBtn,
+                  width: "100%",
+                  padding: "12px 24px",
+                  fontSize: "14px",
+                  fontWeight: "800",
+                  background: "linear-gradient(135deg, #f59e0b, #d97706)",
+                  boxShadow: "0 4px 12px rgba(217, 119, 6, 0.2)"
+                }}
+              >
+                🚀 Confirm & Import {excelStudents.length} Students to attendance sheet
+              </button>
+            )}
+          </div>
+          
+          {excelStudents.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <h4 style={{ fontSize: 13, fontWeight: 700, color: "#1c1917", marginBottom: 8 }}>Parsed Student Cards:</h4>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
+                {excelStudents.map((st, idx) => (
+                  <div key={idx} style={{ background: "white", padding: 14, borderRadius: 14, border: "1px solid #e2e8f0", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", position: "relative", display: "flex", flexDirection: "column", gap: 4 }}>
+                    <button
+                      type="button"
+                      onClick={() => setExcelStudents(prev => prev.filter((_, i) => i !== idx))}
+                      style={{ position: "absolute", top: 10, right: 10, background: "none", border: "none", color: "#ef4444", fontWeight: 700, fontSize: 14, cursor: "pointer" }}
+                      title="Remove"
+                    >
+                      ✕
+                    </button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontSize: 20 }}>👶</span>
+                      <div style={{ fontWeight: 800, fontSize: 13, color: "#1c1917" }}>{st.name}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                      <Badge children={`${st.age || "?"} Yrs`} color="#059669" bg="#d1fae5" />
+                      <Badge children={st.gender} color="#7c3aed" bg="#ede9fe" />
+                    </div>
+                    <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>
+                      <strong>Parent:</strong> {st.parentName || "—"}<br />
+                      <strong>Phone:</strong> {st.parentPhone || "—"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </SectionCard>
+      {/* End: Dnyaneshwari Thorat */}
+
       {/* Date picker */}
       <SectionCard title="📅 Daily Register Date & Class Lookup">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
@@ -444,7 +695,7 @@ export default function AttendanceManager({ user }) {
             )}
 
             {isSavedRecord
-              ? <Badge children="📝 Reviewing Saved Sheet History" color="#1e40af" bg="#dbeafe" />
+              ? <Badge children="📝 Reviewing Saved Sheet History" color="#059669" bg="#d1fae5" />
               : <Badge children="✨ New Unsaved Data Register"     color="#854d0e" bg="#fef9c3" />
             }
           </div>
@@ -452,13 +703,6 @@ export default function AttendanceManager({ user }) {
             <Badge children={`Class: ${classes.find(c => (c._id || c.id) === selectedClassId)?.name || "Selected"}`} color="#d97706" bg="#fef3c7" />
           )}
         </div>
-
-        {isSavedRecord && (
-          <div style={{ marginTop: 12, padding: "10px 14px", background: "#fef3c7", border: "1px solid #fbbf24", borderRadius: 8, fontSize: 12, color: "#92400e", display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 16 }}>🔐</span>
-            <span>This is a <strong>saved record</strong>. Any change requires <strong>Email OTP verification</strong> sent to <strong>{maskedEmail}</strong>.</span>
-          </div>
-        )}
       </SectionCard>
 
       {/* Roster table */}
@@ -466,46 +710,139 @@ export default function AttendanceManager({ user }) {
         <SectionCard title={`👥 Children Register — Date: ${selectedDate} (${students.length} children)`}>
           {students.length === 0 ? (
             <p style={{ fontSize: 13, color: "#9ca3af", fontStyle: "italic", textAlign: "center", padding: "20px 0" }}>
-              No children enrolled in this class yet. Click "+ Enroll Child" above.
+              No children enrolled in this class yet. Click "+ Enroll Child" above or upload an Excel sheet.
             </p>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {/* Header row */}
-              <div style={{ display: "flex", alignItems: "center", padding: "8px 16px", background: "#f9fafb", borderRadius: 8, fontWeight: 700, fontSize: 12, color: "#6b7280" }}>
-                <div style={{ width: 100 }}>Roll No.</div>
-                <div style={{ flex: 1 }}>Full Student Name</div>
-                <div style={{ width: 160, textAlign: "right" }}>Status</div>
-              </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* Start: Dnyaneshwari Thorat */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+                {students.map(st => {
+                  const status = attendanceDict[st.id] || "P";
+                  return (
+                    <div
+                      key={st.id}
+                      style={{
+                        background: "white",
+                        padding: 16,
+                        borderRadius: 16,
+                        border: `1px solid ${status === "P" ? "#86efac" : status === "A" ? "#fca5a5" : "#fde68a"}`,
+                        boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 12,
+                        transition: "all 0.2s ease"
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, justifyContent: "space-between" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{
+                          width: 42,
+                          height: 42,
+                          borderRadius: 12,
+                          background: status === "P" ? "#e8f5e9" : status === "A" ? "#ffebee" : "#fffde7",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 20
+                        }}>
+                          👶
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: "#1c1917" }}>{st.name}</div>
+                          <div style={{ fontSize: 11, color: "#d97706", fontWeight: 700 }}>Roll No: {st.rollNo}</div>
+                        </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteChild(st.id, st.name)}
+                          style={{
+                            border: "1px solid #fecaca",
+                            background: "#fff1f2",
+                            color: "#dc2626",
+                            fontSize: 11,
+                            fontWeight: 800,
+                            borderRadius: 999,
+                            padding: "6px 10px",
+                            cursor: "pointer",
+                            flexShrink: 0
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
 
-              {students.map(st => {
-                const status = attendanceDict[st.id] || "P";
-                const badge  =
-                  status === "P" ? { bg: "#d1fae5", text: "#065f46", lbl: "Present" } :
-                  status === "A" ? { bg: "#fee2e2", text: "#991b1b", lbl: "Absent"  } :
-                                   { bg: "#fef3c7", text: "#92400e", lbl: "Leave"   };
-                return (
-                  <div key={st.id} style={{ display: "flex", alignItems: "center", padding: "12px 16px", background: "white", border: "1px solid #f1f5f9", borderRadius: 10, transition: "all 0.15s" }}>
-                    <div style={{ width: 100, fontSize: 13, fontWeight: 800, color: "#d97706" }}>{st.rollNo}</div>
-                    <div style={{ flex: 1, fontSize: 14, fontWeight: 600, color: "#1c1917" }}>{st.name}</div>
-                    <div style={{ width: 160, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
-                      {isSavedRecord && <span title="OTP required to edit" style={{ fontSize: 13, color: "#f59e0b" }}>🔐</span>}
-                      <button
-                        onClick={() => handleStatusToggle(st.id, status)}
-                        style={{ border: "none", background: badge.bg, color: badge.text, padding: "6px 16px", borderRadius: 20, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-                      >
-                        {badge.lbl}
-                      </button>
+                      <div style={{ display: "flex", gap: 6, borderTop: "1px solid #f1f5f9", paddingTop: 10 }}>
+                        <button
+                          type="button"
+                          onClick={() => handleStatusToggle(st.id, "P")}
+                          style={{
+                            flex: 1,
+                            padding: "6px 0",
+                            borderRadius: 8,
+                            border: "none",
+                            background: status === "P" ? "#22c55e" : "#f1f5f9",
+                            color: status === "P" ? "white" : "#64748b",
+                            fontWeight: 700,
+                            fontSize: 12,
+                            cursor: "pointer",
+                            transition: "all 0.15s"
+                          }}
+                        >
+                          Present
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleStatusToggle(st.id, "A")}
+                          style={{
+                            flex: 1,
+                            padding: "6px 0",
+                            borderRadius: 8,
+                            border: "none",
+                            background: status === "A" ? "#ef4444" : "#f1f5f9",
+                            color: status === "A" ? "white" : "#64748b",
+                            fontWeight: 700,
+                            fontSize: 12,
+                            cursor: "pointer",
+                            transition: "all 0.15s"
+                          }}
+                        >
+                          Absent
+                        </button>
+                        {/* Prajwal start — Leave button replaced with View button.
+                            Clicking it opens the Child Dashboard (Child Profile /
+                            Child Assessment / Activity Suggestions) per Module 1 spec. */}
+                        <button
+                          type="button"
+                          onClick={() => setViewChild(st)}
+                          style={{
+                            flex: 1,
+                            padding: "6px 0",
+                            borderRadius: 8,
+                            border: "none",
+                            background: "#f1f5f9",
+                            color: "#64748b",
+                            fontWeight: 700,
+                            fontSize: 12,
+                            cursor: "pointer",
+                            transition: "all 0.15s"
+                          }}
+                        >
+                          View
+                        </button>
+                        {/* Prajwal end */}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+              {/* End: Dnyaneshwari Thorat */}
 
               {/* Footer actions */}
               <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   {isSavedRecord && (
-                    <button onClick={handleClearSheetRecord} style={{ ...S.exportBtn, color: "#ef4444", border: "1px solid #fca5a5" }}>
-                      🗑️ Reset Sheet
+                    <button onClick={handleDeleteSheetRecord} style={{ ...S.exportBtn, color: "#ef4444", border: "1px solid #fca5a5" }}>
+                      🗑️ Delete Saved Record
                     </button>
                   )}
                 </div>
@@ -526,54 +863,108 @@ export default function AttendanceManager({ user }) {
               <h3 style={{ fontSize: 17, fontWeight: 800, color: "#1c1917", margin: 0 }}>Register New Child</h3>
               <button onClick={() => setShowAddModal(false)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af" }}>✕</button>
             </div>
+            {/* Start: Dnyaneshwari Thorat */}
+            <div style={{ display: "flex", gap: 12, borderBottom: "1px solid #f1f5f9", marginBottom: 16, paddingBottom: 8 }}>
+              <button type="button" onClick={() => setBulkMode(false)} style={{ background: "none", border: "none", fontSize: 13, fontWeight: 700, color: !bulkMode ? "#d97706" : "#6b7280", borderBottom: !bulkMode ? "2px solid #d97706" : "none", paddingBottom: 4, cursor: "pointer" }}>Single Enrollment</button>
+              <button type="button" onClick={() => setBulkMode(true)} style={{ background: "none", border: "none", fontSize: 13, fontWeight: 700, color: bulkMode ? "#d97706" : "#6b7280", borderBottom: bulkMode ? "2px solid #d97706" : "none", paddingBottom: 4, cursor: "pointer" }}>Bulk Enrollment</button>
+            </div>
+
             <form onSubmit={handleAddStudent}>
-              <label style={S.label}>Student Full Name *</label>
-              <input
-                required
-                style={{ ...S.input, marginBottom: 12 }}
-                placeholder="Enter first and last name…"
-                value={newStudentName}
-                onChange={e => setNewStudentName(e.target.value)}
-              />
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+              {bulkMode ? (
                 <div>
-                  <label style={S.label}>Age</label>
+                  <label style={S.label}>Upload Excel File (.xlsx, .xls, .csv)</label>
                   <input
-                    type="number"
-                    min="1"
-                    max="18"
-                    style={S.input}
-                    placeholder="Age"
-                    value={newStudentAge}
-                    onChange={e => setNewStudentAge(e.target.value)}
+                    type="file"
+                    accept=".xlsx, .xls, .csv"
+                    onChange={handleExcelUpload}
+                    style={{ ...S.input, marginBottom: 12, padding: "8px 12px" }}
                   />
+                  
+                  {excelStudents.length > 0 && (
+                    <div style={{ maxHeight: 180, overflowY: "auto", border: "1px solid #e2e8f0", borderRadius: 10, padding: 8, background: "#f8fafc", marginBottom: 12 }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {excelStudents.map((st, idx) => (
+                          <div key={idx} style={{ background: "white", padding: "8px 12px", borderRadius: 8, border: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: "#1c1917" }}>{st.name} ({st.age} yrs, {st.gender})</div>
+                              <div style={{ fontSize: 10, color: "#64748b" }}>Parent: {st.parentName || "—"} | {st.parentPhone || "—"}</div>
+                            </div>
+                            <button type="button" onClick={() => setExcelStudents(prev => prev.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#dc2626", fontSize: 13, cursor: "pointer", padding: "2px 6px" }}>✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <button type="submit" disabled={excelStudents.length === 0} style={{ ...S.primaryBtn, width: "100%", opacity: excelStudents.length === 0 ? 0.6 : 1, cursor: excelStudents.length === 0 ? "not-allowed" : "pointer" }}>
+                    Bulk Enroll {excelStudents.length > 0 ? `(${excelStudents.length} Children)` : ""} →
+                  </button>
                 </div>
+              ) : (
                 <div>
-                  <label style={S.label}>Gender</label>
-                  <select style={S.input} value={newStudentGender} onChange={e => setNewStudentGender(e.target.value)}>
-                    <option value="">Select…</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
+                  <label style={S.label}>Assign Class *</label>
+                  <select
+                    required
+                    style={{ ...S.input, marginBottom: 12 }}
+                    value={newStudentClassId}
+                    onChange={e => setNewStudentClassId(e.target.value)}
+                  >
+                    <option value="">Select a class…</option>
+                    {classes.map(c => (
+                      <option key={c._id || c.id} value={c._id || c.id}>{c.name} ({c.ageGroup || "All Ages"})</option>
+                    ))}
                   </select>
+
+                  <label style={S.label}>Student Full Name *</label>
+                  <input
+                    required
+                    style={{ ...S.input, marginBottom: 12 }}
+                    placeholder="Enter first and last name…"
+                    value={newStudentName}
+                    onChange={e => setNewStudentName(e.target.value)}
+                  />
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+                    <div>
+                      <label style={S.label}>Age</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="18"
+                        style={S.input}
+                        placeholder="Age"
+                        value={newStudentAge}
+                        onChange={e => setNewStudentAge(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label style={S.label}>Gender</label>
+                      <select style={S.input} value={newStudentGender} onChange={e => setNewStudentGender(e.target.value)}>
+                        <option value="">Select…</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                  <label style={S.label}>Parent/Guardian Name</label>
+                  <input
+                    style={{ ...S.input, marginBottom: 12 }}
+                    placeholder="Parent or guardian name"
+                    value={newStudentParentName}
+                    onChange={e => setNewStudentParentName(e.target.value)}
+                  />
+                  <label style={S.label}>Parent Phone</label>
+                  <input
+                    style={{ ...S.input, marginBottom: 20 }}
+                    placeholder="Parent phone number"
+                    value={newStudentParentPhone}
+                    onChange={e => setNewStudentParentPhone(e.target.value)}
+                  />
+                  <button type="submit" style={{ ...S.primaryBtn, width: "100%" }}>Enroll Child →</button>
                 </div>
-              </div>
-              <label style={S.label}>Parent/Guardian Name</label>
-              <input
-                style={{ ...S.input, marginBottom: 12 }}
-                placeholder="Parent or guardian name"
-                value={newStudentParentName}
-                onChange={e => setNewStudentParentName(e.target.value)}
-              />
-              <label style={S.label}>Parent Phone</label>
-              <input
-                style={{ ...S.input, marginBottom: 20 }}
-                placeholder="Parent phone number"
-                value={newStudentParentPhone}
-                onChange={e => setNewStudentParentPhone(e.target.value)}
-              />
-              <button type="submit" style={{ ...S.primaryBtn, width: "100%" }}>Enroll Child →</button>
+              )}
             </form>
+            {/* End: Dnyaneshwari Thorat */}
           </div>
         </div>
       )}
@@ -596,6 +987,13 @@ export default function AttendanceManager({ user }) {
               <p style={{ fontSize: 12, color: "#64748b", margin: 0, lineHeight: 1.6 }}>
                 {otpStep === "sending" ? "Checking network parameters..." : `We've sent a 6-digit OTP passcode to ${maskedEmail}.`}
               </p>
+              {/* Start: Dnyaneshwari Thorat */}
+              {otpRef.current && (
+                <div style={{ marginTop: 10, padding: 8, background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 8, fontSize: 11, color: "#b45309", fontWeight: 700 }}>
+                  🔑 Local Testing OTP: <span style={{ fontSize: 13, color: "#d97706", fontFamily: "monospace", letterSpacing: 1 }}>{otpRef.current}</span>
+                </div>
+              )}
+              {/* End: Dnyaneshwari Thorat */}
             </div>
 
             {otpStep !== "sending" && (
@@ -672,6 +1070,12 @@ export default function AttendanceManager({ user }) {
           </div>
         </div>
       )}
+
+      {/* Prajwal start — Child Dashboard modal (View button) */}
+      {viewChild && (
+        <ChildDashboardModal child={viewChild} onClose={() => setViewChild(null)} />
+      )}
+      {/* Prajwal end */}
     </div>
   );
 }
