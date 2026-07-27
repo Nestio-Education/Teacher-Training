@@ -818,6 +818,177 @@ export default function TrainingAndClassroomManager({ user }) {
   const [isTabDrafting, setIsTabDrafting] = useState(false);
   const [reportError, setReportError] = useState("");
 
+  const [activeRecordingField, setActiveRecordingField] = useState(null); // 'roughNotes' | 'topic' | 'text' | null
+  const [speechLanguage, setSpeechLanguage] = useState("en-IN");
+  const recognitionRef = useRef(null);
+  const activeFieldRef = useRef(null);
+  const nextFieldRef = useRef(null);
+
+  // Keep activeFieldRef in sync with activeRecordingField
+  useEffect(() => {
+    activeFieldRef.current = activeRecordingField;
+  }, [activeRecordingField]);
+
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const rec = new SpeechRecognition();
+      rec.continuous = true;
+      rec.interimResults = false;
+      rec.lang = speechLanguage;
+
+      rec.onresult = (event) => {
+        let finalTranscript = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          }
+        }
+
+        if (finalTranscript) {
+          const field = activeFieldRef.current;
+          if (field === "roughNotes") {
+            setTabRoughNotes((prev) => {
+              const cleaned = prev.trim();
+              return cleaned ? cleaned + " " + finalTranscript.trim() : finalTranscript.trim();
+            });
+          } else if (field === "topic") {
+            setReportTopic((prev) => {
+              const cleaned = prev.trim();
+              return cleaned ? cleaned + " " + finalTranscript.trim() : finalTranscript.trim();
+            });
+          } else if (field === "text") {
+            setReportText((prev) => {
+              const cleaned = prev.trim();
+              return cleaned ? cleaned + " " + finalTranscript.trim() : finalTranscript.trim();
+            });
+          }
+        }
+      };
+
+      rec.onerror = (event) => {
+        console.error("Speech recognition error:", event.error);
+        if (event.error === "not-allowed") {
+          setReportError("Microphone permission denied. Please allow microphone access in your browser settings.");
+        } else {
+          setReportError(`Speech recognition error: ${event.error}`);
+        }
+        setActiveRecordingField(null);
+      };
+
+      rec.onend = () => {
+        const nextField = nextFieldRef.current;
+        if (nextField) {
+          nextFieldRef.current = null;
+          setActiveRecordingField(nextField);
+          try {
+            rec.lang = speechLanguage;
+            rec.start();
+          } catch (err) {
+            console.error("Speech recognition restart error:", err);
+            setActiveRecordingField(null);
+          }
+        } else {
+          setActiveRecordingField(null);
+        }
+      };
+
+      recognitionRef.current = rec;
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+    };
+  }, [speechLanguage]);
+
+  const handleToggleSpeech = (field) => {
+    if (!recognitionRef.current) {
+      setReportError("Speech recognition is not supported in this browser. Please try Google Chrome.");
+      return;
+    }
+
+    if (activeRecordingField === field) {
+      recognitionRef.current.stop();
+    } else {
+      setReportError("");
+      if (activeRecordingField) {
+        nextFieldRef.current = field;
+        recognitionRef.current.stop();
+      } else {
+        setActiveRecordingField(field);
+        try {
+          recognitionRef.current.lang = speechLanguage;
+          recognitionRef.current.start();
+        } catch (err) {
+          console.error("Speech recognition start error:", err);
+          setActiveRecordingField(null);
+        }
+      }
+    }
+  };
+
+  const renderMicButton = (field) => {
+    const isSupported = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+    const isRecording = activeRecordingField === field;
+
+    if (!isSupported) {
+      return (
+        <button
+          type="button"
+          title="Speech-to-text not supported in this browser"
+          style={{
+            position: "absolute",
+            right: "12px",
+            top: field === "topic" ? "50%" : "12px",
+            transform: field === "topic" ? "translateY(-50%)" : "none",
+            background: "none",
+            border: "none",
+            cursor: "not-allowed",
+            opacity: 0.3,
+            fontSize: "15px",
+            padding: 4,
+            zIndex: 5
+          }}
+          disabled
+        >
+          🔇
+        </button>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={() => handleToggleSpeech(field)}
+        title={isRecording ? "Listening... Click to stop" : "Click to speak / write with voice"}
+        className={isRecording ? "mic-pulsing" : ""}
+        style={{
+          position: "absolute",
+          right: "12px",
+          top: field === "topic" ? "50%" : "12px",
+          transform: field === "topic" ? "translateY(-50%)" : "none",
+          background: isRecording ? "#ef4444" : "none",
+          color: isRecording ? "white" : "#64748b",
+          border: "none",
+          borderRadius: "50%",
+          cursor: "pointer",
+          fontSize: "15px",
+          width: "28px",
+          height: "28px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "all 0.2s ease",
+          zIndex: 5
+        }}
+      >
+        {isRecording ? "🔴" : "🎙️"}
+      </button>
+    );
+  };
+
   const [activityCards, setActivityCards] = useState([]);
   const [lessonAssignments, setLessonAssignments] = useState([]);
   const [submissions, setSubmissions] = useState([]);
@@ -1254,7 +1425,32 @@ export default function TrainingAndClassroomManager({ user }) {
             {/* AI Drafting Assistant Notepad */}
             <div style={{ marginBottom: 16, padding: 12, background: "#fffbeb", border: "1px dashed #fbbf24", borderRadius: 10 }}>
               <label style={{ ...S.label, color: "#92400e", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span>AI Drafting Assistant ✨</span>
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span>AI Drafting Assistant ✨</span>
+                  <select
+                    value={speechLanguage}
+                    onChange={(e) => setSpeechLanguage(e.target.value)}
+                    style={{
+                      background: "white",
+                      border: "1.5px solid #fbbf24",
+                      borderRadius: 6,
+                      fontSize: 10,
+                      fontWeight: 600,
+                      color: "#92400e",
+                      padding: "2px 4px",
+                      cursor: "pointer",
+                      outline: "none"
+                    }}
+                    title="Voice Typing Language"
+                  >
+                    <option value="en-IN">🇮🇳 English (India)</option>
+                    <option value="hi-IN">🇮🇳 Hindi (हिंदी)</option>
+                    <option value="mr-IN">🇮🇳 Marathi (मराठी)</option>
+                    <option value="kn-IN">🇮🇳 Kannada (ಕನ್ನಡ)</option>
+                    <option value="te-IN">🇮🇳 Telugu (తెలుగు)</option>
+                    <option value="ta-IN">🇮🇳 Tamil (தமிழ்)</option>
+                  </select>
+                </span>
                 <button 
                   type="button"
                   onClick={handleDraftWithAIForTab} 
@@ -1268,22 +1464,44 @@ export default function TrainingAndClassroomManager({ user }) {
                   {isTabDrafting ? "Structuring..." : "Draft with AI ✨"}
                 </button>
               </label>
-              <textarea
-                style={{ ...S.input, height: 60, resize: "none", background: "white", border: "1px solid #fcd34d", marginTop: 6 }}
-                value={tabRoughNotes}
-                onChange={(e) => setTabRoughNotes(e.target.value)}
-                placeholder="Type rough, messy observations here (e.g. 'Raj subtracted correctly with blocks. Priya was sharing pencil.')"
-              />
+              <div style={{ position: "relative", marginTop: 6 }}>
+                <textarea
+                  rows={5}
+                  style={{ ...S.input, height: "auto", minHeight: "110px", resize: "vertical", background: "white", border: "1px solid #fcd34d", paddingRight: "44px" }}
+                  value={tabRoughNotes}
+                  onChange={(e) => setTabRoughNotes(e.target.value)}
+                  placeholder={activeRecordingField === "roughNotes" ? "Listening... Speak now." : "Type rough, messy observations here (e.g. 'Raj subtracted correctly with blocks. Priya was sharing pencil.')"}
+                />
+                {renderMicButton("roughNotes")}
+              </div>
             </div>
 
             <form onSubmit={handleAddReport}>
               <div style={{ marginBottom: 12 }}>
                 <label style={S.label}>Report Core Subject / Focus Topic</label>
-                <input required value={reportTopic} onChange={e => setReportTopic(e.target.value)} style={S.input} placeholder="e.g., Weekly Class Performance Log" />
+                <div style={{ position: "relative" }}>
+                  <input 
+                    required 
+                    value={reportTopic} 
+                    onChange={e => setReportTopic(e.target.value)} 
+                    style={{ ...S.input, paddingRight: "44px" }} 
+                    placeholder={activeRecordingField === "topic" ? "Listening... Speak now." : "e.g., Weekly Class Performance Log"} 
+                  />
+                  {renderMicButton("topic")}
+                </div>
               </div>
               <div style={{ marginBottom: 16 }}>
                 <label style={S.label}>Observation Summary Details</label>
-                <textarea required value={reportText} onChange={e => setReportText(e.target.value)} style={{ ...S.input, height: "110px", resize: "none" }} placeholder="Type detailed class notes or performance reports here..." />
+                <div style={{ position: "relative" }}>
+                  <textarea 
+                    required 
+                    value={reportText} 
+                    onChange={e => setReportText(e.target.value)} 
+                    style={{ ...S.input, height: "110px", resize: "none", paddingRight: "44px" }} 
+                    placeholder={activeRecordingField === "text" ? "Listening... Speak now." : "Type detailed class notes or performance reports here..."} 
+                  />
+                  {renderMicButton("text")}
+                </div>
               </div>
               <button type="submit" style={{ ...S.primaryBtn, width: "100%" }}>Save Report Entry</button>
             </form>
