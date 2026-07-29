@@ -1,3 +1,4 @@
+import { t } from "../services/i18n";
 import { useState, useEffect } from "react";
 import { getSystemHealth } from "../services/api";
 
@@ -14,7 +15,7 @@ export default function SystemHealthTab({ setToast }) {
   }, []);
 
   if (loading) return <div style={{ padding: 40, textAlign: "center", color: "#64748b" }}>🔄 Loading system health...</div>;
-  if (!health) return <div style={{ padding: 40, textAlign: "center", color: "#ef4444" }}>Failed to load system health</div>;
+  if (!health) return <div style={{ padding: 40, textAlign: "center", color: "#ef4444" }}>{t("Failed to load system health")}</div>;
 
   const statusColor = health.status === "healthy" ? "#16a34a" : "#ef4444";
   const cards = [
@@ -33,7 +34,7 @@ export default function SystemHealthTab({ setToast }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>🖥️ System Health</h2>
-          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748b" }}>Real-time system status and database statistics</p>
+          <p style={{ margin: "4px 0 0", fontSize: 13, color: "#64748b" }}>{t("Real-time system status and database statistics")}</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 10, background: statusColor + "15", border: `1px solid ${statusColor}40` }}>
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: statusColor }} />
@@ -58,11 +59,11 @@ export default function SystemHealthTab({ setToast }) {
           <h3 style={{ margin: "0 0 14px", fontSize: 15, fontWeight: 700 }}>🗄️ Database</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "#f8fafc", borderRadius: 8 }}>
-              <span style={{ fontSize: 13, color: "#64748b" }}>State</span>
+              <span style={{ fontSize: 13, color: "#64748b" }}>{t("State")}</span>
               <span style={{ fontSize: 13, fontWeight: 700, color: health.database?.state === "connected" ? "#16a34a" : "#ef4444" }}>{health.database?.state}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "#f8fafc", borderRadius: 8 }}>
-              <span style={{ fontSize: 13, color: "#64748b" }}>Database</span>
+              <span style={{ fontSize: 13, color: "#64748b" }}>{t("Database")}</span>
               <span style={{ fontSize: 13, fontWeight: 700 }}>{health.database?.name}</span>
             </div>
           </div>
@@ -71,19 +72,19 @@ export default function SystemHealthTab({ setToast }) {
           <h3 style={{ margin: "0 0 14px", fontSize: 15, fontWeight: 700 }}>⚡ Server</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "#f8fafc", borderRadius: 8 }}>
-              <span style={{ fontSize: 13, color: "#64748b" }}>Uptime</span>
+              <span style={{ fontSize: 13, color: "#64748b" }}>{t("Uptime")}</span>
               <span style={{ fontSize: 13, fontWeight: 700 }}>{Math.floor(health.uptime / 3600)}h {Math.floor((health.uptime % 3600) / 60)}m</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "#f8fafc", borderRadius: 8 }}>
-              <span style={{ fontSize: 13, color: "#64748b" }}>Memory Used</span>
+              <span style={{ fontSize: 13, color: "#64748b" }}>{t("Memory Used")}</span>
               <span style={{ fontSize: 13, fontWeight: 700 }}>{health.memory?.used} MB / {health.memory?.total} MB</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "#f8fafc", borderRadius: 8 }}>
-              <span style={{ fontSize: 13, color: "#64748b" }}>Node.js</span>
+              <span style={{ fontSize: 13, color: "#64748b" }}>{t("Node.js")}</span>
               <span style={{ fontSize: 13, fontWeight: 700 }}>{health.nodeVersion}</span>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 12px", background: "#f8fafc", borderRadius: 8 }}>
-              <span style={{ fontSize: 13, color: "#64748b" }}>Last Checked</span>
+              <span style={{ fontSize: 13, color: "#64748b" }}>{t("Last Checked")}</span>
               <span style={{ fontSize: 13, fontWeight: 700 }}>{new Date(health.timestamp).toLocaleTimeString()}</span>
             </div>
           </div>

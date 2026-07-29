@@ -14,6 +14,7 @@ async function request(path, options = {}) {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...options,
       headers,
+      cache: "no-store" // Prevent aggressive browser disk caching of GET requests
     });
   } catch (networkError) {
     console.error(
@@ -359,8 +360,9 @@ export function changeTeacherPassword(currentPassword, newPassword) {
   });
 }
 
-export function getTeacherProgress() {
-  return request("/api/teacher/progress");
+export function getTeacherProgress(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/api/teacher/progress${qs ? `?${qs}` : ""}`);
 }
 
 export function getTeacherGrades() {
@@ -462,8 +464,9 @@ export function askTeacherChatbot(message) {
 }
 
 // Course Management APIs
-export function getCourses() {
-  return request("/api/courses");
+export function getCourses(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/api/courses${qs ? `?${qs}` : ""}`);
 }
 
 export function getParentModules(params = {}) {
@@ -610,8 +613,9 @@ export function getTeacherCourseNotes(courseId) {
 
 
 // Lesson Plan APIs
-export function getLessonPlans() {
-  return request("/api/lesson-plans");
+export function getLessonPlans(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/api/lesson-plans${qs ? `?${qs}` : ""}`);
 }
 
 export function createLessonPlan(lessonData) {

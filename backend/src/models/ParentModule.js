@@ -31,6 +31,7 @@ const parentModuleSchema = new mongoose.Schema({
   year: { type: Number, default: 1 },
   objective: String,
   // Start: Snehal change
+  // DEPRECATED: use `translations` field instead
   titleTranslations: { hi: String, mr: String },
   objectiveTranslations: { hi: String, mr: String },
   // End: Snehal change

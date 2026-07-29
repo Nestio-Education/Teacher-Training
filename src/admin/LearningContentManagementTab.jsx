@@ -1,3 +1,4 @@
+import { t } from "../services/i18n";
 import { useState, useRef } from "react";
 import { Modal, S, Toast } from "../components/Shared";
 import { LC_BTN_GHOST, LC_BTN_PRIMARY, LC_CLOSE, LC_HDR, LC_MODAL, LC_OVERLAY } from "./adminStyles";
@@ -52,12 +53,12 @@ export default function LearningContentManagementTab({ contentItems, setContentI
   // ── Actions ──
   const togglePublish = id => {
     setContentItems(p => p.map(i => i.id === id ? { ...i, status: i.status === "published" ? "draft" : "published" } : i));
-    setToast({ msg: "Status updated!", type: "success" });
+    setToast({ msg: t("Status updated!"), type: "success" });
   };
  
   const deleteItem = id => {
     setContentItems(p => p.filter(i => i.id !== id));
-    setToast({ msg: "Content deleted.", type: "error" });
+    setToast({ msg: t("Content deleted."), type: "error" });
     if (detailItem?.id === id) setDetailItem(null);
   };
  
@@ -81,13 +82,13 @@ export default function LearningContentManagementTab({ contentItems, setContentI
   const savePrereq = (id, prereqId) => {
     setContentItems(p => p.map(i => i.id === id ? { ...i, prerequisite: prereqId === "" ? null : Number(prereqId) } : i));
     setPrereqEdit(null);
-    setToast({ msg: "Prerequisite saved!", type: "success" });
+    setToast({ msg: t("Prerequisite saved!"), type: "success" });
   };
  
   const saveDrip = (id, week, date) => {
     setContentItems(p => p.map(i => i.id === id ? { ...i, dripWeek: Number(week), releaseDate: date } : i));
     setDripEdit(null);
-    setToast({ msg: "Content schedule saved!", type: "success" });
+    setToast({ msg: t("Content schedule saved!"), type: "success" });
   };
  
   // ── Bulk upload simulation ──
@@ -207,8 +208,8 @@ export default function LearningContentManagementTab({ contentItems, setContentI
                   <div>
                     <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, color: "#374151", background: "#f9fafb", borderRadius: 10, padding: 14, border: "1px solid #f3f4f6", maxHeight: 320, overflowY: "auto", fontFamily: "inherit", lineHeight: 1.7 }}>{aiResult}</pre>
                     <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
-                      <button onClick={() => { navigator.clipboard?.writeText(aiResult); setToast({ msg: "Copied!", type: "success" }); }} style={{ ...LC_BTN_GHOST, flex: 1 }}>📋 Copy</button>
-                      <button onClick={() => { setAiModal(null); setAiResult(""); }} style={{ ...LC_BTN_PRIMARY, flex: 1 }}>Done</button>
+                      <button onClick={() => { navigator.clipboard?.writeText(aiResult); setToast({ msg: t("Copied!"), type: "success" }); }} style={{ ...LC_BTN_GHOST, flex: 1 }}>📋 Copy</button>
+                      <button onClick={() => { setAiModal(null); setAiResult(""); }} style={{ ...LC_BTN_PRIMARY, flex: 1 }}>{t("Done")}</button>
                     </div>
                   </div>
                 ) : (
@@ -270,7 +271,7 @@ export default function LearningContentManagementTab({ contentItems, setContentI
           <div style={{ background: "#f9fafb", borderRadius: 12, padding: 14, border: "1px solid #f3f4f6", marginBottom: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>🔒 Prerequisite Lesson</div>
-              <button onClick={() => setPrereqEdit(item.id)} style={LC_BTN_GHOST}>Edit</button>
+              <button onClick={() => setPrereqEdit(item.id)} style={LC_BTN_GHOST}>{t("Edit")}</button>
             </div>
             {prereqItem
               ? <div style={{ fontSize: 12, color: "#374151" }}>Must complete: <b>{prereqItem.title}</b> ({prereqItem.module})</div>
@@ -278,12 +279,12 @@ export default function LearningContentManagementTab({ contentItems, setContentI
             {prereqEdit === item.id && (
               <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
                 <select id="prereq-sel" defaultValue={item.prerequisite || ""} style={{ ...S.input, marginBottom: 0, flex: 1 }}>
-                  <option value="">No prerequisite</option>
+                  <option value="">{t("No prerequisite")}</option>
                   {contentItems.filter(i => i.id !== item.id).map(i => (
                     <option key={i.id} value={i.id}>{i.title} ({i.module})</option>
                   ))}
                 </select>
-                <button onClick={() => savePrereq(item.id, document.getElementById("prereq-sel").value)} style={LC_BTN_PRIMARY}>Save</button>
+                <button onClick={() => savePrereq(item.id, document.getElementById("prereq-sel").value)} style={LC_BTN_PRIMARY}>{t("Save")}</button>
                 <button onClick={() => setPrereqEdit(null)} style={LC_BTN_GHOST}>✕</button>
               </div>
             )}
@@ -293,7 +294,7 @@ export default function LearningContentManagementTab({ contentItems, setContentI
           <div style={{ background: "#f9fafb", borderRadius: 12, padding: 14, border: "1px solid #f3f4f6", marginBottom: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>📅 Content Drip Schedule</div>
-              <button onClick={() => setDripEdit(item.id)} style={LC_BTN_GHOST}>Edit</button>
+              <button onClick={() => setDripEdit(item.id)} style={LC_BTN_GHOST}>{t("Edit")}</button>
             </div>
             <div style={{ fontSize: 12, color: "#374151" }}>
               Release: <b>Week {item.dripWeek}</b>{item.releaseDate ? ` · Date: ${item.releaseDate}` : ""}
@@ -301,14 +302,14 @@ export default function LearningContentManagementTab({ contentItems, setContentI
             {dripEdit === item.id && (
               <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr auto auto", gap: 8, alignItems: "end" }}>
                 <div>
-                  <label style={S.label}>Batch Week</label>
+                  <label style={S.label}>{t("Batch Week")}</label>
                   <input id="drip-week" type="number" min="1" max="52" defaultValue={item.dripWeek} style={{ ...S.input, marginBottom: 0 }} />
                 </div>
                 <div>
-                  <label style={S.label}>Release Date</label>
+                  <label style={S.label}>{t("Release Date")}</label>
                   <input id="drip-date" type="date" defaultValue={item.releaseDate} style={{ ...S.input, marginBottom: 0 }} />
                 </div>
-                <button onClick={() => saveDrip(item.id, document.getElementById("drip-week").value, document.getElementById("drip-date").value)} style={{ ...LC_BTN_PRIMARY, height: 38 }}>Save</button>
+                <button onClick={() => saveDrip(item.id, document.getElementById("drip-week").value, document.getElementById("drip-date").value)} style={{ ...LC_BTN_PRIMARY, height: 38 }}>{t("Save")}</button>
                 <button onClick={() => setDripEdit(null)} style={{ ...LC_BTN_GHOST, height: 38 }}>✕</button>
               </div>
             )}
@@ -366,7 +367,7 @@ export default function LearningContentManagementTab({ contentItems, setContentI
               {aiLoading ? (
                 <div style={{ textAlign: "center", padding: 40 }}>
                   <div style={{ fontSize: 36, marginBottom: 12 }}>⚙️</div>
-                  <div style={{ fontSize: 13, color: "#6b7280", fontWeight: 600 }}>Processing...</div>
+                  <div style={{ fontSize: 13, color: "#6b7280", fontWeight: 600 }}>{t("Processing...")}</div>
                   <div style={{ marginTop: 16, height: 6, background: "#f3f4f6", borderRadius: 6, overflow: "hidden" }}>
                     <div style={{ height: "100%", width: "60%", background: "#f59e0b", borderRadius: 6 }} />
                   </div>
@@ -374,7 +375,7 @@ export default function LearningContentManagementTab({ contentItems, setContentI
               ) : aiResult ? (
                 <div>
                   <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, color: "#374151", background: "#f9fafb", borderRadius: 10, padding: 14, border: "1px solid #f3f4f6", maxHeight: 320, overflowY: "auto", fontFamily: "inherit", lineHeight: 1.7 }}>{aiResult}</pre>
-                  <button onClick={() => { setAiModal(null); setAiResult(""); }} style={{ ...LC_BTN_PRIMARY, width: "100%", marginTop: 14 }}>Done</button>
+                  <button onClick={() => { setAiModal(null); setAiResult(""); }} style={{ ...LC_BTN_PRIMARY, width: "100%", marginTop: 14 }}>{t("Done")}</button>
                 </div>
               ) : (
                 <div style={{ textAlign: "center", padding: 20 }}>
@@ -424,7 +425,7 @@ export default function LearningContentManagementTab({ contentItems, setContentI
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
-          <h1 style={S.pageTitle}>Learning Content Management</h1>
+          <h1 style={S.pageTitle}>{t("Learning Content Management")}</h1>
           <p style={S.pageSub}>Media library · Module organiser · AI content tools</p>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
@@ -456,7 +457,7 @@ export default function LearningContentManagementTab({ contentItems, setContentI
         <div style={{ background: "white", borderRadius: 14, padding: 16, border: "1px solid #f1f5f9", marginBottom: 18, boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a" }}>⬆ Upload Queue ({uploads.length} files)</div>
-            <button onClick={() => setUploads([])} style={LC_BTN_GHOST}>Clear All</button>
+            <button onClick={() => setUploads([])} style={LC_BTN_GHOST}>{t("Clear All")}</button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {uploads.map(u => (
@@ -517,16 +518,16 @@ export default function LearningContentManagementTab({ contentItems, setContentI
               <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", fontSize: 14 }}>🔍</span>
               <input
                 value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="Search title, course, format..."
+                placeholder={t("Search title, course, format...")}
                 style={{ ...S.input, paddingLeft: 34, marginBottom: 0 }}
               />
             </div>
             <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} style={{ ...S.input, marginBottom: 0, width: 140 }}>
-              <option value="all">All Types</option>
+              <option value="all">{t("All Types")}</option>
               {Object.keys(TYPE_ICON).map(t => <option key={t} value={t}>{TYPE_ICON[t]} {t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
             </select>
             <select value={courseFilter} onChange={e => setCourseFilter(e.target.value)} style={{ ...S.input, marginBottom: 0, width: 220 }}>
-              <option value="all">All Courses</option>
+              <option value="all">{t("All Courses")}</option>
               {allCourses.map(c => <option key={c} value={c}>{c.substring(0, 30)}</option>)}
             </select>
             {(search || typeFilter !== "all" || courseFilter !== "all") && (
@@ -578,7 +579,7 @@ export default function LearningContentManagementTab({ contentItems, setContentI
                     </td>
                     <td style={{ padding: "11px 14px" }}>
                       <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                        <button onClick={() => setDetailItem(item)} style={{ ...LC_BTN_GHOST, fontSize: 11, padding: "4px 9px" }}>View</button>
+                        <button onClick={() => setDetailItem(item)} style={{ ...LC_BTN_GHOST, fontSize: 11, padding: "4px 9px" }}>{t("View")}</button>
                         <button onClick={() => togglePublish(item.id)} style={{ ...LC_BTN_GHOST, fontSize: 11, padding: "4px 9px", color: item.status === "published" ? "#dc2626" : "#059669" }}>
                           {item.status === "published" ? "Unpublish" : "Publish"}
                         </button>
@@ -592,7 +593,7 @@ export default function LearningContentManagementTab({ contentItems, setContentI
             {filtered.length === 0 && (
               <div style={{ textAlign: "center", padding: 48, color: "#9ca3af" }}>
                 <div style={{ fontSize: 36, marginBottom: 8 }}>🗂️</div>
-                <div style={{ fontSize: 14, fontWeight: 700 }}>No content found</div>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{t("No content found")}</div>
               </div>
             )}
           </div>
@@ -646,11 +647,11 @@ export default function LearningContentManagementTab({ contentItems, setContentI
                             </div>
                           </div>
                           <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700, background: item.status === "published" ? "#d1fae5" : "#f3f4f6", color: item.status === "published" ? "#059669" : "#6b7280" }}>{item.status}</span>
-                          <button onClick={() => setDetailItem(item)} style={{ ...LC_BTN_GHOST, fontSize: 11, padding: "4px 9px" }}>Edit</button>
+                          <button onClick={() => setDetailItem(item)} style={{ ...LC_BTN_GHOST, fontSize: 11, padding: "4px 9px" }}>{t("Edit")}</button>
                         </div>
                       );
                     })}
-                    {items.length === 0 && <div style={{ textAlign: "center", padding: 16, fontSize: 12, color: "#9ca3af" }}>Drop content here</div>}
+                    {items.length === 0 && <div style={{ textAlign: "center", padding: 16, fontSize: 12, color: "#9ca3af" }}>{t("Drop content here")}</div>}
                   </div>
                 </div>
               ))}
@@ -687,7 +688,7 @@ export default function LearningContentManagementTab({ contentItems, setContentI
             {contentItems.filter(i => i.duplicate).length === 0 ? (
               <div style={{ textAlign: "center", padding: 24, color: "#9ca3af" }}>
                 <div style={{ fontSize: 28, marginBottom: 6 }}>✅</div>
-                <div style={{ fontSize: 12 }}>No duplicates found in library</div>
+                <div style={{ fontSize: 12 }}>{t("No duplicates found in library")}</div>
               </div>
             ) : (
               contentItems.filter(i => i.duplicate).map((item, i) => (

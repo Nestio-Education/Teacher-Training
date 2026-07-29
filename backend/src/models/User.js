@@ -19,7 +19,7 @@ const userSchema = new mongoose.Schema(
     assignedMentor: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     // end dnyaneshwari thorat
     photoUrl: String,
-    language: { type: String, enum: ["English", "Hindi", "Marathi", "Telugu", "Kannada", "Tamil"], default: "English" },
+    language: { type: String, enum: ["English", "Hindi", "Marathi", "Telugu", "Kannada", "Tamil", "Gujarati", "Malayalam"], default: "English" },
     preferredNotificationChannel: { type: String, enum: ["in_app", "email", "sms", "whatsapp", "all"], default: "in_app" },
     passwordChangedAt: Date,
     passwordExpiresAt: Date,

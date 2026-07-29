@@ -1,3 +1,4 @@
+import { t } from "../services/i18n";
 import { useState, useEffect } from "react";
 import { Modal, S, StatCard, StatusBadge, Toast } from "../components/Shared";
 // Start: Dnyaneshwari Thorat
@@ -34,7 +35,7 @@ export default function CertificateManagementTab({ setToast }) {
   const handleGenerate = async (e) => {
     e.preventDefault();
     if (!form.teacherId || !form.courseId) {
-      showToast({ msg: "Teacher and course are required.", type: "error" });
+      showToast({ msg: t("Teacher and course are required."), type: "error" });
       return;
     }
     try {
@@ -45,7 +46,7 @@ export default function CertificateManagementTab({ setToast }) {
         score: form.score ? Number(form.score) : undefined,
         googleFormUrl: form.googleFormUrl || undefined,
       });
-      showToast({ msg: "Certificate generated!", type: "success" });
+      showToast({ msg: t("Certificate generated!"), type: "success" });
       setGenerateModal(false);
       setForm({ teacherId: "", courseId: "", assignmentId: "", score: "", googleFormUrl: "" });
       loadData();
@@ -58,7 +59,7 @@ export default function CertificateManagementTab({ setToast }) {
     if (!window.confirm("Revoke this certificate? It will become invalid.")) return;
     try {
       await revokeCertificate(id);
-      showToast({ msg: "Certificate revoked.", type: "success" });
+      showToast({ msg: t("Certificate revoked."), type: "success" });
       loadData();
     } catch (err) {
       showToast({ msg: err.message, type: "error" });
@@ -85,7 +86,7 @@ export default function CertificateManagementTab({ setToast }) {
           <form onSubmit={handleGenerate}>
             <label style={S.label}>Teacher *</label>
             <select style={{ ...S.input, marginBottom: 12 }} value={form.teacherId} onChange={(e) => setForm({ ...form, teacherId: e.target.value })} required>
-              <option value="">Select teacher...</option>
+              <option value="">{t("Select teacher...")}</option>
               {teachers.map((t) => (
                 <option key={t._id || t.id} value={t._id || t.id}>{t.name} — {t.email}</option>
               ))}
@@ -93,17 +94,17 @@ export default function CertificateManagementTab({ setToast }) {
 
             <label style={S.label}>Course *</label>
             <select style={{ ...S.input, marginBottom: 12 }} value={form.courseId} onChange={(e) => setForm({ ...form, courseId: e.target.value })} required>
-              <option value="">Select course...</option>
+              <option value="">{t("Select course...")}</option>
               {courses.map((c) => (
                 <option key={c._id || c.id} value={c._id || c.id}>{c.title}</option>
               ))}
             </select>
 
             <label style={S.label}>Score (optional)</label>
-            <input style={{ ...S.input, marginBottom: 12 }} type="number" min="0" max="100" value={form.score} onChange={(e) => setForm({ ...form, score: e.target.value })} placeholder="e.g. 85" />
+            <input style={{ ...S.input, marginBottom: 12 }} type="number" min="0" max="100" value={form.score} onChange={(e) => setForm({ ...form, score: e.target.value })} placeholder={t("e.g. 85")} />
 
             <label style={S.label}>Google Form URL (for course completion submission)</label>
-            <input style={{ ...S.input, marginBottom: 20 }} value={form.googleFormUrl} onChange={(e) => setForm({ ...form, googleFormUrl: e.target.value })} placeholder="https://docs.google.com/forms/..." />
+            <input style={{ ...S.input, marginBottom: 20 }} value={form.googleFormUrl} onChange={(e) => setForm({ ...form, googleFormUrl: e.target.value })} placeholder={t("https://docs.google.com/forms/...")} />
 
             <button type="submit" style={{ ...S.primaryBtn, width: "100%" }}>🎓 Generate Certificate</button>
           </form>
@@ -112,7 +113,7 @@ export default function CertificateManagementTab({ setToast }) {
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
-          <h1 style={S.pageTitle}>Certificate Management</h1>
+          <h1 style={S.pageTitle}>{t("Certificate Management")}</h1>
           <p style={S.pageSub}>{issued} issued · {revoked} revoked</p>
         </div>
         <button onClick={() => setGenerateModal(true)} style={S.primaryBtn}>+ Generate Certificate</button>
@@ -128,8 +129,8 @@ export default function CertificateManagementTab({ setToast }) {
         {certificates.length === 0 ? (
           <div style={{ textAlign: "center", padding: 60, color: "#9ca3af" }}>
             <div style={{ fontSize: 40, marginBottom: 10 }}>🎓</div>
-            <div style={{ fontSize: 14, fontWeight: 700 }}>No certificates issued yet</div>
-            <div style={{ fontSize: 12, marginTop: 4 }}>Assign courses and generate certificates when teachers complete them</div>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>{t("No certificates issued yet")}</div>
+            <div style={{ fontSize: 12, marginTop: 4 }}>{t("Assign courses and generate certificates when teachers complete them")}</div>
           </div>
         ) : (
           certificates.map((cert) => {
