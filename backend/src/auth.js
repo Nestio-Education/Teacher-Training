@@ -11,7 +11,7 @@ export async function validatePasswordAgainstPolicy(password) {
       minLength: 8,
       requireUppercase: true,
       requireNumbers: true,
-      requireSpecial: false,
+      requireSpecial: true,
     };
     docs.forEach((doc) => {
       if (doc.key === "minLength") {
