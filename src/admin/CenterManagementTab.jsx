@@ -1,4 +1,5 @@
 // CenterManagementTab.jsx
+import { t } from "../services/i18n";
 import { useState, useEffect } from "react";
 import { Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
 import { getCenters, createCenter, updateCenter, deleteCenter, getAdminTeachers, updateTeacherProfile, getClasses, createClass, updateClass, deleteClass, getClassLogs, getCenterTeacherAssignments, validateCenterAssignments, getAdminMentors } from "../services/api";
@@ -319,7 +320,7 @@ function CenterFormModal({ center, allTeachers = [], onSave, onClose, setToast }
           ))}
         </select>
 
-        <label style={S.label}>Status</label>
+        <label style={S.label}>{t("Status")}</label>
         <select style={{ ...S.input, marginBottom: 16 }} value={form.status}
           onChange={e => setForm({ ...form, status: e.target.value })}>
           <option value="active">Active</option>
@@ -367,7 +368,7 @@ function CenterFormModal({ center, allTeachers = [], onSave, onClose, setToast }
                   />
                 </div>
                 <div>
-                  <label style={{ ...S.label, fontSize: 11 }}>Age Group</label>
+                  <label style={{ ...S.label, fontSize: 11 }}>{t("Age Group")}</label>
                   <input
                     style={{ ...S.input, fontSize: 12 }}
                     value={newClass.ageGroup}
@@ -378,7 +379,7 @@ function CenterFormModal({ center, allTeachers = [], onSave, onClose, setToast }
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
                 <div>
-                  <label style={{ ...S.label, fontSize: 11 }}>Curriculum Level</label>
+                  <label style={{ ...S.label, fontSize: 11 }}>{t("Curriculum Level")}</label>
                   <input
                     style={{ ...S.input, fontSize: 12 }}
                     value={newClass.curriculumLevel}
@@ -435,9 +436,7 @@ function CenterFormModal({ center, allTeachers = [], onSave, onClose, setToast }
                     padding: "6px 14px", borderRadius: 6, border: "none",
                     background: "#10b981", color: "white", fontSize: 12, fontWeight: 600,
                     cursor: "pointer"
-                  }}>
-                  Add Class
-                </button>
+                  }}>{t("Add Class")}</button>
                 <button type="button" onClick={() => setShowClassForm(false)}
                   style={{
                     padding: "6px 14px", borderRadius: 6, border: "1px solid #e5e7eb",
@@ -695,7 +694,7 @@ function CenterDetailModal({ center, allTeachers = [], onClose, setToast }) {
         </div>
         <div style={{ background: "#d1fae5", borderRadius: 10, padding: "12px", textAlign: "center", border: "1px solid #6ee7b7" }}>
           <div style={{ fontSize: 22, fontWeight: 800, color: "#1c1917" }}>{center.classes}</div>
-          <div style={{ fontSize: 11, color: "#065f46", fontWeight: 700 }}>Classes</div>
+          <div style={{ fontSize: 11, color: "#065f46", fontWeight: 700 }}>{t("Classes")}</div>
         </div>
       </div>
 
@@ -914,7 +913,7 @@ function AddClassModal({ centers, onSave, onClose, setToast }) {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
           <div>
-            <label style={S.label}>Age Group</label>
+            <label style={S.label}>{t("Age Group")}</label>
             <input
               style={S.input}
               value={form.ageGroup}
@@ -923,7 +922,7 @@ function AddClassModal({ centers, onSave, onClose, setToast }) {
             />
           </div>
           <div>
-            <label style={S.label}>Curriculum Level</label>
+            <label style={S.label}>{t("Curriculum Level")}</label>
             <input
               style={S.input}
               value={form.curriculumLevel}
@@ -1074,7 +1073,7 @@ function ClassManagementModal({ centerId, centerName, classes, onSave, onClose, 
                 />
               </div>
               <div>
-                <label style={S.label}>Age Group</label>
+                <label style={S.label}>{t("Age Group")}</label>
                 <input
                   style={S.input}
                   value={formData.ageGroup}
@@ -1085,7 +1084,7 @@ function ClassManagementModal({ centerId, centerName, classes, onSave, onClose, 
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
               <div>
-                <label style={S.label}>Curriculum Level</label>
+                <label style={S.label}>{t("Curriculum Level")}</label>
                 <input
                   style={S.input}
                   value={formData.curriculumLevel}
@@ -1128,11 +1127,11 @@ function ClassManagementModal({ centerId, centerName, classes, onSave, onClose, 
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e5e7eb" }}>
-              <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>Class Name</th>
-              <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>Age Group</th>
-              <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>Curriculum Level</th>
+              <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>{t("Class Name")}</th>
+              <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>{t("Age Group")}</th>
+              <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>{t("Curriculum Level")}</th>
               <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>Schedule</th>
-              <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>Capacity</th>
+              <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>{t("Capacity")}</th>
               <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>Actions</th>
             </tr>
           </thead>
@@ -1434,10 +1433,10 @@ export default function CenterManagementTab({ setToast }) {
         <div style={{ position: "absolute", top: -30, right: -30, width: 160, height: 160, borderRadius: "50%", background: "rgba(255,255,255,0.08)" }} />
         <div style={{ position: "relative", zIndex: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#fef3c7", letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 6 }}>Center Management</div>
-            <h1 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 4px", letterSpacing: "-0.5px" }}>Training Centers</h1>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#fef3c7", letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 6 }}>{t("Center Management")}</div>
+            <h1 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 4px", letterSpacing: "-0.5px" }}>{t("Training Centers")}</h1>
             <p style={{ fontSize: 12, margin: 0, color: "rgba(255,255,255,0.75)" }}>
-              {active} active · {inactive} inactive · {centers.length} total centers
+              {active} {t("active")} · {inactive} {t("inactive")} · {centers.length} {t("total centers")}
             </p>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
@@ -1450,7 +1449,7 @@ export default function CenterManagementTab({ setToast }) {
 
       {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 14, marginBottom: 20 }}>
-        <StatCard icon="🏫" label="Total Centers"  val={centers.length} color="#f59e0b" bg="#fef3c7" />
+        <StatCard icon="🏫" label={t("Total Centers")}  val={centers.length} color="#f59e0b" bg="#fef3c7" />
         <StatCard icon="✅" label="Active"          val={active}         color="#10b981" bg="#d1fae5" />
         <StatCard icon="🔕" label="Inactive"        val={inactive}       color="#6b7280" bg="#f3f4f6" />
         <StatCard icon="👩‍🏫" label="Total Teachers" val={totalTeachers}  color="#3b82f6" bg="#dbeafe" />
@@ -1591,7 +1590,7 @@ export default function CenterManagementTab({ setToast }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div>
             <h2 style={{ fontSize: 18, fontWeight: 800, color: "#1c1917", margin: "0 0 4px" }}>🏛️ All Classes</h2>
-            <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>Complete class directory across all centers with teacher assignments</p>
+            <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>{t("Complete class directory across all centers with teacher assignments")}</p>
           </div>
           <button onClick={() => setAddClassModal(true)} style={{ ...S.primaryBtn, whiteSpace: "nowrap", background: "#f59e0b", padding: "10px 20px", fontSize: 13, borderRadius: 10, fontWeight: 700 }}>
             + Add Class
@@ -1602,12 +1601,12 @@ export default function CenterManagementTab({ setToast }) {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e5e7eb" }}>
-                <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>Class Name</th>
+                <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>{t("Class Name")}</th>
                 <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>Center</th>
                 <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>Assigned Teacher</th>
-                <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>Age Group</th>
-                <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>Curriculum Level</th>
-                <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>Capacity</th>
+                <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>{t("Age Group")}</th>
+                <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>{t("Curriculum Level")}</th>
+                <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>{t("Capacity")}</th>
                 <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>Schedule</th>
                 <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 700, color: "#374151", whiteSpace: "nowrap" }}>Actions</th>
               </tr>

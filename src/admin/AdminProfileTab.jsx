@@ -1,3 +1,4 @@
+import { t } from "../services/i18n";
 import { useState, useEffect } from "react";
 import { getAdminProfile, updateAdminProfile, changeAdminPassword } from "../services/api";
 
@@ -39,13 +40,13 @@ export default function AdminProfileTab({ user, setToast, onUserUpdate }) {
 
   return (
     <div style={{ padding: 24, maxWidth: 700 }}>
-      <h2 style={{ margin: "0 0 24px", fontSize: 22, fontWeight: 700 }}>👤 Admin Profile</h2>
+      <h2 style={{ margin: "0 0 24px", fontSize: 22, fontWeight: 700 }}>{t("👤 Admin Profile")}</h2>
 
       <div style={{ background: "white", borderRadius: 14, padding: 24, border: "1px solid #e2e8f0", marginBottom: 20 }}>
-        <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700 }}>Profile Information</h3>
+        <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 700 }}>{t("Profile Information")}</h3>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b", marginBottom: 4, display: "block" }}>Full Name</label>
+            <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b", marginBottom: 4, display: "block" }}>{t("Full Name")}</label>
             <input value={profile.name} onChange={e => setProfile({...profile, name: e.target.value})}
               style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, boxSizing: "border-box" }} />
           </div>
@@ -60,8 +61,8 @@ export default function AdminProfileTab({ user, setToast, onUserUpdate }) {
               style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, boxSizing: "border-box" }} />
           </div>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b", marginBottom: 4, display: "block" }}>Photo URL</label>
-            <input value={profile.photoUrl} onChange={e => setProfile({...profile, photoUrl: e.target.value})} placeholder="https://..."
+            <label style={{ fontSize: 11, fontWeight: 600, color: "#64748b", marginBottom: 4, display: "block" }}>{t("Photo URL")}</label>
+            <input value={profile.photoUrl} onChange={e => setProfile({...profile, photoUrl: e.target.value})} placeholder={t("https://...")}
               style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13, boxSizing: "border-box" }} />
           </div>
         </div>

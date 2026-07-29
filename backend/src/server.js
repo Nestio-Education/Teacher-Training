@@ -18,6 +18,65 @@ import { generateOtp, storeOtp, verifyOtp, deleteOtp, OTP_TTL_MINUTES } from "./
 // Start: Dnyaneshwari Thorat
 import { sendNotification, broadcastNotification, CHANNELS, TEMPLATES, sendSms, sendWhatsApp } from "./services/notificationService.js";
 // End: Dnyaneshwari Thorat
+import { syncCourseTranslations, syncLessonPlanTranslations } from "./services/translationSync.js";
+
+function localizeCourse(courseDoc, lang) {
+  const c = courseDoc.toObject ? courseDoc.toObject() : courseDoc;
+  if (!lang || lang === 'en') return c;
+  if (!c.translations || !c.translations[lang]) return c;
+  
+  const trans = c.translations[lang];
+  const ttitle = getTransText(trans.title);
+  const tdesc = getTransText(trans.description);
+  const tobj = getTransText(trans.objectives);
+  if (ttitle) c.title = ttitle;
+  if (tdesc) c.description = tdesc;
+  if (tobj) c.objectives = tobj;
+
+  if (c.modules) {
+    c.modules = c.modules.map((m, idx) => {
+      const mtitle = getTransText(trans[`module_${idx}_title`]);
+      const mdesc = getTransText(trans[`module_${idx}_description`]);
+      if (mtitle) m.title = mtitle;
+      if (mdesc) m.description = mdesc;
+      if (m.contents) {
+        m.contents = m.contents.map(ct => {
+          if (ct.translations && ct.translations[lang]) {
+            const ctt = ct.translations[lang];
+            const cttitle = getTransText(ctt.title);
+            const ctdesc = getTransText(ctt.description);
+            if (cttitle) ct.title = cttitle;
+            if (ctdesc) ct.description = ctdesc;
+          }
+          return ct;
+        });
+      }
+      return m;
+    });
+  }
+  return c;
+}
+
+function getTransText(val) {
+  if (!val) return null;
+  if (typeof val === 'string') return val;
+  if (typeof val === 'object' && val.text) return val.text;
+  return null;
+}
+
+function localizeLessonPlan(lpDoc, lang) {
+  const lp = lpDoc.toObject ? lpDoc.toObject() : lpDoc;
+  if (!lang || lang === 'en') return lp;
+  if (!lp.translations || !lp.translations[lang]) return lp;
+
+  const trans = lp.translations[lang];
+  ['title', 'objectives', 'instructions', 'activities', 'resources'].forEach(f => {
+    const text = getTransText(trans[f]);
+    if (text) lp[f] = text;
+  });
+  return lp;
+}
+
 import { autoSeed } from "./auto-seed.js";
 import { generateAICourse } from "./services/aiCourseGenerator.js";
 import { generateAILessonPlan } from "./services/aiLessonPlanner.js";
@@ -1613,7 +1672,7 @@ app.get("/api/courses", requireAuth, async (req, res, next) => {
       const decoratedCourses = courses.map((course) => {
         const stats = statsByCourseId.get(String(course._id)) || { assignedCount: 0, completedCount: 0, completion: 0 };
         return {
-          ...course.toObject(),
+          ...localizeCourse(course, req.query.lang),
           ...stats,
         };
       });
@@ -1631,7 +1690,13 @@ app.get("/api/courses", requireAuth, async (req, res, next) => {
       .populate("course")
       .sort({ createdAt: -1 });
 
-    res.json({ courses: assignments });
+    const localizedAssignments = assignments.map((a) => {
+      const obj = a.toObject();
+      if (obj.course) obj.course = localizeCourse(obj.course, req.query.lang);
+      return obj;
+    });
+
+    res.json({ courses: localizedAssignments });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
   }
@@ -2781,7 +2846,7 @@ app.get("/api/teacher/lesson-plans", requireAuth, requireRole("teacher", "fellow
       })
       .sort({ assignedDate: -1 });
 
-    res.json({ lessonPlans });
+    res.json({ lessonPlans: lessonPlans.map(lp => localizeLessonPlan(lp, req.query.lang)) });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
   }
@@ -3333,6 +3398,7 @@ app.patch("/api/courses/:id", requireAuth, requireRole("admin"), async (req, res
     requireObjectId(req.params.id, "course id");
     const course = await Course.findByIdAndUpdate(req.params.id, normalizeCoursePayload(req.body, req.user.id), { new: true });
     if (!course) return res.status(404).json({ message: "Course not found." });
+    syncCourseTranslations(course._id).catch(console.error);
     res.json({ course });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
@@ -3678,6 +3744,8 @@ app.post("/api/courses/generate-from-ai", requireAuth, requireRole("admin"), asy
       notes,
       req.user.id
     );
+    // Kick off background translation for the newly generated AI course
+    syncCourseTranslations(saved.course._id).catch(console.error);
     console.log("[ai-course] generate_and_save_success", JSON.stringify({ courseId: saved.course._id, notes: saved.notes.length }));
     res.status(201).json(saved);
   } catch (error) {
@@ -3738,7 +3806,7 @@ app.get("/api/teacher/courses/:courseId/notes", requireAuth, requireRole("teache
 app.get("/api/lesson-plans", requireAuth, async (req, res, next) => {
   try {
     const lessonPlans = await LessonPlan.find().populate("course", "title category level");
-    res.json({ lessonPlans });
+    res.json({ lessonPlans: lessonPlans.map(lp => localizeLessonPlan(lp, req.query.lang)) });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
   }
@@ -3747,6 +3815,7 @@ app.get("/api/lesson-plans", requireAuth, async (req, res, next) => {
 app.post("/api/lesson-plans", requireAuth, requireRole("admin"), async (req, res, next) => {
   try {
     const lessonPlan = await LessonPlan.create({ ...req.body, createdBy: req.user.id });
+    syncLessonPlanTranslations(lessonPlan._id).catch(console.error);
     res.status(201).json({ lessonPlan });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
@@ -3758,6 +3827,7 @@ app.patch("/api/lesson-plans/:id", requireAuth, requireRole("admin"), async (req
     requireObjectId(req.params.id, "lesson plan id");
     const lessonPlan = await LessonPlan.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!lessonPlan) return res.status(404).json({ message: "Lesson plan not found." });
+    syncLessonPlanTranslations(lessonPlan._id).catch(console.error);
     res.json({ lessonPlan });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
@@ -3927,6 +3997,11 @@ app.post("/api/lesson-plans/auto-publish", requireAuth, requireRole("admin"), as
           }
         }
       }
+    }
+
+    // Kick off translation syncs for created plans
+    for (const plan of createdPlans) {
+      syncLessonPlanTranslations(plan._id).catch(console.error);
     }
 
     res.status(201).json({
@@ -4938,7 +5013,7 @@ app.post("/api/admin/settings/test-sms", requireAuth, requireRole("admin"), asyn
 // ==========================================
 app.post("/api/admin/settings/test-whatsapp", requireAuth, requireRole("admin"), async (req, res, next) => {
   try {
-    const { to } = req.body;
+    const to = req.body.to || req.body.phone;
     if (!to) {
       return res.status(400).json({ success: false, message: "Phone number is required." });
     }

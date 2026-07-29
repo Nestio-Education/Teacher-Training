@@ -1,3 +1,4 @@
+import { t, getCurrentLanguageCode, LANG_CHANGE_EVENT } from "../services/i18n";
 import { useState, useEffect } from "react";
 import { Modal, S, SearchBar, StatCard } from "../components/Shared";
 import {
@@ -583,7 +584,7 @@ function CourseTrackingModal({ course, assignments = [], assessmentResults = [],
           <div style={{ fontSize: 22, fontWeight: 900, color: avgScore === null ? "#9ca3af" : avgScore >= 75 ? "#10b981" : avgScore >= 50 ? "#f59e0b" : "#ef4444" }}>
             {avgScore === null ? "—" : `${avgScore}%`}
           </div>
-          <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>{courseResults.length} attempt(s) recorded</div>
+          <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>{courseResults.length} {t("attempt(s)")} recorded</div>
         </div>
       </div>
 
@@ -645,13 +646,19 @@ export default function CurriculumTrainingTab({ setToast }) {
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  /* Each call is caught individually so one failing endpoint (e.g. the
-     assessment-results route not being live yet) never blocks the rest
-     of the page — courses/assignments/teachers still load normally. */
-  const loadCourses = () => {
+  useEffect(() => {
+    const handleLangChange = () => {
+      // Small timeout to allow localStorage to update before fetching
+      setTimeout(loadData, 50);
+    };
+    window.addEventListener(LANG_CHANGE_EVENT, handleLangChange);
+    return () => window.removeEventListener(LANG_CHANGE_EVENT, handleLangChange);
+  }, []);
+
+  const loadData = () => {
     setLoading(true);
     Promise.all([
-      getCourses().catch((err) => { console.error("getCourses failed:", err); return { courses: [] }; }),
+      getCourses({ lang: getCurrentLanguageCode() }).catch((err) => { console.error("getCourses failed:", err); return { courses: [] }; }),
       getCourseAssignments().catch((err) => { console.error("getCourseAssignments failed:", err); return { assignments: [] }; }),
       getAdminTeachers().catch((err) => { console.error("getAdminTeachers failed:", err); return { teachers: [] }; }),
       getAdminAssessmentResults().catch((err) => { console.error("getAdminAssessmentResults failed:", err); return { results: [] }; }),
@@ -669,7 +676,7 @@ export default function CurriculumTrainingTab({ setToast }) {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadCourses(); }, []); // eslint-disable-line
+  useEffect(() => { loadData(); }, []); // eslint-disable-line
 
   const [uploading, setUploading] = useState(false);
 
@@ -701,7 +708,7 @@ export default function CurriculumTrainingTab({ setToast }) {
       }
       const data = await res.json();
       setToast({ msg: "Course & Assessment generated successfully!", type: "success" });
-      loadCourses();
+      loadData();
     } catch (err) {
       setToast({ msg: err.message, type: "error" });
     } finally {
@@ -721,7 +728,7 @@ export default function CurriculumTrainingTab({ setToast }) {
   const handleDelete = (course) => {
     if (!window.confirm(`Delete "${course.title}"? This cannot be undone.`)) return;
     deleteCourse(course.id)
-      .then(() => { setToast({ msg: "Course deleted.", type: "success" }); loadCourses(); })
+      .then(() => { setToast({ msg: "Course deleted.", type: "success" }); loadData(); })
       .catch((err) => setToast({ msg: err.message, type: "error" }));
   };
 
@@ -744,7 +751,7 @@ export default function CurriculumTrainingTab({ setToast }) {
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
       {libraryModal && (
-        <CourseLibraryPickerModal onClose={() => setLibraryModal(false)} onCreated={loadCourses} setToast={setToast} />
+        <CourseLibraryPickerModal onClose={() => setLibraryModal(false)} onCreated={loadData} setToast={setToast} />
       )}
       {previewModal && selectedCourse && (
         <NotesPreviewModal course={selectedCourse} onClose={() => { setPreviewModal(false); setSelectedCourse(null); }} />
@@ -758,13 +765,13 @@ export default function CurriculumTrainingTab({ setToast }) {
       )}
       {assignModal && selectedCourse && (
         <AssignCourseModal course={selectedCourse} teachers={teachers}
-          onClose={() => { setAssignModal(false); setSelectedCourse(null); }} onAssigned={loadCourses} setToast={setToast} />
+          onClose={() => { setAssignModal(false); setSelectedCourse(null); }} onAssigned={loadData} setToast={setToast} />
       )}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
-          <h1 style={S.pageTitle}>Training & Curriculum</h1>
-          <p style={S.pageSub}>{courses.length} courses · {overallPct}% notes completion · {overallAvgScore}% avg assessment score</p>
+          <h1 style={S.pageTitle}>{t("Training & Curriculum")}</h1>
+          <p style={S.pageSub}>{courses.length} {t("courses")} · {overallPct}% {t("notes completion")} · {overallAvgScore}% {t("avg assessment score")}</p>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <div style={{ position: "relative" }}>
@@ -790,22 +797,22 @@ export default function CurriculumTrainingTab({ setToast }) {
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 14, marginBottom: 20 }}>
-        <StatCard icon="📚" label="Total Courses" val={courses.length} color="#f59e0b" bg="#fef3c7" />
-        <StatCard icon="📖" label="Notes Completion" val={`${overallPct}%`} color="#10b981" bg="#d1fae5" />
-        <StatCard icon="📝" label="Avg Assessment Score" val={`${overallAvgScore}%`} color="#8b5cf6" bg="#ede9fe" />
-        <StatCard icon="👥" label="Total Assignments" val={totalAssigned} color="#3b82f6" bg="#dbeafe" />
-        <StatCard icon="✅" label="Assessments Taken" val={assessmentResults.length} color="#06b6d4" bg="#cffafe" />
+        <StatCard icon="📚" label={t("Total Courses")} val={courses.length} color="#f59e0b" bg="#fef3c7" />
+        <StatCard icon="📖" label={t("Notes Completion")} val={`${overallPct}%`} color="#10b981" bg="#d1fae5" />
+        <StatCard icon="📝" label={t("Avg Assessment Score")} val={`${overallAvgScore}%`} color="#8b5cf6" bg="#ede9fe" />
+        <StatCard icon="👥" label={t("Total Assignments")} val={totalAssigned} color="#3b82f6" bg="#dbeafe" />
+        <StatCard icon="✅" label={t("Assessments Taken")} val={assessmentResults.length} color="#06b6d4" bg="#cffafe" />
       </div>
 
       <div style={{ background: "white", borderRadius: 14, padding: "14px 18px", border: "1px solid #f1f5f9", marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ flex: 1, minWidth: 200 }}>
-          <SearchBar value={search} onChange={setSearch} placeholder="Search courses..." />
+          <SearchBar value={search} onChange={setSearch} placeholder={t("Search courses...")} />
         </div>
         <select style={{ ...S.input, width: 200, marginBottom: 0 }} value={catFilter} onChange={(e) => setCatFilter(e.target.value)}>
-          {CATEGORIES.map((c) => <option key={c} value={c}>{c === "all" ? "All Categories" : c}</option>)}
+          {CATEGORIES.map((c) => <option key={c} value={c}>{c === "all" ? t("All Categories") : c}</option>)}
         </select>
         <select style={{ ...S.input, width: 150, marginBottom: 0 }} value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)}>
-          <option value="all">All Levels</option>
+          <option value="all">{t("All Levels")}</option>
           <option>Beginner</option><option>Intermediate</option><option>Advanced</option>
         </select>
         {(catFilter !== "all" || levelFilter !== "all" || search) && (
@@ -813,7 +820,7 @@ export default function CurriculumTrainingTab({ setToast }) {
         )}
       </div>
 
-      <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 12 }}>Showing {filtered.length} of {courses.length} courses</div>
+      <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 12 }}>{t("Showing")} {filtered.length} {t("of")} {courses.length} {t("courses")}</div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(320px,1fr))", gap: 20 }}>
         {filtered.map((c) => {
@@ -833,13 +840,13 @@ export default function CurriculumTrainingTab({ setToast }) {
                   {isStale ? (
                     <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700, background: "#fee2e2", color: "#dc2626" }}>⚠️ No topics</span>
                   ) : (
-                    <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700, background: "#f3f4f6", color: "#6b7280" }}>📖 {topicCount} topics</span>
+                    <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700, background: "#f3f4f6", color: "#6b7280" }}>📖 {topicCount} {t("topics")}</span>
                   )}
                 </div>
                 <div style={{ fontSize: 14, fontWeight: 800, color: "#1c1917", marginBottom: 6, lineHeight: 1.4 }}>{c.title}</div>
                 <div style={{ display: "flex", gap: 12, fontSize: 11, color: "#9ca3af", marginBottom: 8 }}>
                   <span>⏱️ {c.duration}</span>
-                  <span>👥 {c.assignedCount} assigned</span>
+                  <span>👥 {c.assignedCount} {t("assigned")}</span>
                 </div>
                 <p style={{ fontSize: 12, color: "#6b7280", margin: "0 0 10px", lineHeight: 1.5 }}>
                   {c.description.length > 110 ? c.description.substring(0, 110) + "..." : c.description}
@@ -849,22 +856,22 @@ export default function CurriculumTrainingTab({ setToast }) {
               {/* Reading completion + assessment score */}
               <div style={{ padding: "0 18px 12px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontWeight: 700, color: "#64748b", marginBottom: 3 }}>
-                  <span>NOTES READ</span><span>{pct}%</span>
+                  <span>{t("NOTES READ")}</span><span>{pct}%</span>
                 </div>
                 <div style={{ height: 6, background: "#f3f4f6", borderRadius: 4, overflow: "hidden", marginBottom: 8 }}>
                   <div style={{ height: "100%", width: `${pct}%`, background: pct >= 75 ? "#10b981" : pct >= 40 ? "#f59e0b" : "#ef4444", borderRadius: 4 }} />
                 </div>
                 <div style={{ fontSize: 11, color: "#6b7280" }}>
                   📝 Avg assessment: <b style={{ color: avgScore === null ? "#9ca3af" : avgScore >= 75 ? "#10b981" : "#f59e0b" }}>{avgScore === null ? "—" : `${avgScore}%`}</b>
-                  {" · "}{courseResults.length} attempt(s)
+                  {" · "}{courseResults.length} {t("attempt(s)")}
                 </div>
               </div>
 
               <div style={{ padding: "0 18px 16px", display: "flex", gap: 6, flexWrap: "wrap" }}>
-                <button onClick={() => { setSelectedCourse(c); setPreviewModal(true); }} style={{ ...S.tblBtn, flex: 1, color: "#7c3aed", borderColor: "#c4b5fd" }}>📖 Preview Notes</button>
-                <button onClick={() => { setSelectedCourse(c); setAssessmentModal(true); }} style={{ ...S.tblBtn, flex: 1, color: "#4f46e5", borderColor: "#c7d2fe" }}>📝 Assessment</button>
-                <button onClick={() => { setSelectedCourse(c); setAssignModal(true); }} disabled={isStale} style={{ ...S.tblBtn, flex: 1, color: isStale ? "#9ca3af" : "#059669", borderColor: isStale ? "#e5e7eb" : "#6ee7b7", cursor: isStale ? "not-allowed" : "pointer" }}>📋 Assign</button>
-                <button onClick={() => { setSelectedCourse(c); setTrackingModal(true); }} style={{ ...S.tblBtn, flex: 1, color: "#2563eb", borderColor: "#bfdbfe" }}>📊 Track</button>
+                <button onClick={() => { setSelectedCourse(c); setPreviewModal(true); }} style={{ ...S.tblBtn, flex: 1, color: "#7c3aed", borderColor: "#c4b5fd" }}>📖 {t("Preview Notes")}</button>
+                <button onClick={() => { setSelectedCourse(c); setAssessmentModal(true); }} style={{ ...S.tblBtn, flex: 1, color: "#4f46e5", borderColor: "#c7d2fe" }}>📝 {t("Assessment")}</button>
+                <button onClick={() => { setSelectedCourse(c); setAssignModal(true); }} disabled={isStale} style={{ ...S.tblBtn, flex: 1, color: isStale ? "#9ca3af" : "#059669", borderColor: isStale ? "#e5e7eb" : "#6ee7b7", cursor: isStale ? "not-allowed" : "pointer" }}>📋 {t("Assign")}</button>
+                <button onClick={() => { setSelectedCourse(c); setTrackingModal(true); }} style={{ ...S.tblBtn, flex: 1, color: "#2563eb", borderColor: "#bfdbfe" }}>📊 {t("Track")}</button>
                 <button onClick={() => handleDelete(c)} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5" }}>🗑️</button>
               </div>
             </div>

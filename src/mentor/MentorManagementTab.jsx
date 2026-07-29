@@ -20,37 +20,37 @@ const getPhotoUrl = (photo) => {
   return `${API_BASE_URL}${path}`;
 };
 
-const mapMentorFromApi = (t) => ({
-  id: t._id || t.id,
-  name: t.name,
-  email: t.email,
-  phone: t.phone || "",
-  subject: t.mentorProfile?.subject || "N/A",
-  address: t.mentorProfile?.address || "N/A",
-  qualification: t.mentorProfile?.qualification || "N/A",
-  experience: t.mentorProfile?.experience || "N/A",
-  status: t.status === "blocked" ? "blocked" : (t.status || "pending"),
-  joined: t.createdAt ? new Date(t.createdAt).toLocaleDateString("en-IN") : "—",
-  attendance: t.mentorProfile?.performanceRating ? Math.round(t.mentorProfile.performanceRating * 20) : 0,
-  classes: t.mentorProfile?.lessonsCompleted || 0,
-  assignedCenter: t.mentorProfile?.center?.name || "Not Assigned",
-  centerId: t.mentorProfile?.center?._id || t.mentorProfile?.center || "",
-  classId: (t.mentorProfile?.classes || [])[0]?._id || "",
-  classIds: (t.mentorProfile?.classes || []).map(c => c?._id || c),
-  classNames: (t.mentorProfile?.classes || []).map(c => c?.name || "—"),
-  batch: (t.mentorProfile?.classes || []).map(c => c?.name).filter(Boolean).join(", ") || "—",
-  // NEW: resolve real profile photo from any common API shape (including t.photoUrl from User model)
-  photoUrl: t.photoUrl ? getPhotoUrl(t.photoUrl) : getPhotoUrl(
-    t.mentorProfile?.profilePhoto ||
-    t.mentorProfile?.photo ||
-    t.profilePhoto ||
-    t.photo ||
+const mapMentorFromApi = (tr) => ({
+  id: tr._id || tr.id,
+  name: tr.name,
+  email: tr.email,
+  phone: tr.phone || "",
+  subject: tr.mentorProfile?.subject || "N/A",
+  address: tr.mentorProfile?.address || "N/A",
+  qualification: tr.mentorProfile?.qualification || "N/A",
+  experience: tr.mentorProfile?.experience || "N/A",
+  status: tr.status === "blocked" ? "blocked" : (tr.status || "pending"),
+  joined: tr.createdAt ? new Date(tr.createdAt).toLocaleDateString("en-IN") : "—",
+  attendance: tr.mentorProfile?.performanceRating ? Math.round(tr.mentorProfile.performanceRating * 20) : 0,
+  classes: tr.mentorProfile?.lessonsCompleted || 0,
+  assignedCenter: tr.mentorProfile?.center?.name || "Not Assigned",
+  centerId: tr.mentorProfile?.center?._id || tr.mentorProfile?.center || "",
+  classId: (tr.mentorProfile?.classes || [])[0]?._id || "",
+  classIds: (tr.mentorProfile?.classes || []).map(c => c?._id || c),
+  classNames: (tr.mentorProfile?.classes || []).map(c => c?.name || "—"),
+  batch: (tr.mentorProfile?.classes || []).map(c => c?.name).filter(Boolean).join(", ") || "—",
+  // NEW: resolve real profile photo from any common API shape (including tr.photoUrl from User model)
+  photoUrl: tr.photoUrl ? getPhotoUrl(tr.photoUrl) : getPhotoUrl(
+    tr.mentorProfile?.profilePhoto ||
+    tr.mentorProfile?.photo ||
+    tr.profilePhoto ||
+    tr.photo ||
     null
   ),
-  bio: t.mentorProfile?.bio || t.bio || "",
-  dob: t.mentorProfile?.dob ? new Date(t.mentorProfile.dob).toLocaleDateString("en-IN") : "",
-  gender: t.mentorProfile?.gender || "",
-  languages: t.mentorProfile?.languages || [],
+  bio: tr.mentorProfile?.bio || tr.bio || "",
+  dob: tr.mentorProfile?.dob ? new Date(tr.mentorProfile.dob).toLocaleDateString("en-IN") : "",
+  gender: tr.mentorProfile?.gender || "",
+  languages: tr.mentorProfile?.languages || [],
 });
 
 /* ─── Reusable mentor avatar with graceful fallback ─── */
@@ -648,12 +648,12 @@ export default function MentorManagementTab({ setToast }) {
 
   useEffect(() => { loadData(); }, []);
 
-  const filtered = mentors.filter(t => {
+  const filtered = mentors.filter(tr => {
     const q = search.toLowerCase();
-    return (t.name.toLowerCase().includes(q) || t.email.toLowerCase().includes(q) ||
-      t.phone.includes(q) || (t.subject || "").toLowerCase().includes(q))
-      && (statusFilter === "all" || t.status === statusFilter)
-      && (centerFilter === "all" || t.centerId === centerFilter);
+    return (tr.name.toLowerCase().includes(q) || tr.email.toLowerCase().includes(q) ||
+      tr.phone.includes(q) || (tr.subject || "").toLowerCase().includes(q))
+      && (statusFilter === "all" || tr.status === statusFilter)
+      && (centerFilter === "all" || tr.centerId === centerFilter);
   });
 
   const handleAdd = async (e) => {
@@ -730,12 +730,12 @@ export default function MentorManagementTab({ setToast }) {
 
       {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 14, marginBottom: 20 }}>
-        <StatCard icon="👩‍🏫" label="Total Registered" val={mentors.length}  color="#3b82f6" bg="#dbeafe" />
-        <StatCard icon="✅" label="Approved"            val={mentors.filter(t=>t.status==="approved").length} color="#10b981" bg="#d1fae5" />
-        <StatCard icon="⏳" label="Pending Approval"   val={pending}          color="#f59e0b" bg="#fef3c7" />
-        <StatCard icon="🚫" label="Rejected/Blocked"   val={mentors.filter(t=>t.status==="rejected"||t.status==="blocked").length} color="#ef4444" bg="#fee2e2" />
+        <StatCard icon="👩‍🏫" label={t("Total Registered")} val={mentors.length}  color="#3b82f6" bg="#dbeafe" />
+        <StatCard icon="✅" label={t("Approved")}            val={mentors.filter(t=>t.status==="approved").length} color="#10b981" bg="#d1fae5" />
+        <StatCard icon="⏳" label={t("Pending Approval")}   val={pending}          color="#f59e0b" bg="#fef3c7" />
+        <StatCard icon="🚫" label={t("Rejected/Blocked")}   val={mentors.filter(t=>t.status==="rejected"||t.status==="blocked").length} color="#ef4444" bg="#fee2e2" />
         {/* NEW: how many have uploaded a real photo */}
-        <StatCard icon="📷" label="Photos Uploaded"    val={mentors.filter(t=>t.photoUrl).length} color="#8b5cf6" bg="#ede9fe" />
+        <StatCard icon="📷" label={t("Photos Uploaded")}    val={mentors.filter(t=>t.photoUrl).length} color="#8b5cf6" bg="#ede9fe" />
       </div>
 
       {/* Filters */}
@@ -767,32 +767,32 @@ export default function MentorManagementTab({ setToast }) {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((t, i) => (
-              <tr key={t.id} style={{ borderBottom: "1px solid #f9fafb", background: i % 2 === 0 ? "white" : "#fafafa" }}>
+            {filtered.map((tr, i) => (
+              <tr key={tr.id} style={{ borderBottom: "1px solid #f9fafb", background: i % 2 === 0 ? "white" : "#fafafa" }}>
                 <td style={{ padding: "12px 14px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     {/* NEW: uses real photo when available */}
                     <div style={{ position: "relative", flexShrink: 0 }}>
-                      <MentorAvatar mentor={t} size={38} borderColor={t.photoUrl ? "#f59e0b" : "#e2e8f0"} borderWidth={t.photoUrl ? 2 : 1} />
+                      <MentorAvatar mentor={t} size={38} borderColor={tr.photoUrl ? "#f59e0b" : "#e2e8f0"} borderWidth={tr.photoUrl ? 2 : 1} />
                       {/* tiny camera badge if real photo */}
-                      {t.photoUrl && (
+                      {tr.photoUrl && (
                         <span style={{ position: "absolute", bottom: -1, right: -1, background: "#10b981",
                           borderRadius: "50%", width: 13, height: 13, display: "flex", alignItems: "center",
                           justifyContent: "center", fontSize: 7, border: "1.5px solid white" }}>📷</span>
                       )}
                     </div>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1c1917" }}>{t.name}</div>
-                      <div style={{ fontSize: 11, color: "#9ca3af" }}>{t.email}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1c1917" }}>{tr.name}</div>
+                      <div style={{ fontSize: 11, color: "#9ca3af" }}>{tr.email}</div>
                     </div>
                   </div>
                 </td>
-                <td style={{ padding: "12px 14px", fontSize: 12, color: "#374151" }}>{t.phone || "—"}</td>
+                <td style={{ padding: "12px 14px", fontSize: 12, color: "#374151" }}>{tr.phone || "—"}</td>
                 <td style={{ padding: "12px 14px", fontSize: 12, color: "#374151" }}>
-                  <div>{t.assignedCenter}</div>
-                  {t.classNames?.length > 0 ? (
+                  <div>{tr.assignedCenter}</div>
+                  {tr.classNames?.length > 0 ? (
                     <div style={{ fontSize: 10, color: "#10b981", marginTop: 2, fontWeight: 600 }}>
-                      {t.classNames.length} class{t.classNames.length > 1 ? "es" : ""} assigned
+                      {tr.classNames.length} class{tr.classNames.length > 1 ? "es" : ""} assigned
                     </div>
                   ) : (
                     <div style={{ fontSize: 10, color: "#dc2626", marginTop: 2, fontWeight: 600 }}>
@@ -800,33 +800,33 @@ export default function MentorManagementTab({ setToast }) {
                     </div>
                   )}
                 </td>
-                <td style={{ padding: "12px 14px", fontSize: 12, color: "#9ca3af" }}>{t.joined}</td>
-                <td style={{ padding: "12px 14px" }}><StatusBadge status={t.status} /></td>
+                <td style={{ padding: "12px 14px", fontSize: 12, color: "#9ca3af" }}>{tr.joined}</td>
+                <td style={{ padding: "12px 14px" }}><StatusBadge status={tr.status} /></td>
                 <td style={{ padding: "12px 14px" }}>
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                    <button onClick={() => setSelected(t)}
+                    <button onClick={() => setSelected(tr)}
                       style={{ ...S.tblBtn, color: "#3b82f6", borderColor: "#93c5fd" }}>👁 View</button>
-                    {t.status === "pending" && (
+                    {tr.status === "pending" && (
                       <button onClick={async () => {
-                        try { await updateMentorStatus(t.id, "approved"); await loadData(); showToast({ msg: `${t.name} approved!`, type: "success" }); }
+                        try { await updateMentorStatus(tr.id, "approved"); await loadData(); showToast({ msg: `${tr.name} approved!`, type: "success" }); }
                         catch (err) { showToast({ msg: err.message, type: "error" }); }
                       }} style={{ ...S.btnGreen }}>✓ Approve</button>
                     )}
-                    {t.status === "approved" && (
+                    {tr.status === "approved" && (
                       <button onClick={async () => {
-                        try { await blockMentor(t.id); await loadData(); showToast({ msg: `${t.name} blocked.`, type: "error" }); }
+                        try { await blockMentor(tr.id); await loadData(); showToast({ msg: `${tr.name} blocked.`, type: "error" }); }
                         catch (err) { showToast({ msg: err.message, type: "error" }); }
                       }} style={{ ...S.btnRed }}>🚫 Block</button>
                     )}
-                    {t.status === "blocked" && (
+                    {tr.status === "blocked" && (
                       <button onClick={async () => {
-                        try { await unblockMentor(t.id); await loadData(); showToast({ msg: `${t.name} unblocked!`, type: "success" }); }
+                        try { await unblockMentor(tr.id); await loadData(); showToast({ msg: `${tr.name} unblocked!`, type: "success" }); }
                         catch (err) { showToast({ msg: err.message, type: "error" }); }
                       }} style={{ ...S.btnGreen }}>✓ Unblock</button>
                     )}
                     <button onClick={async () => {
-                      if (!window.confirm(`Delete ${t.name} permanently?`)) return;
-                      try { await deleteMentor(t.id); await loadData(); showToast({ msg: `${t.name} deleted.`, type: "success" }); }
+                      if (!window.confirm(`Delete ${tr.name} permanently?`)) return;
+                      try { await deleteMentor(tr.id); await loadData(); showToast({ msg: `${tr.name} deleted.`, type: "success" }); }
                       catch (err) { showToast({ msg: err.message, type: "error" }); }
                     }} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5" }} title="Delete mentor">🗑️</button>
                   </div>

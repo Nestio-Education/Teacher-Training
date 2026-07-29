@@ -573,16 +573,16 @@ export default function ActivityMonitoringTab({ setToast }) {
 
       {/* KPI Stat Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 14, marginBottom: 20 }}>
-        <StatCard icon="📸" label="Total Submissions" val={activities.length} color="#3b82f6" bg="#dbeafe" />
-        <StatCard icon="⏳" label="Awaiting Review"   val={pending}           color="#f59e0b" bg="#fef3c7" />
-        <StatCard icon="✅" label="Approved"           val={approved}          color="#10b981" bg="#d1fae5" />
-        <StatCard icon="🚩" label="Flagged"            val={flagged}           color="#dc2626" bg="#fee2e2" />
-        <StatCard icon="✕" label="Rejected"            val={rejected}          color="#6b7280" bg="#f3f4f6" />
+        <StatCard icon="📸" label={t("Total Submissions")} val={activities.length} color="#3b82f6" bg="#dbeafe" />
+        <StatCard icon="⏳" label={t("Awaiting Review")}   val={pending}           color="#f59e0b" bg="#fef3c7" />
+        <StatCard icon="✅" label={t("Approved")}           val={approved}          color="#10b981" bg="#d1fae5" />
+        <StatCard icon="🚩" label={t("Flagged")}            val={flagged}           color="#dc2626" bg="#fee2e2" />
+        <StatCard icon="✕" label={t("Rejected")}            val={rejected}          color="#6b7280" bg="#f3f4f6" />
       </div>
 
       {/* Status filter pills */}
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-        {[["all", "All"], ["pending", "⏳ Pending"], ["approved", "✅ Approved"], ["flagged", "🚩 Flagged"], ["rejected", "✕ Rejected"]].map(([val, label]) => (
+        {[["all", t("All")], ["pending", "⏳ " + t("Pending")], ["approved", "✅ " + t("Approved")], ["flagged", "🚩 " + t("Flagged")], ["rejected", "✕ " + t("Rejected")]].map(([val, label]) => (
           <button key={val} onClick={() => setStatusFilter(val)}
             style={{ padding: "7px 14px", borderRadius: 20,
               border: `1.5px solid ${statusFilter === val ? (statusConfig[val]?.color || "#374151") : "#e5e7eb"}`,
@@ -602,7 +602,7 @@ export default function ActivityMonitoringTab({ setToast }) {
           <SearchBar value={search} onChange={setSearch} placeholder="Search by teacher, class, center, description..." />
         </div>
         <select style={{ ...S.input, width: 200, marginBottom: 0 }} value={centerFilter} onChange={e => setCenterFilter(e.target.value)}>
-          <option value="all">All Centers</option>
+          <option value="all">{t("All Centers")}</option>
           {centers.map(c => <option key={c._id || c.id} value={c._id || c.id}>{c.name}</option>)}
         </select>
         {/* FEATURE: date range filter */}
@@ -629,11 +629,11 @@ export default function ActivityMonitoringTab({ setToast }) {
           padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center",
           gap: 10, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12, color: "#92400e", fontWeight: 600 }}>
-            {selectedIds.length > 0 ? `${selectedIds.length} selected` : `${pendingInView.length} pending in view`}
+            {selectedIds.length > 0 ? `${selectedIds.length} ${t("selected")}` : `${pendingInView.length} ${t("pending in view")}`}
           </span>
           {selectedIds.length === 0 ? (
             <button onClick={selectAllPendingInView} style={{ ...S.tblBtn }}>
-              Select all pending in view
+              {t("Select all pending in view")}
             </button>
           ) : (
             <>

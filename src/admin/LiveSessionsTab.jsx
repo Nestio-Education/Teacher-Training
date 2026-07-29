@@ -1,3 +1,4 @@
+import { t } from "../services/i18n";
 import { useState } from "react";
 import { Modal, S, SectionCard, StatCard, Toast } from "../components/Shared";
 /* ── A8: Live Sessions ── */
@@ -52,14 +53,14 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
       "Webex":             `https://webex.com/meet/${id}`,
     };
     upd("meetingLink", links[platform] || links["Zoom"]);
-    setToast({ msg:"Meeting link generated!", type:"success" });
+    setToast({ msg:t("Meeting link generated!"), type:"success" });
   };
 
   // ── Create session (with recurrence expansion) ──
   const handleCreate = (e) => {
     e.preventDefault();
     if (!form.title||!form.date||!form.time||!form.batch||!form.trainer) {
-      setToast({ msg:"Fill required fields: title, date, time, batch, trainer.", type:"error" });
+      setToast({ msg:t("Fill required fields: title, date, time, batch, trainer."), type:"error" });
       return;
     }
 
@@ -90,7 +91,7 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
       setToast({ msg:`${newSessions.length} recurring sessions created!`, type:"success" });
     } else {
       newSessions.push({ ...base, id:Date.now(), date:new Date(form.date).toLocaleDateString("en-IN") });
-      setToast({ msg:"Session scheduled!", type:"success" });
+      setToast({ msg:t("Session scheduled!"), type:"success" });
     }
 
     setSessions(prev => [...prev, ...newSessions]);
@@ -114,7 +115,7 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
     if (postForm.summary)      updates.summary   = postForm.summary;
     if (postForm.feedbackMsg)  updates.feedbackSent = true;
     updateSession(id, updates);
-    setToast({ msg:"Post-session tasks saved!", type:"success" });
+    setToast({ msg:t("Post-session tasks saved!"), type:"success" });
     setPostModal(null);
     setPostForm({ recording:"", newMaterial:"", feedbackMsg:"", summary:"" });
   };
@@ -126,7 +127,7 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
     const summary = `📋 AI Session Summary — ${session.title}\n\nDate: ${session.date} | Duration: ${session.duration} min | Batch: ${session.batch}\nTrainer: ${session.trainer} | Platform: ${session.platform}\nAttendees: ${session.attendees} / ${session.maxParticipants}\n\nKey Topics Covered:\n• Introduction and context setting for ${session.batch}\n• Core concepts aligned with course curriculum\n• Interactive Q&A with ${session.attendees} participants\n• Practical demonstrations and activity walkthroughs\n\nEngagement Level: ${session.attendees > 20 ? "High" : "Moderate"}\nCompletion Rate: ${Math.round((session.attendees/session.maxParticipants)*100)}%\n\nNext Steps:\n• Review uploaded materials before next session\n• Complete assigned module quiz by end of week\n• Trainer to follow up with absentees`;
     setPostForm(f => ({...f, summary}));
     setAiLoading(false);
-    setToast({ msg:"AI summary generated!", type:"success" });
+    setToast({ msg:t("AI summary generated!"), type:"success" });
   };
 
   const platformIcon = { "Zoom":"📹", "Google Meet":"📞", "Microsoft Teams":"💼", "Webex":"🌐" };
@@ -148,7 +149,7 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
               <div>
                 <label style={S.label}>🎥 Session Recording URL</label>
                 <input style={S.input} value={postForm.recording} onChange={e=>setPostForm(f=>({...f,recording:e.target.value}))}
-                  placeholder="https://recordings.spaceece.in/session.mp4 or Drive link"/>
+                  placeholder={t("https://recordings.spaceece.in/session.mp4 or Drive link")}/>
                 {s.recording && <div style={{ fontSize:11, color:"#059669", marginTop:4 }}>✓ Current: {s.recording.substring(0,40)}...</div>}
               </div>
 
@@ -156,7 +157,7 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
               <div>
                 <label style={S.label}>📎 Upload Session Material</label>
                 <input style={S.input} value={postForm.newMaterial} onChange={e=>setPostForm(f=>({...f,newMaterial:e.target.value}))}
-                  placeholder="Filename or URL e.g. Session_Notes.pdf"/>
+                  placeholder={t("Filename or URL e.g. Session_Notes.pdf")}/>
                 {s.materials?.length > 0 && (
                   <div style={{ marginTop:6, display:"flex", flexWrap:"wrap", gap:6 }}>
                     {s.materials.map((m,i)=>(
@@ -169,8 +170,8 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
               {/* Attendance button */}
               <div style={{ padding:"12px 14px", background:"#f9fafb", borderRadius:10, border:"1px solid #f3f4f6" }}>
                 <div style={{ fontSize:13, fontWeight:700, color:"#374151", marginBottom:6 }}>📊 Mark Attendance</div>
-                <div style={{ fontSize:12, color:"#6b7280", marginBottom:8 }}>Attendance for this session is managed in the Attendance tab.</div>
-                <button onClick={()=>{ setToast({ msg:"Go to Attendance tab to mark this session.", type:"success" }); setPostModal(null); }}
+                <div style={{ fontSize:12, color:"#6b7280", marginBottom:8 }}>{t("Attendance for this session is managed in the Attendance tab.")}</div>
+                <button onClick={()=>{ setToast({ msg:t("Go to Attendance tab to mark this session."), type:"success" }); setPostModal(null); }}
                   style={{ ...S.exportBtn, fontSize:11 }}>Go to Attendance →</button>
               </div>
 
@@ -180,7 +181,7 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
                 <textarea style={{ ...S.input, height:60, resize:"none" }}
                   value={postForm.feedbackMsg}
                   onChange={e=>setPostForm(f=>({...f,feedbackMsg:e.target.value}))}
-                  placeholder="Optional message to include with feedback form link..."/>
+                  placeholder={t("Optional message to include with feedback form link...")}/>
                 {s.feedbackSent && <div style={{ fontSize:11, color:"#059669", marginTop:4 }}>✓ Feedback form already sent</div>}
               </div>
 
@@ -196,10 +197,10 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
                 <textarea style={{ ...S.input, height:130, resize:"none", fontSize:11, fontFamily:"inherit", lineHeight:1.6 }}
                   value={postForm.summary}
                   onChange={e=>setPostForm(f=>({...f,summary:e.target.value}))}
-                  placeholder="AI-generated or manual session summary..."/>
+                  placeholder={t("AI-generated or manual session summary...")}/>
                 {s.summary && !postForm.summary && (
                   <div style={{ fontSize:11, color:"#6b7280", marginTop:4 }}>
-                    <button onClick={()=>setPostForm(f=>({...f,summary:s.summary}))} style={{ ...S.tblBtn, fontSize:10 }}>Load existing summary</button>
+                    <button onClick={()=>setPostForm(f=>({...f,summary:s.summary}))} style={{ ...S.tblBtn, fontSize:10 }}>{t("Load existing summary")}</button>
                   </div>
                 )}
               </div>
@@ -262,7 +263,7 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
             <div style={{ background:"#eff6ff", border:"1px solid #bfdbfe", borderRadius:10, padding:"10px 14px", display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
               <span style={{ fontSize:16 }}>🔗</span>
               <a href={s.meetingLink} target="_blank" rel="noreferrer" style={{ fontSize:12, fontWeight:700, color:"#2563eb", flex:1 }}>{s.meetingLink}</a>
-              <button onClick={()=>{ navigator.clipboard?.writeText(s.meetingLink); setToast({ msg:"Link copied!", type:"success" }); }}
+              <button onClick={()=>{ navigator.clipboard?.writeText(s.meetingLink); setToast({ msg:t("Link copied!"), type:"success" }); }}
                 style={{ ...S.tblBtn, fontSize:11 }}>📋 Copy</button>
             </div>
           )}
@@ -277,14 +278,14 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
                   <div style={{ fontSize:11, color:"#9ca3af", marginBottom:8 }}>Email + SMS to all enrolled teachers</div>
                   {s.reminderSent24h
                     ? <span style={{ fontSize:11, color:"#059669", fontWeight:700 }}>✓ Sent</span>
-                    : <button onClick={()=>sendReminder(s.id,"24h")} style={{ ...S.btnGreen, fontSize:11, padding:"5px 12px" }}>Send Now</button>}
+                    : <button onClick={()=>sendReminder(s.id,"24h")} style={{ ...S.btnGreen, fontSize:11, padding:"5px 12px" }}>{t("Send Now")}</button>}
                 </div>
                 <div style={{ flex:1, padding:"10px 14px", background:"white", borderRadius:10, border:`1px solid ${s.reminderSent1h?"#86efac":"#e5e7eb"}` }}>
                   <div style={{ fontSize:12, fontWeight:700, color:"#374151" }}>1-Hour Reminder</div>
                   <div style={{ fontSize:11, color:"#9ca3af", marginBottom:8 }}>Email + SMS to all enrolled teachers</div>
                   {s.reminderSent1h
                     ? <span style={{ fontSize:11, color:"#059669", fontWeight:700 }}>✓ Sent</span>
-                    : <button onClick={()=>sendReminder(s.id,"1h")} style={{ ...S.btnGreen, fontSize:11, padding:"5px 12px" }}>Send Now</button>}
+                    : <button onClick={()=>sendReminder(s.id,"1h")} style={{ ...S.btnGreen, fontSize:11, padding:"5px 12px" }}>{t("Send Now")}</button>}
                 </div>
               </div>
             </div>
@@ -298,7 +299,7 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
               {s.recording ? (
                 <div>
                   <div style={{ background:"#f9fafb", borderRadius:10, padding:"14px", border:"1px solid #f3f4f6", marginBottom:10 }}>
-                    <div style={{ fontSize:12, fontWeight:700, color:"#374151", marginBottom:4 }}>Recording Available</div>
+                    <div style={{ fontSize:12, fontWeight:700, color:"#374151", marginBottom:4 }}>{t("Recording Available")}</div>
                     <a href={s.recording} target="_blank" rel="noreferrer" style={{ fontSize:11, color:"#2563eb", wordBreak:"break-all" }}>{s.recording}</a>
                   </div>
                   <div style={{ fontSize:11, color:"#059669", fontWeight:600 }}>✓ Auto-available in Live Session page for enrolled teachers</div>
@@ -306,9 +307,9 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
               ) : (
                 <div style={{ textAlign:"center", padding:20, color:"#9ca3af" }}>
                   <div style={{ fontSize:28, marginBottom:8 }}>🎥</div>
-                  <div style={{ fontSize:12, marginBottom:10 }}>No recording uploaded yet</div>
+                  <div style={{ fontSize:12, marginBottom:10 }}>{t("No recording uploaded yet")}</div>
                   <button onClick={()=>{ setPostForm({ recording:"", newMaterial:"", feedbackMsg:"", summary:"" }); setPostModal(s); }}
-                    style={S.primaryBtn}>Upload Recording</button>
+                    style={S.primaryBtn}>{t("Upload Recording")}</button>
                 </div>
               )}
             </SectionCard>
@@ -328,9 +329,9 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
               ) : (
                 <div style={{ textAlign:"center", padding:20, color:"#9ca3af" }}>
                   <div style={{ fontSize:28, marginBottom:8 }}>📎</div>
-                  <div style={{ fontSize:12, marginBottom:10 }}>No materials uploaded</div>
+                  <div style={{ fontSize:12, marginBottom:10 }}>{t("No materials uploaded")}</div>
                   <button onClick={()=>{ setPostForm({ recording:"", newMaterial:"", feedbackMsg:"", summary:"" }); setPostModal(s); }}
-                    style={S.exportBtn}>Upload Material</button>
+                    style={S.exportBtn}>{t("Upload Material")}</button>
                 </div>
               )}
             </SectionCard>
@@ -389,7 +390,7 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
 
               {/* Title */}
               <label style={S.label}>Session Title *</label>
-              <input style={{ ...S.input, marginBottom:12 }} value={form.title} onChange={e=>upd("title",e.target.value)} placeholder="e.g. Classroom Management Techniques"/>
+              <input style={{ ...S.input, marginBottom:12 }} value={form.title} onChange={e=>upd("title",e.target.value)} placeholder={t("e.g. Classroom Management Techniques")}/>
 
               {/* Date / Time / Duration */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:12 }}>
@@ -412,13 +413,13 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
                 <div>
                   <label style={S.label}>Batch *</label>
                   <select style={S.input} value={form.batch} onChange={e=>upd("batch",e.target.value)}>
-                    <option value="">Select batch...</option>
+                    <option value="">{t("Select batch...")}</option>
                     {BATCHES.map(b=><option key={b}>{b}</option>)}
-                    <option value="All Batches">All Batches</option>
+                    <option value="All Batches">{t("All Batches")}</option>
                   </select>
                 </div>
                 <div>
-                  <label style={S.label}>Max Participants</label>
+                  <label style={S.label}>{t("Max Participants")}</label>
                   <input style={S.input} type="number" value={form.maxParticipants} onChange={e=>upd("maxParticipants",e.target.value)} min="1"/>
                 </div>
               </div>
@@ -428,14 +429,14 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
                 <div>
                   <label style={S.label}>Primary Trainer *</label>
                   <select style={S.input} value={form.trainer} onChange={e=>upd("trainer",e.target.value)}>
-                    <option value="">Select trainer...</option>
+                    <option value="">{t("Select trainer...")}</option>
                     {["Dr. Rekha Iyer","Prof. Amol Desai","Ms. Geeta Rao","Dr. Vikram Shah","Mr. Sunil Mehta"].map(t=><option key={t}>{t}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label style={S.label}>Backup Trainer</label>
+                  <label style={S.label}>{t("Backup Trainer")}</label>
                   <select style={S.input} value={form.backupTrainer} onChange={e=>upd("backupTrainer",e.target.value)}>
-                    <option value="">None</option>
+                    <option value="">{t("None")}</option>
                     {["Dr. Rekha Iyer","Prof. Amol Desai","Ms. Geeta Rao","Dr. Vikram Shah","Mr. Sunil Mehta"].map(t=><option key={t}>{t}</option>)}
                   </select>
                 </div>
@@ -443,7 +444,7 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
 
               {/* Platform + Meeting Link */}
               <div style={{ marginBottom:12 }}>
-                <label style={S.label}>Platform</label>
+                <label style={S.label}>{t("Platform")}</label>
                 <div style={{ display:"flex", gap:8, marginBottom:8 }}>
                   {PLATFORMS.map(p=>(
                     <button key={p} type="button" onClick={()=>upd("platform",p)}
@@ -453,7 +454,7 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
                   ))}
                 </div>
                 <div style={{ display:"flex", gap:8 }}>
-                  <input style={{ ...S.input, marginBottom:0, flex:1 }} value={form.meetingLink} onChange={e=>upd("meetingLink",e.target.value)} placeholder="Paste meeting link or auto-generate below"/>
+                  <input style={{ ...S.input, marginBottom:0, flex:1 }} value={form.meetingLink} onChange={e=>upd("meetingLink",e.target.value)} placeholder={t("Paste meeting link or auto-generate below")}/>
                   <button type="button" onClick={()=>generateLink(form.platform)} style={{ ...S.exportBtn, whiteSpace:"nowrap" }}>⚡ Auto-Generate</button>
                 </div>
               </div>
@@ -491,7 +492,7 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
       {/* Header */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
         <div>
-          <h1 style={S.pageTitle}>Live Session Management</h1>
+          <h1 style={S.pageTitle}>{t("Live Session Management")}</h1>
           <p style={S.pageSub}>
             {sessions.filter(s=>s.status==="upcoming").length} upcoming &nbsp;·&nbsp;
             {sessions.filter(s=>s.status==="live").length} live now &nbsp;·&nbsp;
@@ -519,7 +520,7 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
       <div style={{ display:"flex", gap:10, marginBottom:16, flexWrap:"wrap", alignItems:"center" }}>
         <div style={{ flex:1, minWidth:200, position:"relative" }}>
           <span style={{ position:"absolute", left:11, top:"50%", transform:"translateY(-50%)", fontSize:14 }}>🔍</span>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search session, trainer, batch..."
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder={t("Search session, trainer, batch...")}
             style={{ ...S.input, paddingLeft:34, marginBottom:0 }}/>
         </div>
         <div style={{ display:"flex", gap:6 }}>
@@ -531,7 +532,7 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
           ))}
         </div>
         <select value={batchFilter} onChange={e=>setBatchFilter(e.target.value)} style={{ ...S.input, width:160, marginBottom:0 }}>
-          <option value="all">All Batches</option>
+          <option value="all">{t("All Batches")}</option>
           {BATCHES.map(b=><option key={b}>{b}</option>)}
         </select>
       </div>
@@ -582,7 +583,7 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
                   <button onClick={()=>{ setPostForm({ recording:s.recording||"", newMaterial:"", feedbackMsg:"", summary:s.summary||"" }); setPostModal(s); }}
                     style={{ ...S.tblBtn, color:"#7c3aed", borderColor:"#c4b5fd", fontSize:11 }}>📋 Post-Tasks</button>
                 )}
-                <button onClick={()=>{ setSessions(prev=>prev.filter(x=>x.id!==s.id)); setToast({ msg:"Session deleted.", type:"error" }); }}
+                <button onClick={()=>{ setSessions(prev=>prev.filter(x=>x.id!==s.id)); setToast({ msg:t("Session deleted."), type:"error" }); }}
                   style={{ ...S.tblBtn, color:"#dc2626", borderColor:"#fca5a5", fontSize:11 }}>🗑</button>
               </div>
             </div>
@@ -591,7 +592,7 @@ export default function LiveSessionsTab({ sessions, setSessions, teachers, batch
         {filtered.length === 0 && (
           <div style={{ textAlign:"center", padding:60, color:"#9ca3af" }}>
             <div style={{ fontSize:40, marginBottom:10 }}>📅</div>
-            <div style={{ fontSize:14, fontWeight:700 }}>No sessions found</div>
+            <div style={{ fontSize:14, fontWeight:700 }}>{t("No sessions found")}</div>
           </div>
         )}
       </div>

@@ -1,3 +1,4 @@
+import { t } from "../services/i18n";
 import { useMemo, useState } from "react";
 import { S } from "../components/Shared";
 import { updateCourseAssignmentReview } from "../services/api";
@@ -350,7 +351,7 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
   const listHeader = (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, marginBottom: 16 }}>
       <div>
-        <h1 style={S.pageTitle}>Assignment Review</h1>
+        <h1 style={S.pageTitle}>{t("Assignment Review")}</h1>
         <p style={S.pageSub}>{pending} pending, {submitted} submitted, {underReview} under review, {revision} need revision</p>
       </div>
     </div>
@@ -358,7 +359,7 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
 
   const howToUse = (
     <div style={{ background: "white", border: "1px solid #f1f5f9", borderRadius: 14, padding: 16, marginBottom: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-      <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", marginBottom: 10 }}>How this page works</div>
+      <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", marginBottom: 10 }}>{t("How this page works")}</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10 }}>
         {workflowSteps.map((step, index) => (
           <div key={step} style={{ border: "1px solid #f3f4f6", borderRadius: 10, padding: 12, background: "#fafafa" }}>
@@ -374,17 +375,17 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
     <div style={AR_OVERLAY}>
       <div style={AR_MODAL}>
         <div style={AR_HDR}>
-          <span style={{ fontSize: 15, fontWeight: 800 }}>Assign Reviewer</span>
+          <span style={{ fontSize: 15, fontWeight: 800 }}>{t("Assign Reviewer")}</span>
           <button onClick={() => setAssignModal(null)} style={AR_CLOSE}>x</button>
         </div>
         <div style={{ padding: "20px 24px 24px" }}>
-          <label style={S.label}>Select reviewer *</label>
+          <label style={S.label}>{t("Select reviewer *")}</label>
           <select
             style={{ ...S.input, marginBottom: 20 }}
             value={assignReviewer}
             onChange={(e) => setAssignReviewer(e.target.value)}
           >
-            <option value="">Select a reviewer...</option>
+            <option value="">{t("Select a reviewer...")}</option>
             {reviewers.map((reviewer) => (
               <option key={reviewer} value={reviewer}>{reviewer}</option>
             ))}
@@ -409,7 +410,7 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
     return (
       <div style={{ animation: "fadeIn 0.3s ease" }}>
         {reviewerModal}
-        <button onClick={() => { setSelected(null); setAiSuggestion(""); }} style={S.backBtn}>Back to assignments</button>
+        <button onClick={() => { setSelected(null); setAiSuggestion(""); }} style={S.backBtn}>{t("Back to assignments")}</button>
 
         <div style={{ background: "white", borderRadius: 18, padding: 24, border: "1px solid #f1f5f9", boxShadow: "0 4px 20px rgba(0,0,0,0.06)", marginBottom: 18 }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 16, marginBottom: 16, paddingBottom: 16, borderBottom: "1px solid #f3f4f6" }}>
@@ -431,7 +432,7 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button onClick={() => setAssignModal(assignment.id)} style={AR_BTN_GHOST}>Assign</button>
               {!assignment.notified && (assignment.status === "approved" || assignment.status === "revision" || assignment.status === "reviewed") && (
-                <button onClick={() => handleNotify(assignment.id)} style={{ ...AR_BTN_PRIMARY, background: "#8b5cf6" }}>Notify Teacher</button>
+                <button onClick={() => handleNotify(assignment.id)} style={{ ...AR_BTN_PRIMARY, background: "#8b5cf6" }}>{t("Notify Teacher")}</button>
               )}
             </div>
           </div>
@@ -452,11 +453,11 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
 
           <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
             {assignment.status === "pending" && (
-              <button onClick={() => handleStartReview(assignment.id)} style={{ ...AR_BTN_GHOST, color: "#2563eb", borderColor: "#93c5fd" }}>Start Review</button>
+              <button onClick={() => handleStartReview(assignment.id)} style={{ ...AR_BTN_GHOST, color: "#2563eb", borderColor: "#93c5fd" }}>{t("Start Review")}</button>
             )}
-            <button onClick={() => handleSaveReview(assignment)} style={{ ...AR_BTN_PRIMARY, background: "#0f766e" }}>Save Review</button>
+            <button onClick={() => handleSaveReview(assignment)} style={{ ...AR_BTN_PRIMARY, background: "#0f766e" }}>{t("Save Review")}</button>
             <button onClick={() => handleApprove(assignment)} style={{ ...AR_BTN_PRIMARY, background: "#059669" }}>Approve</button>
-            <button onClick={() => handleRevision(assignment)} style={{ ...AR_BTN_PRIMARY, background: "#dc2626" }}>Request Revision</button>
+            <button onClick={() => handleRevision(assignment)} style={{ ...AR_BTN_PRIMARY, background: "#dc2626" }}>{t("Request Revision")}</button>
           </div>
         </div>
 
@@ -491,7 +492,7 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
           <div style={{ display: "grid", gridTemplateColumns: "1.2fr .8fr", gap: 18 }}>
             <div style={{ background: "white", borderRadius: 16, padding: 20, border: "1px solid #f1f5f9", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a" }}>Written Feedback</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a" }}>{t("Written Feedback")}</div>
                 <button
                   onClick={() => runAiFeedback(assignment)}
                   disabled={aiLoading}
@@ -506,12 +507,12 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
                 onChange={(e) => patchAssignment(assignment.id, { feedback: e.target.value })}
                 rows={8}
                 style={{ ...S.input, resize: "vertical", fontFamily: "inherit", lineHeight: 1.6, fontSize: 13 }}
-                placeholder="Write detailed feedback for the teacher here..."
+                placeholder={t("Write detailed feedback for the teacher here...")}
               />
 
               {aiLoading && (
                 <div style={{ marginTop: 10, padding: 14, background: "#f5f3ff", borderRadius: 10, border: "1px solid #c4b5fd", fontSize: 12, color: "#7c3aed" }}>
-                  <div style={{ fontWeight: 700, marginBottom: 4 }}>AI is preparing a feedback draft...</div>
+                  <div style={{ fontWeight: 700, marginBottom: 4 }}>{t("AI is preparing a feedback draft...")}</div>
                   <div style={{ height: 4, background: "#e5e7eb", borderRadius: 4, overflow: "hidden", marginTop: 8 }}>
                     <div style={{ height: "100%", width: "65%", background: "#8b5cf6", borderRadius: 4 }} />
                   </div>
@@ -520,10 +521,10 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
 
               {aiSuggestion && (
                 <div style={{ marginTop: 10, padding: 14, background: "#f5f3ff", borderRadius: 10, border: "1px solid #c4b5fd" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#7c3aed", marginBottom: 6 }}>AI Suggested Feedback</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#7c3aed", marginBottom: 6 }}>{t("AI Suggested Feedback")}</div>
                   <pre style={{ whiteSpace: "pre-wrap", fontSize: 11, color: "#374151", lineHeight: 1.6, fontFamily: "inherit", maxHeight: 180, overflowY: "auto" }}>{aiSuggestion}</pre>
                   <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                    <button onClick={() => applyAiFeedback(assignment)} style={{ ...AR_BTN_PRIMARY, flex: 1, fontSize: 11 }}>Use This Feedback</button>
+                    <button onClick={() => applyAiFeedback(assignment)} style={{ ...AR_BTN_PRIMARY, flex: 1, fontSize: 11 }}>{t("Use This Feedback")}</button>
                     <button onClick={() => setAiSuggestion("")} style={{ ...AR_BTN_GHOST, flex: 1, fontSize: 11 }}>Dismiss</button>
                   </div>
                 </div>
@@ -537,7 +538,7 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
             </div>
 
             <div style={{ background: "white", borderRadius: 16, padding: 20, border: "1px solid #f1f5f9", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", marginBottom: 14 }}>Review Summary</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", marginBottom: 14 }}>{t("Review Summary")}</div>
               {rows.map((row, index) => {
                 const rowPct = row.score != null ? Math.round((row.score / row.maxScore) * 100) : 0;
                 const rowColor = row.score != null ? (rowPct >= 80 ? "#10b981" : rowPct >= 60 ? "#f59e0b" : "#ef4444") : "#d1d5db";
@@ -609,15 +610,15 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
             </div>
 
             <div style={{ marginTop: 20, padding: 18, background: `${scoreColor}15`, borderRadius: 14, border: `2px solid ${scoreColor}40`, textAlign: "center" }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 4 }}>Total Score</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 4 }}>{t("Total Score")}</div>
               <div style={{ fontSize: 36, fontWeight: 900, color: scoreColor }}>{total} <span style={{ fontSize: 18, color: "#9ca3af" }}>/ {max}</span></div>
               <div style={{ fontSize: 14, fontWeight: 700, color: scoreColor, marginTop: 4 }}>{pct}% - {pct >= 80 ? "Pass" : pct >= 60 ? "Borderline" : "Needs work"}</div>
             </div>
 
             <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
-              <button onClick={() => handleSaveReview(assignment)} style={{ ...AR_BTN_PRIMARY, flex: 1, background: "#0f766e" }}>Save Review</button>
+              <button onClick={() => handleSaveReview(assignment)} style={{ ...AR_BTN_PRIMARY, flex: 1, background: "#0f766e" }}>{t("Save Review")}</button>
               <button onClick={() => handleApprove(assignment)} style={{ ...AR_BTN_PRIMARY, flex: 1, background: "#059669" }}>Approve</button>
-              <button onClick={() => handleRevision(assignment)} style={{ ...AR_BTN_PRIMARY, flex: 1, background: "#dc2626" }}>Request Revision</button>
+              <button onClick={() => handleRevision(assignment)} style={{ ...AR_BTN_PRIMARY, flex: 1, background: "#dc2626" }}>{t("Request Revision")}</button>
             </div>
           </div>
         )}
@@ -638,7 +639,7 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
                     onChange={(e) => setAnnoPage(Number(e.target.value))}
                     style={{ width: 48, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", textAlign: "center", fontSize: 12, fontFamily: "inherit" }}
                   />
-                  <span style={{ fontSize: 12, color: "#9ca3af" }}>of 5</span>
+                  <span style={{ fontSize: 12, color: "#9ca3af" }}>{t("of 5")}</span>
                 </div>
               </div>
 
@@ -674,7 +675,7 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
 
                 {addAnnoMode && (
                   <div style={{ position: "absolute", inset: 0, background: "rgba(245,158,11,0.08)", border: "2px dashed #f59e0b", display: "flex", alignItems: "center", justifyContent: "center", cursor: "crosshair", zIndex: 5 }}>
-                    <div style={{ background: "#fef3c7", borderRadius: 10, padding: "10px 16px", fontSize: 12, fontWeight: 700, color: "#92400e" }}>Click anywhere on the document to place annotation</div>
+                    <div style={{ background: "#fef3c7", borderRadius: 10, padding: "10px 16px", fontSize: 12, fontWeight: 700, color: "#92400e" }}>{t("Click anywhere on the document to place annotation")}</div>
                   </div>
                 )}
               </div>
@@ -682,14 +683,14 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
 
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div style={{ background: "white", borderRadius: 16, padding: 16, border: "1px solid #f1f5f9", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
-                <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", marginBottom: 12 }}>Add Annotation</div>
-                <label style={S.label}>Annotation Text</label>
+                <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", marginBottom: 12 }}>{t("Add Annotation")}</div>
+                <label style={S.label}>{t("Annotation Text")}</label>
                 <textarea
                   value={annoText}
                   onChange={(e) => setAnnoText(e.target.value)}
                   rows={3}
                   style={{ ...S.input, resize: "none", marginBottom: 10, fontSize: 12 }}
-                  placeholder="Add a note or comment..."
+                  placeholder={t("Add a note or comment...")}
                 />
                 <label style={S.label}>Color</label>
                 <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
@@ -706,14 +707,14 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
                   <button onClick={() => setAddAnnoMode((value) => !value)} style={{ ...AR_BTN_GHOST, flex: 1 }}>
                     {addAnnoMode ? "Cancel Pin Mode" : "Pin Mode"}
                   </button>
-                  <button onClick={() => addAnnotation(assignment.id)} style={{ ...AR_BTN_PRIMARY, flex: 1 }}>Add Pin</button>
+                  <button onClick={() => addAnnotation(assignment.id)} style={{ ...AR_BTN_PRIMARY, flex: 1 }}>{t("Add Pin")}</button>
                 </div>
               </div>
 
               <div style={{ background: "white", borderRadius: 16, padding: 16, border: "1px solid #f1f5f9", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", marginBottom: 10 }}>Annotations ({(assignment.annotations || []).length})</div>
                 {(assignment.annotations || []).length === 0 ? (
-                  <div style={{ textAlign: "center", padding: 20, color: "#9ca3af", fontSize: 12 }}>No annotations yet</div>
+                  <div style={{ textAlign: "center", padding: 20, color: "#9ca3af", fontSize: 12 }}>{t("No annotations yet")}</div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 300, overflowY: "auto" }}>
                     {(assignment.annotations || []).map((annotation) => (
@@ -766,7 +767,7 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <div style={{ flex: 1, minWidth: 200, position: "relative" }}>
             <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", fontSize: 11, fontWeight: 700, color: "#9ca3af" }}>Find</span>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search teacher, title, course..."
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("Search teacher, title, course...")}
               style={{ ...S.input, paddingLeft: 34, marginBottom: 0 }} />
           </div>
           {["all", "pending", "submitted", "under_review", "reviewed", "revision", "approved"].map((item) => (
@@ -782,18 +783,18 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", marginTop: 10 }}>
           <select value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)} style={{ ...S.input, marginBottom: 0, width: 220 }}>
-            <option value="all">All Courses</option>
+            <option value="all">{t("All Courses")}</option>
             {courseOptions.map((course) => <option key={course} value={course}>{course}</option>)}
           </select>
           <select value={reviewerFilter} onChange={(e) => setReviewerFilter(e.target.value)} style={{ ...S.input, marginBottom: 0, width: 220 }}>
-            <option value="all">All Reviewers</option>
+            <option value="all">{t("All Reviewers")}</option>
             {reviewers.map((reviewer) => <option key={reviewer} value={reviewer}>{reviewer}</option>)}
           </select>
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} style={{ ...S.input, marginBottom: 0, width: 160 }}>
-            <option value="date">Sort: Date</option>
-            <option value="course">Sort: Course</option>
-            <option value="teacher">Sort: Teacher</option>
-            <option value="status">Sort: Status</option>
+            <option value="date">{t("Sort: Date")}</option>
+            <option value="course">{t("Sort: Course")}</option>
+            <option value="teacher">{t("Sort: Teacher")}</option>
+            <option value="status">{t("Sort: Status")}</option>
           </select>
           {(search || statusFilter !== "all" || courseFilter !== "all" || reviewerFilter !== "all") && (
             <button onClick={() => { setSearch(""); setStatusFilter("all"); setCourseFilter("all"); setReviewerFilter("all"); }} style={{ ...AR_BTN_GHOST, color: "#ef4444", borderColor: "#fca5a5" }}>
@@ -853,7 +854,7 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
                     <button onClick={() => handleNotify(assignmentId(item))} style={{ ...AR_BTN_GHOST, color: "#8b5cf6", borderColor: "#c4b5fd" }}>Notify</button>
                   )}
                   {(item.status === "approved" || item.status === "revision" || item.status === "reviewed" || item.status === "completed") && (
-                    <button onClick={() => handleResetReview(assignmentId(item))} style={{ ...AR_BTN_GHOST, color: "#dc2626", borderColor: "#fca5a5", background: "#fff1f2" }}>Reset Review</button>
+                    <button onClick={() => handleResetReview(assignmentId(item))} style={{ ...AR_BTN_GHOST, color: "#dc2626", borderColor: "#fca5a5", background: "#fff1f2" }}>{t("Reset Review")}</button>
                   )}
                 </div>
               </div>

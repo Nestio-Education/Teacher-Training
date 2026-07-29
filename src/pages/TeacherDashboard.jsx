@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Logo, Toast, Badge, StatusBadge, StatCard, SectionCard, S, globalCSS } from "../components/Shared";
-import { t, setLanguage, getLanguageList, getCurrentLanguage, LANG_CHANGE_EVENT } from "../services/i18n";
+import { t, setLanguage, getLanguageList, getCurrentLanguage, LANG_CHANGE_EVENT, getCurrentLanguageCode } from "../services/i18n";
 // Start: Snehal change
 import { updateTeacherNotificationPreference, getParentModules, getParentSessionAssignments, submitParentSessionFeedback } from "../services/api";
 // End: Snehal change
@@ -1953,7 +1953,7 @@ export default function TeacherDashboard({ user, onLogout }) {
   const refreshCoreData = async () => {
     try {
       const [progressRes, notificationsRes, teacherRes, certificatesRes, classesRes] = await Promise.all([
-        getTeacherProgress(),
+        getTeacherProgress({ lang: getCurrentLanguageCode() }),
         getNotifications(),
         getTeacherMe(),
         getTeacherCertificates(),
@@ -2015,6 +2015,13 @@ export default function TeacherDashboard({ user, onLogout }) {
   useEffect(() => {
     setLoading(true);
     refreshCoreData().finally(() => setLoading(false));
+    
+    const langHandler = () => refreshCoreData();
+    window.addEventListener(LANG_CHANGE_EVENT, langHandler);
+    
+    return () => {
+      window.removeEventListener(LANG_CHANGE_EVENT, langHandler);
+    };
   }, [user]);
 
   // Start: Dnyaneshwari Thorat
@@ -2146,22 +2153,22 @@ export default function TeacherDashboard({ user, onLogout }) {
   const pendingAssignmentsCount = courses.filter(a=>a.status==="assigned"||a.status==="revision").length;
 
   const navItems = [
-    { key: "overview",      label: currentUser?.role === "fellow" ? "Fellow's Dashboard" : "Teacher's Dashboard", icon: "📊" },
-    { key: "children_att",  label: "Daily Attendance",    icon: "📋" },
-    { key: "geotag",        label: "Geotag Attendance",   icon: "📍" },
-    { key: "training",      label: "Training & Lessons",  icon: "🎓" },
-    { key: "planner",       label: "AI Lesson Planner", icon: "✏️" },
-    { key: "courses",       label: "My Courses",          icon: "📚" },
-    { key: "parent_capacity", label: "Parent Capacity Building", icon: "👪" },
-    { key: "assessment",    label: "Assessments",         icon: "📝" },
-    { key: "certificates",  label: "Certificates",        icon: "🏆" },
-    { key: "feedback",      label: "Feedback",             icon: "💬" },
+    { key: "overview",      label: currentUser?.role === "fellow" ? t("Fellow's Dashboard") : t("Teacher's Dashboard"), icon: "📊" },
+    { key: "children_att",  label: t("Daily Attendance"),    icon: "📋" },
+    { key: "geotag",        label: t("Geotag Attendance"),   icon: "📍" },
+    { key: "training",      label: t("Training & Lessons"),  icon: "🎓" },
+    { key: "planner",       label: t("AI Lesson Planner"), icon: "✏️" },
+    { key: "courses",       label: t("My Courses"),          icon: "📚" },
+    { key: "parent_capacity", label: t("Parent Capacity Building"), icon: "👪" },
+    { key: "assessment",    label: t("Assessments"),         icon: "📝" },
+    { key: "certificates",  label: t("Certificates"),        icon: "🏆" },
+    { key: "feedback",      label: t("Feedback"),             icon: "💬" },
   ];
 
   // Start: Fellow-only tabs
   if (currentUser?.role === "fellow") {
     navItems.splice(navItems.length - 1, 0,
-      { key: "curriculum", label: "Curriculum", icon: "📖" }
+      { key: "curriculum", label: t("Curriculum"), icon: "📖" }
     );
   }
   // End: Fellow-only tabs
@@ -2242,7 +2249,7 @@ export default function TeacherDashboard({ user, onLogout }) {
           {navItems.map(item=>(
             <button key={item.key} onClick={()=>setActiveTab(item.key)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", border: "none", borderRadius: 10, background: activeTab===item.key?"#dbeafe":"transparent", color: activeTab===item.key?"#1e40af":"#6b7280", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", textAlign: "left", marginBottom: 2, transition: "all 0.18s" }}>
               <span style={{ fontSize: 15 }}>{item.icon}</span>
-              <span style={{ flex: 1 }}>{t(item.label)}</span>
+              <span style={{ flex: 1 }}>{item.label}</span>
               {item.badge>0 && <span style={{ background: "#ef4444", color: "white", borderRadius: 20, fontSize: 10, fontWeight: 800, padding: "1px 7px" }}>{item.badge}</span>}
             </button>
           ))}

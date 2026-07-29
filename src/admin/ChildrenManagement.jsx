@@ -1,3 +1,4 @@
+import { t } from "../services/i18n";
 import { useState, useEffect } from "react";
 import { Modal, S, SearchBar, StatCard, StatusBadge, Toast } from "../components/Shared";
 import { getChildren, updateChild, deleteChild, getCenters, getClasses } from "../services/api";
@@ -72,7 +73,7 @@ function ChildFormModal({ child, centers = [], classes = [], children: allChildr
     const resolvedCenterId = form.centerId || classCenterId;
 
     if (!form.name || !form.parentName || !form.phone || !resolvedCenterId || !form.classId) {
-      setToast({ msg: "Please fill all required fields including center and class.", type: "error" });
+      setToast({ msg: t("Please fill all required fields including center and class."), type: "error" });
       return;
     }
 
@@ -99,21 +100,21 @@ function ChildFormModal({ child, centers = [], classes = [], children: allChildr
         <label style={S.label}>Child's Full Name *</label>
         <input style={{ ...S.input, marginBottom: 12 }} value={form.name}
           onChange={e => setForm({ ...form, name: e.target.value })}
-          placeholder="e.g. Aarav Sharma" required />
+          placeholder={t("e.g. Aarav Sharma")} required />
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
           <div>
             <label style={S.label}>Age *</label>
             <input style={S.input} type="number" min={1} max={18} value={form.age}
-              onChange={e => setForm({ ...form, age: e.target.value })} placeholder="e.g. 4" required />
+              onChange={e => setForm({ ...form, age: e.target.value })} placeholder={t("e.g. 4")} required />
           </div>
           <div>
-            <label style={S.label}>Gender</label>
+            <label style={S.label}>{t("Gender")}</label>
             <select style={S.input} value={form.gender}
               onChange={e => setForm({ ...form, gender: e.target.value })}>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-              <option value="Other">Other</option>
+              <option value="Male">{t("Male")}</option>
+              <option value="Female">{t("Female")}</option>
+              <option value="Other">{t("Other")}</option>
             </select>
           </div>
         </div>
@@ -186,7 +187,7 @@ function ChildFormModal({ child, centers = [], classes = [], children: allChildr
         <label style={S.label}>Parent / Guardian Name *</label>
         <input style={{ ...S.input, marginBottom: 12 }} value={form.parentName}
           onChange={e => setForm({ ...form, parentName: e.target.value })}
-          placeholder="e.g. Rajesh Sharma" required />
+          placeholder={t("e.g. Rajesh Sharma")} required />
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
           <div>
@@ -195,17 +196,17 @@ function ChildFormModal({ child, centers = [], classes = [], children: allChildr
               onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="9876543211" required />
           </div>
           <div>
-            <label style={S.label}>Parent Email</label>
+            <label style={S.label}>{t("Parent Email")}</label>
             <input style={S.input} type="email" value={form.email}
-              onChange={e => setForm({ ...form, email: e.target.value })} placeholder="parent@gmail.com" />
+              onChange={e => setForm({ ...form, email: e.target.value })} placeholder={t("parent@gmail.com")} />
           </div>
         </div>
 
-        <label style={S.label}>Status</label>
+        <label style={S.label}>{t("Status")}</label>
         <select style={{ ...S.input, marginBottom: 20 }} value={form.status}
           onChange={e => setForm({ ...form, status: e.target.value })}>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
+          <option value="active">{t("Active")}</option>
+          <option value="inactive">{t("Inactive")}</option>
         </select>
 
         <button type="submit" disabled={saving} style={{ ...S.primaryBtn, width: "100%", opacity: saving ? 0.7 : 1 }}>
@@ -313,7 +314,7 @@ export default function ChildrenManagementTab({ setToast }) {
       .catch(err => {
         console.error("Error loading children data:", err);
         setLoading(false);
-        showToast({ msg: "Failed to load kids & classes from database.", type: "error" });
+        showToast({ msg: t("Failed to load kids & classes from database."), type: "error" });
       });
   };
 
@@ -341,7 +342,7 @@ export default function ChildrenManagementTab({ setToast }) {
         const res = await updateChild(editChild.id, payload);
         const updated = mapChildFromApi(res.child || res);
         setChildren(prev => prev.map(c => c.id === updated.id ? updated : c));
-        showToast({ msg: "Child profile updated!", type: "success" });
+        showToast({ msg: t("Child profile updated!"), type: "success" });
       }
       setFormModal(false);
       setEditChild(null);
@@ -356,7 +357,7 @@ export default function ChildrenManagementTab({ setToast }) {
     try {
       await deleteChild(id);
       setChildren(prev => prev.filter(c => c.id !== id));
-      showToast({ msg: "Child profile deleted.", type: "error" });
+      showToast({ msg: t("Child profile deleted."), type: "error" });
     } catch (err) {
       showToast({ msg: err.message || "Failed to delete child.", type: "error" });
     }
@@ -389,7 +390,7 @@ export default function ChildrenManagementTab({ setToast }) {
     return (
       <div style={{ textAlign: "center", padding: "60px 20px", color: "#9ca3af" }}>
         <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
-        <div style={{ fontSize: 14, fontWeight: 700 }}>Loading children data...</div>
+        <div style={{ fontSize: 14, fontWeight: 700 }}>{t("Loading children data...")}</div>
       </div>
     );
   }
@@ -424,29 +425,29 @@ export default function ChildrenManagementTab({ setToast }) {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
-          <h1 style={S.pageTitle}>Children &amp; Class Management</h1>
-          <p style={S.pageSub}>{active} active enrolled · {inactive} inactive · {children.length} total profiles</p>
+          <h1 style={S.pageTitle}>{t("Children & Class Management")}</h1>
+          <p style={S.pageSub}>{active} {t("active enrolled")} · {inactive} {t("inactive")} · {children.length} {t("total profiles")}</p>
         </div>
         <div style={{ padding: "8px 16px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, fontSize: 12, color: "#065f46", fontWeight: 600 }}>
-          👩‍🏫 Children are enrolled by Teachers from their dashboard
+          👩‍🏫 {t("Children are enrolled by Teachers from their dashboard")}
         </div>
       </div>
 
       {/* KPI Display */}
       <div style={{ display: "flex", gap: 14, marginBottom: 20, flexWrap: "wrap" }}>
-        <StatCard icon="👶" label="Total Children" val={children.length} color="#8b5cf6" bg="#ede9fe" />
-        <StatCard icon="✅" label="Active Enrolled" val={active} color="#10b981" bg="#d1fae5" />
-        <StatCard icon="🔕" label="Inactive Profiles" val={inactive} color="#6b7280" bg="#f3f4f6" />
+        <StatCard icon="👶" label={t("Total Children")} val={children.length} color="#8b5cf6" bg="#ede9fe" />
+        <StatCard icon="✅" label={t("Active Enrolled")} val={active} color="#10b981" bg="#d1fae5" />
+        <StatCard icon="🔕" label={t("Inactive Profiles")} val={inactive} color="#6b7280" bg="#f3f4f6" />
       </div>
 
       {/* ── STEP 1: CENTERS NAVIGATION TABS ── */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: "#475569", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-          📍 Select Center
+          📍 {t("Select Center")}
         </div>
         {centers.length === 0 ? (
           <div style={{ fontSize: 13, color: "#9ca3af", padding: "12px", background: "#f9fafb", borderRadius: 10, border: "1px dashed #e2e8f0" }}>
-            No centers found. Please create a center from Center Management first.
+            {t("No centers found. Please create a center from Center Management first.")}
           </div>
         ) : (
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -494,7 +495,7 @@ export default function ChildrenManagementTab({ setToast }) {
       {selectedCenterId && (
         <div style={{ marginBottom: 20, padding: "14px 16px", background: "#f8fafc", borderRadius: 14, border: "1px solid #e2e8f0" }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-            🎒 Select Class Room
+            🎒 {t("Select Class Room")}
           </div>
           {activeCenterClasses.length === 0 ? (
             <div style={{ fontSize: 12, color: "#9ca3af" }}>
@@ -561,7 +562,7 @@ export default function ChildrenManagementTab({ setToast }) {
 
       {/* Filter Text Query Search Box */}
       <div style={{ marginBottom: 16 }}>
-        <SearchBar value={search} onChange={setSearch} placeholder="Search within selection by child or parent name..." />
+        <SearchBar value={search} onChange={setSearch} placeholder={t("Search within selection by child or parent name...")} />
       </div>
 
       {/* ── STEP 3: ENROLLED STUDENTS GRID DISPLAY ── */}
@@ -583,7 +584,7 @@ export default function ChildrenManagementTab({ setToast }) {
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 14, padding: "12px", background: "#f9fafb", borderRadius: 10, border: "1px solid #f3f4f6" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" }}>Center Assignment</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" }}>{t("Center Assignment")}</div>
                 <div style={{ fontSize: 12, color: "#374151", fontWeight: 600, marginBottom: 4 }}>🏢 {centerObj?.name || "None"}</div>
                 <div style={{ fontSize: 12, color: "#6b7280" }}>👤 Parent: {c.parentName}</div>
                 <div style={{ fontSize: 12, color: "#6b7280" }}>📱 Phone: {c.phone}</div>
@@ -610,7 +611,7 @@ export default function ChildrenManagementTab({ setToast }) {
       {filteredChildren.length === 0 && (
         <div style={{ textAlign: "center", padding: "60px 20px", color: "#9ca3af" }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>👶</div>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>No children found</div>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>{t("No children found")}</div>
           <div style={{ fontSize: 12, marginTop: 4 }}>
             {search ? "No child matches your search." : "No children enrolled yet. Teachers add children from their dashboard."}
           </div>
