@@ -65,6 +65,28 @@ function StrengthBar({ password }) {
   );
 }
 
+// Start: Prajwal edit
+/* ── Live Password Requirements Checklist ── */
+function PasswordRequirements({ password }) {
+  if (!password) return null;
+  const checks = [
+    { label: "At least 8 characters", valid: password.length >= 8 },
+    { label: "One uppercase letter", valid: /[A-Z]/.test(password) },
+    { label: "One number", valid: /[0-9]/.test(password) },
+    { label: "One special character", valid: /[!@#$%^&*(),.?":{}|<>]/.test(password) },
+  ];
+  return (
+    <ul style={{ margin: "4px 0 0", padding: 0, listStyle: "none" }}>
+      {checks.map((c, i) => (
+        <li key={i} style={{ fontSize: 10, fontWeight: 600, color: c.valid ? "#10b981" : "#ef4444", marginBottom: 1 }}>
+          {c.valid ? "✅" : "❌"} {c.label}
+        </li>
+      ))}
+    </ul>
+  );
+}
+// End: Prajwal edit
+
 /* ── Compact input style overrides ── */
 const ci = {
   input:     { fontSize: 12, padding: "7px 10px 7px 28px", marginBottom: 0 },
@@ -76,7 +98,7 @@ const ci = {
 /* ── OTP Input Component ── */
 function OtpInput({ length = 6, value, onChange, disabled }) {
   const inputs = Array.from({ length }, (_, i) => i);
-  
+
   const handleChange = (index, e) => {
     const val = e.target.value.replace(/\D/g, "");
     if (val.length > 1) return;
@@ -445,6 +467,9 @@ function ForgotPasswordForm({ onBack }) {
             </button>
           </div>
           <StrengthBar password={password} />
+          {/* Start: Prajwal edit */}
+          <PasswordRequirements password={password} />
+          {/* End: Prajwal edit */}
         </div>
         <div style={ci.mb}>
           <label style={ci.label}>Confirm New Password</label>
@@ -565,6 +590,9 @@ function ResetPasswordForm({ token, onDone }) {
             </button>
           </div>
           <StrengthBar password={password} />
+          {/* Start: Prajwal edit */}
+          <PasswordRequirements password={password} />
+          {/* End: Prajwal edit */}
         </div>
         <div style={ci.mb}>
           <label style={ci.label}>Confirm New Password</label>
@@ -596,28 +624,24 @@ function ResetPasswordForm({ token, onDone }) {
 // Start: Dnyaneshwari Thorat
 function RegisterForm({ onBack }) {
   const [role, setRole]         = useState("teacher"); // teacher | mentor | fellow
-  const [form, setForm]         = useState({ name: "", email: "", phone: "", address: "", photo: "", password: "", confirmPassword: "" });
+  // Start: Prajwal edit — removed `photo` field from form state (photo upload feature removed)
+  const [form, setForm]         = useState({ name: "", email: "", phone: "", address: "", password: "", confirmPassword: "" });
+  // End: Prajwal edit
   const [showPass, setShowPass] = useState(false);
   const [toast, setToast]       = useState({ msg: "", type: "" });
-  const [step, setStep]         = useState("form"); // form | otp
+  const [step, setStep]         = useState("form"); // form | otp  (otp step currently disabled below)
   const [emailOtp, setEmailOtp] = useState("");
   const [emailOtpDev, setEmailOtpDev] = useState("");
   const [verifying, setVerifying] = useState(false);
 
-  const handlePhotoUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) { setToast({ msg: "Please upload an image file (PNG/JPG).", type: "error" }); return; }
-    if (file.size > 1024 * 1024)         { setToast({ msg: "Image is too large. Please select a photo under 1MB.", type: "error" }); return; }
-    const reader = new FileReader();
-    reader.onloadend = () => setForm({ ...form, photo: reader.result });
-    reader.readAsDataURL(file);
-  };
+  // Start: Prajwal edit
+  // NOTE: Photo upload feature removed (handlePhotoUpload function and its JSX deleted).
+  // End: Prajwal edit
 
   const handleRegisterClick = (e) => {
     e.preventDefault();
     const { name, email, phone, address, password, confirmPassword } = form;
-if (!name || !email || !phone || !address || !password || !confirmPassword) {
+    if (!name || !email || !phone || !address || !password || !confirmPassword) {
       setToast({ msg: "Please fill all required fields.", type: "error" });
       return;
     }
@@ -627,6 +651,14 @@ if (!name || !email || !phone || !address || !password || !confirmPassword) {
       setToast({ msg: "Please enter a valid email address.", type: "error" });
       return;
     }
+
+    // Start: Prajwal edit — name validation (requires full name: first + last)
+    const nameRegex = /^[a-zA-Z][a-zA-Z.'-]*(\s+[a-zA-Z][a-zA-Z.'-]*)+$/;
+    if (!nameRegex.test(name.trim())) {
+      setToast({ msg: "Please enter your full name (first and last name, letters only).", type: "error" });
+      return;
+    }
+    // End: Prajwal edit
 
     // Start: Dnyaneshwari Thorat
     if (!isValidPhoneNumber(phone.trim(), 'IN')) {
@@ -657,6 +689,15 @@ if (!name || !email || !phone || !address || !password || !confirmPassword) {
     }
 
     setVerifying(true);
+
+    // Start: Prajwal edit — OTP verification disabled
+    /* ══════════════════════════════════════════════════════════════════
+       OTP VERIFICATION — TEMPORARILY DISABLED
+       To re-enable: uncomment this block, comment out the "Direct
+       registration" block below it, and uncomment the OTP-step JSX
+       further down (search for the same banner comment).
+    ══════════════════════════════════════════════════════════════════
+
     sendSignupOtp(email.trim().toLowerCase())
       .then((data) => {
         setToast({ msg: "Verification OTP generated!", type: "success" });
@@ -669,7 +710,60 @@ if (!name || !email || !phone || !address || !password || !confirmPassword) {
         setToast({ msg: err.message || "Failed to send verification code.", type: "error" });
       })
       .finally(() => setVerifying(false));
+
+    ══════════════════════════════════════════════════════════════════ */
+    // End: Prajwal edit
+
+    // Start: Prajwal edit — direct registration (OTP step skipped)
+    if (role === "teacher") {
+      registerTeacher({
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        phone: phone.trim(),
+        password,
+        qualification: "B.Ed",
+        experience: "2 years",
+        address,
+      })
+        .then(() => {
+          setToast({ msg: "Registration submitted! Awaiting admin approval.", type: "success" });
+          setTimeout(onBack, 2000);
+        })
+        .catch((err) => {
+          setToast({ msg: err.message || "Failed to submit registration.", type: "error" });
+        })
+        .finally(() => setVerifying(false));
+    } else {
+      registerMentor({
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        phone: phone.trim(),
+        password,
+        qualification: "Graduate",
+        experience: "2 years",
+        address,
+        fellowshipSemester: role === "fellow" ? 1 : undefined,
+        role,
+      })
+        .then(() => {
+          const successMsg = role === "fellow"
+            ? "Registration successful! You can sign in now."
+            : "Registration submitted! Awaiting admin approval.";
+          setToast({ msg: successMsg, type: "success" });
+          setTimeout(onBack, 2000);
+        })
+        .catch((err) => {
+          setToast({ msg: err.message || "Failed to submit registration.", type: "error" });
+        })
+        .finally(() => setVerifying(false));
+    }
   };
+  // End: Prajwal edit
+
+  // Start: Prajwal edit — OTP verification disabled (handler kept for reference)
+  /* ══════════════════════════════════════════════════════════════════
+     OTP VERIFICATION — TEMPORARILY DISABLED (handler)
+  ══════════════════════════════════════════════════════════════════
 
   const handleVerifyAndSubmit = (e) => {
     e.preventDefault();
@@ -692,7 +786,6 @@ if (!name || !email || !phone || !address || !password || !confirmPassword) {
             qualification: "B.Ed",
             experience: "2 years",
             address,
-            photoUrl: photo,
           });
         } else {
           return registerMentor({
@@ -705,7 +798,6 @@ if (!name || !email || !phone || !address || !password || !confirmPassword) {
             address,
             fellowshipSemester: role === "fellow" ? 1 : undefined,
             role,
-            photoUrl: photo,
           });
         }
       })
@@ -722,7 +814,16 @@ if (!name || !email || !phone || !address || !password || !confirmPassword) {
       .finally(() => setVerifying(false));
   };
 
+  ══════════════════════════════════════════════════════════════════ */
+  // End: Prajwal edit
+
   const roleLabel = role === "teacher" ? "Teacher" : role === "mentor" ? "Mentor" : "Fellow";
+
+  // Start: Prajwal edit — OTP verification disabled (JSX screen kept for reference)
+  /* ══════════════════════════════════════════════════════════════════
+     OTP VERIFICATION — TEMPORARILY DISABLED (JSX screen)
+     Since `step` is never set to "otp" above, this never renders.
+  ══════════════════════════════════════════════════════════════════
 
   if (step === "otp") {
     return (
@@ -754,12 +855,14 @@ if (!name || !email || !phone || !address || !password || !confirmPassword) {
           </button>
         </form>
         <p style={{ textAlign: "center", fontSize: 11, color: "#9ca3af", marginTop: 12, marginBottom: 0 }}>
-          {/* End: Dnyaneshwari Thorat */}
           <span onClick={() => setStep("form")} style={{ color: "#d97706", fontWeight: 700, cursor: "pointer" }}>← Edit Registration Info</span>
         </p>
       </>
     );
   }
+
+  ══════════════════════════════════════════════════════════════════ */
+  // End: Prajwal edit
 
   return (
     <>
@@ -779,18 +882,35 @@ if (!name || !email || !phone || !address || !password || !confirmPassword) {
         >
           <option value="teacher">Teacher</option>
           <option value="mentor">Mentor</option>
-          <option value="fellow">Fellow</option>
         </select>
       </div>
 
       <form onSubmit={handleRegisterClick}>
-     <div style={ci.mb}>
-  <label style={ci.label}>Full Name</label>
-  <div style={{ position: "relative" }}>
-    <span style={ci.fieldIcon}>👤</span>
-    <input style={{ ...S.input, ...ci.input }} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Dr. Jane Smith" />
-  </div>
-</div>
+        <div style={ci.mb}>
+          <label style={ci.label}>Full Name</label>
+          <div style={{ position: "relative" }}>
+            <span style={ci.fieldIcon}>👤</span>
+            {/* Start: Prajwal edit — name field validation styling */}
+            <input
+              style={{
+                ...S.input,
+                ...ci.input,
+                borderColor: form.name && !/^[a-zA-Z][a-zA-Z.'-]*(\s+[a-zA-Z][a-zA-Z.'-]*)+$/.test(form.name.trim()) ? "#ef4444" : "#e5e7eb",
+              }}
+              value={form.name}
+              onChange={e => setForm({ ...form, name: e.target.value })}
+              placeholder="Dr. Jane Smith"
+            />
+          </div>
+          {form.name && (
+            <p style={{ fontSize: 10, fontWeight: 600, marginTop: 3, marginBottom: 0, color: /^[a-zA-Z][a-zA-Z.'-]*(\s+[a-zA-Z][a-zA-Z.'-]*)+$/.test(form.name.trim()) ? "#10b981" : "#ef4444" }}>
+              {/^[a-zA-Z][a-zA-Z.'-]*(\s+[a-zA-Z][a-zA-Z.'-]*)+$/.test(form.name.trim())
+                ? "✅ Valid name"
+                : "❌ Please enter your full name (first and last name, letters only)"}
+            </p>
+          )}
+          {/* End: Prajwal edit */}
+        </div>
         {[
           { key: "email", label: "Email Address *", icon: "📧", type: "email", ph: "teacher@school.edu" },
           { key: "phone", label: "Phone (10-Digit Mobile) *", icon: "📱", type: "tel", ph: "9876543210" },
@@ -823,19 +943,23 @@ if (!name || !email || !phone || !address || !password || !confirmPassword) {
             )}
           </div>
         ))}
-        <div style={ci.mb}>
-          <label style={ci.label}>Upload Profile Photo</label>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 3 }}>
-            <input type="file" accept="image/*" onChange={handlePhotoUpload}
-              style={{ fontSize: 11, color: "#6b7280", width: "100%", padding: "6px 8px", borderRadius: 7, border: "1px dashed #d97706", background: "#fffbeb", cursor: "pointer" }} />
-            {form.photo && <img src={form.photo} alt="Preview" style={{ width: 34, height: 34, borderRadius: "50%", objectFit: "cover", border: "1.5px solid #fbbf24", flexShrink: 0 }} />}
-          </div>
-        </div>
+        {/* Start: Prajwal edit — Upload Profile Photo field removed here */}
+        {/* End: Prajwal edit */}
+        {/* Start: Prajwal edit — School/Address changed from free-text to dropdown */}
         <div style={ci.mb}>
           <label style={ci.label}>School / Address</label>
-          <textarea style={{ ...S.input, height: 48, resize: "none", fontSize: 12, padding: "7px 10px" }}
-            value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="School name and location" />
+          <select
+            value={form.address}
+            onChange={e => setForm({ ...form, address: e.target.value })}
+            style={{ ...S.input, fontSize: 12, padding: "7px 10px", marginBottom: 0, cursor: "pointer" }}
+          >
+            <option value="">Select a center</option>
+            <option value="Udaan Centre, Dhayari, Pune">Udaan Centre, Dhayari, Pune</option>
+            <option value="Umang Centre, Gosavi Vasti, Karve Nagar, Pune">Umang Centre, Gosavi Vasti, Karve Nagar, Pune</option>
+            <option value="Umang Centre, Shivane, Pune">Umang Centre, Shivane, Pune</option>
+          </select>
         </div>
+        {/* End: Prajwal edit */}
         <div style={ci.mb}>
           <label style={ci.label}>Password</label>
           <div style={{ position: "relative" }}>
@@ -848,6 +972,9 @@ if (!name || !email || !phone || !address || !password || !confirmPassword) {
             </button>
           </div>
           <StrengthBar password={form.password} />
+          {/* Start: Prajwal edit */}
+          <PasswordRequirements password={form.password} />
+          {/* End: Prajwal edit */}
         </div>
         <div style={ci.mb}>
           <label style={ci.label}>Confirm Password</label>
@@ -857,9 +984,11 @@ if (!name || !email || !phone || !address || !password || !confirmPassword) {
               onChange={e => setForm({ ...form, confirmPassword: e.target.value })} placeholder="Re-enter password" />
           </div>
         </div>
+        {/* Start: Prajwal edit — button now says "Submitting..." (was "Sending Verification...") since OTP step is skipped */}
         <button type="submit" disabled={verifying} style={{ ...S.primaryBtn, width: "100%", padding: "9px", fontSize: 13, opacity: verifying ? 0.7 : 1 }}>
-          {verifying ? "Sending Verification..." : "Submit Registration →"}
+          {verifying ? "Submitting..." : "Submit Registration →"}
         </button>
+        {/* End: Prajwal edit */}
       </form>
       <p style={{ textAlign: "center", fontSize: 11, color: "#9ca3af", marginTop: 12, marginBottom: 0 }}>
         Already registered?{" "}
