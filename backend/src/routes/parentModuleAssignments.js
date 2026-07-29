@@ -30,87 +30,36 @@ router.get("/", requireAuth, requireRole("admin", "super_admin"), async (req, re
   }
 });
 
-// POST create assignment(s): module + (class and/or teacher)
-// - If teacherId is given (with or without classId) -> single assignment.
-// - If only classId is given -> assign the module to EVERY teacher whose
-//   teacherProfile.classes includes that class.
+// POST create a new assignment: module + class + teacher
 router.post("/", requireAuth, requireRole("admin", "super_admin"), async (req, res, next) => {
   try {
     const { moduleId, classId, teacherId } = req.body;
-
-    if (!moduleId) {
-      return res.status(400).json({ message: "moduleId is required" });
-    }
-    if (!classId && !teacherId) {
-      return res.status(400).json({ message: "Select at least a teacher or a class" });
+    if (!moduleId || !classId || !teacherId) {
+      return res.status(400).json({ message: "moduleId, classId and teacherId are required" });
     }
 
-    const mod = await ParentModule.findById(moduleId);
+    const [mod, cls, teacher] = await Promise.all([
+      ParentModule.findById(moduleId),
+      ClassModel.findById(classId),
+      User.findById(teacherId),
+    ]);
     if (!mod) return res.status(404).json({ message: "Module not found" });
-
-    let cls = null;
-    if (classId) {
-      cls = await ClassModel.findById(classId);
-      if (!cls) return res.status(404).json({ message: "Class not found" });
+    if (!cls) return res.status(404).json({ message: "Class not found" });
+    if (!teacher || teacher.role !== "teacher") {
+      return res.status(404).json({ message: "Teacher not found" });
     }
 
-    // Case 1: teacher explicitly chosen (with or without a class) —
-    // single assignment.
-    if (teacherId) {
-      const teacher = await User.findById(teacherId);
-      if (!teacher || teacher.role !== "teacher") {
-        return res.status(404).json({ message: "Teacher not found" });
-      }
-
-      const assignment = await ParentModuleAssignment.create({
-        module: moduleId,
-        class: classId || null,
-        teacher: teacherId,
-        assignedBy: req.user.id,
-      });
-
-      return res.status(201).json({ success: true, assignment });
-    }
-
-    // Case 2: only a class was chosen — assign to every teacher who
-    // has this class in their teacherProfile.classes.
-    const teachersInClass = await User.find({
-      role: "teacher",
-      "teacherProfile.classes": classId,
+    const assignment = await ParentModuleAssignment.create({
+      module: moduleId,
+      class: classId,
+      teacher: teacherId,
+      assignedBy: req.user.id,
     });
 
-    if (teachersInClass.length === 0) {
-      return res.status(404).json({ message: "No teachers are assigned to this class yet." });
-    }
-
-    const created = [];
-    const skipped = [];
-    for (const teacher of teachersInClass) {
-      try {
-        const assignment = await ParentModuleAssignment.create({
-          module: moduleId,
-          class: classId,
-          teacher: teacher._id,
-          assignedBy: req.user.id,
-        });
-        created.push(assignment);
-      } catch (err) {
-        if (err.code === 11000) {
-          skipped.push(teacher._id); // already assigned — not an error
-        } else {
-          throw err;
-        }
-      }
-    }
-
-    return res.status(201).json({
-      success: true,
-      assignments: created,
-      message: `Assigned to ${created.length} teacher(s) in this class${skipped.length ? `, ${skipped.length} already assigned` : ""}.`,
-    });
+    res.status(201).json({ success: true, assignment });
   } catch (error) {
     if (error.code === 11000) {
-      return res.status(409).json({ message: "This assignment already exists." });
+      return res.status(409).json({ message: "This module is already assigned to this teacher for this class." });
     }
     next(error);
   }
