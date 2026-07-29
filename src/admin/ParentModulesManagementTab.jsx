@@ -17,8 +17,16 @@ const smallBtn = (bg, color) => ({
 });
 
 function emptyActivity() { return { time: "", activity: "", keyFocus: "" }; }
+function emptyContentBlock() { return { heading: "", body: "" }; }
 function emptySession(num) {
-  return { sessionNumber: num, title: "", objective: "", homePractice: "", activities: [emptyActivity()] };
+  return {
+    sessionNumber: num, title: "", objective: "", homePractice: "",
+    activities: [emptyActivity()],
+    // Start: Snehal change — detailed content fields
+    content: [],
+    reflection: "",
+    // End: Snehal change
+  };
 }
 
 function StatCard({ icon, value, label, borderColor }) {
@@ -51,9 +59,9 @@ function AssignModal({ mod, teachers, classes, onClose, setToast }) {
 
   const handleAssign = async () => {
     if (!teacherId && !classId) {
-  setToast?.({ msg: "Select at least a teacher or a class.", type: "error" });
-  return;
-}
+      setToast?.({ msg: "Select at least a teacher or a class.", type: "error" });
+      return;
+    }
     setSaving(true);
     try {
       await assignParentModule({ moduleId: mod._id, teacherId: teacherId || null, classId: classId || null });
@@ -138,11 +146,299 @@ function AssignModal({ mod, teachers, classes, onClose, setToast }) {
 }
 // End: Snehal change
 
+// Start: Snehal change — Detail modal: opens in read-only "view" mode, has an Edit
+// button top-right that switches the SAME modal into edit mode (no separate screen).
+function ModuleDetailModal({ mod, onClose, onSaved, setToast }) {
+  const [mode, setMode] = useState("view"); // "view" | "edit"
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState(() => buildFormFromModule(mod));
+
+  function buildFormFromModule(m) {
+    return {
+      moduleNumber: m.moduleNumber ?? "",
+      title: m.title || "",
+      category: m.category || "",
+      sessions: (m.sessions?.length ? m.sessions : []).map((s) => ({
+        sessionNumber: s.sessionNumber,
+        title: s.title || "",
+        objective: s.objective || "",
+        homePractice: s.homePractice || "",
+        activities: s.activities?.length ? JSON.parse(JSON.stringify(s.activities)) : [emptyActivity()],
+        // Default safely — older sessions may not have these yet
+        content: s.content?.length ? JSON.parse(JSON.stringify(s.content)) : [],
+        reflection: s.reflection || "",
+      })),
+    };
+  }
+
+  const enterEdit = () => {
+    setForm(buildFormFromModule(mod));
+    setMode("edit");
+  };
+
+  const handleFieldChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  const addSession = () => {
+    setForm({ ...form, sessions: [...form.sessions, emptySession(form.sessions.length + 1)] });
+  };
+  const removeSession = (idx) => {
+    setForm({ ...form, sessions: form.sessions.filter((_, i) => i !== idx) });
+  };
+  const updateSessionField = (idx, field, value) => {
+    const sessions = [...form.sessions];
+    sessions[idx] = { ...sessions[idx], [field]: value };
+    setForm({ ...form, sessions });
+  };
+  const addActivity = (sIdx) => {
+    const sessions = [...form.sessions];
+    sessions[sIdx].activities = [...sessions[sIdx].activities, emptyActivity()];
+    setForm({ ...form, sessions });
+  };
+  const removeActivity = (sIdx, aIdx) => {
+    const sessions = [...form.sessions];
+    sessions[sIdx].activities = sessions[sIdx].activities.filter((_, i) => i !== aIdx);
+    setForm({ ...form, sessions });
+  };
+  const updateActivityField = (sIdx, aIdx, field, value) => {
+    const sessions = [...form.sessions];
+    sessions[sIdx].activities[aIdx] = { ...sessions[sIdx].activities[aIdx], [field]: value };
+    setForm({ ...form, sessions });
+  };
+
+  // Start: Snehal change — content block (heading/body) + reflection editing
+  const addContentBlock = (sIdx) => {
+    const sessions = [...form.sessions];
+    sessions[sIdx].content = [...(sessions[sIdx].content || []), emptyContentBlock()];
+    setForm({ ...form, sessions });
+  };
+  const removeContentBlock = (sIdx, cIdx) => {
+    const sessions = [...form.sessions];
+    sessions[sIdx].content = sessions[sIdx].content.filter((_, i) => i !== cIdx);
+    setForm({ ...form, sessions });
+  };
+  const updateContentField = (sIdx, cIdx, field, value) => {
+    const sessions = [...form.sessions];
+    const content = [...sessions[sIdx].content];
+    content[cIdx] = { ...content[cIdx], [field]: value };
+    sessions[sIdx] = { ...sessions[sIdx], content };
+    setForm({ ...form, sessions });
+  };
+  const updateReflection = (sIdx, value) => {
+    updateSessionField(sIdx, "reflection", value);
+  };
+  // End: Snehal change
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.moduleNumber || !form.title) {
+      setToast?.({ msg: "Module number and title are required.", type: "error" });
+      return;
+    }
+    setSaving(true);
+    const payload = {
+      moduleNumber: Number(form.moduleNumber),
+      title: form.title,
+      category: form.category,
+      sessions: form.sessions.map((s) => ({
+        sessionNumber: s.sessionNumber,
+        title: s.title,
+        objective: s.objective,
+        homePractice: s.homePractice,
+        activities: s.activities,
+        content: s.content || [],
+        reflection: s.reflection || "",
+      })),
+    };
+    try {
+      await updateParentModule(mod._id, payload);
+      setToast?.({ msg: "Module updated successfully!", type: "success" });
+      onSaved?.({ ...mod, ...payload });
+      setMode("view");
+    } catch (error) {
+      setToast?.({ msg: error.message || "Could not save module.", type: "error" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 1000, padding: "40px 16px", overflowY: "auto" }} onClick={onClose}>
+      <div style={{ background: "white", borderRadius: 16, padding: 24, width: 720, maxWidth: "100%" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280" }}>MODULE {form.moduleNumber}</div>
+            <h3 style={{ margin: "2px 0 0", fontSize: 17, fontWeight: 800, color: "#1c1917" }}>{form.title}</h3>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {mode === "view" ? (
+              <button onClick={enterEdit} style={smallBtn("#e0f2fe", "#0369a1")}>✏️ Edit</button>
+            ) : (
+              <button onClick={() => setMode("view")} style={smallBtn("#f1f5f9", "#475569")}>Cancel</button>
+            )}
+            <button onClick={onClose} style={smallBtn("#f1f5f9", "#475569")}>✕ Close</button>
+          </div>
+        </div>
+
+        {mode === "view" ? (
+          <ModuleDetailView form={form} />
+        ) : (
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div>
+              <label style={labelStyle}>Module Number</label>
+              <input type="number" name="moduleNumber" value={form.moduleNumber} onChange={handleFieldChange} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Title</label>
+              <input type="text" name="title" value={form.title} onChange={handleFieldChange} style={inputStyle} />
+            </div>
+            <div>
+              <label style={labelStyle}>Category</label>
+              <input type="text" name="category" value={form.category} onChange={handleFieldChange} style={inputStyle} />
+            </div>
+
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <label style={{ ...labelStyle, marginBottom: 0 }}>Sessions</label>
+                <button type="button" onClick={addSession} style={smallBtn("#fef3c7", "#92400e")}>+ Add Session</button>
+              </div>
+
+              {form.sessions.map((session, sIdx) => (
+                <div key={sIdx} style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, marginBottom: 12, background: "#fafafa" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                    <strong style={{ fontSize: 12, color: "#1c1917" }}>Session {session.sessionNumber}</strong>
+                    <button type="button" onClick={() => removeSession(sIdx)} style={smallBtn("#fee2e2", "#dc2626")}>Remove Session</button>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <input type="text" placeholder="Session title" value={session.title}
+                      onChange={(e) => updateSessionField(sIdx, "title", e.target.value)} style={inputStyle} />
+                    <input type="text" placeholder="Objective" value={session.objective}
+                      onChange={(e) => updateSessionField(sIdx, "objective", e.target.value)} style={inputStyle} />
+
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", marginTop: 4 }}>Activities</div>
+                    {session.activities.map((act, aIdx) => (
+                      <div key={aIdx} style={{ display: "grid", gridTemplateColumns: "80px 1fr 1fr 30px", gap: 6 }}>
+                        <input type="text" placeholder="Time" value={act.time}
+                          onChange={(e) => updateActivityField(sIdx, aIdx, "time", e.target.value)} style={inputStyle} />
+                        <input type="text" placeholder="Activity" value={act.activity}
+                          onChange={(e) => updateActivityField(sIdx, aIdx, "activity", e.target.value)} style={inputStyle} />
+                        <input type="text" placeholder="Key Focus" value={act.keyFocus}
+                          onChange={(e) => updateActivityField(sIdx, aIdx, "keyFocus", e.target.value)} style={inputStyle} />
+                        <button type="button" onClick={() => removeActivity(sIdx, aIdx)}
+                          style={{ ...smallBtn("#fee2e2", "#dc2626"), padding: "6px" }}>✕</button>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => addActivity(sIdx)} style={smallBtn("#e0f2fe", "#0369a1")}>+ Add Activity Row</button>
+
+                    <input type="text" placeholder="Home Practice" value={session.homePractice}
+                      onChange={(e) => updateSessionField(sIdx, "homePractice", e.target.value)} style={inputStyle} />
+
+                    {/* Start: Snehal change — Detailed Content blocks + Reflection, same form */}
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", marginTop: 4 }}>Detailed Content</div>
+                    {(session.content || []).map((block, cIdx) => (
+                      <div key={cIdx} style={{ border: "1px dashed #e5e7eb", borderRadius: 8, padding: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <input type="text" placeholder="Heading (optional)" value={block.heading || ""}
+                            onChange={(e) => updateContentField(sIdx, cIdx, "heading", e.target.value)} style={inputStyle} />
+                          <button type="button" onClick={() => removeContentBlock(sIdx, cIdx)}
+                            style={{ ...smallBtn("#fee2e2", "#dc2626"), padding: "6px 10px" }}>✕</button>
+                        </div>
+                        <textarea placeholder="Body text" value={block.body || ""} rows={3}
+                          onChange={(e) => updateContentField(sIdx, cIdx, "body", e.target.value)}
+                          style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => addContentBlock(sIdx)} style={smallBtn("#e0f2fe", "#0369a1")}>+ Add Content Block</button>
+
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", marginTop: 4 }}>Reflection</div>
+                    <textarea placeholder="Reflection text" value={session.reflection || ""} rows={3}
+                      onChange={(e) => updateReflection(sIdx, e.target.value)}
+                      style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+                    {/* End: Snehal change */}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button type="submit" disabled={saving}
+              style={{ marginTop: 4, padding: "12px 20px", borderRadius: 10, border: "none", background: saving ? "#fcd34d" : "linear-gradient(135deg,#f59e0b,#d97706)", color: "white", fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: saving ? "not-allowed" : "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+              {saving ? "Saving..." : "Update Module"}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Start: Snehal change — read-only formatted view of a module + its sessions
+function ModuleDetailView({ form }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {form.category && (
+        <span style={{ fontSize: 10, fontWeight: 700, color: "#92400e", background: "#fef3c7", padding: "3px 8px", borderRadius: 20, alignSelf: "flex-start" }}>
+          {form.category}
+        </span>
+      )}
+
+      {form.sessions.map((session, sIdx) => (
+        <div key={sIdx} style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, background: "#fafafa" }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: "#1c1917", marginBottom: 4 }}>
+            Session {session.sessionNumber}: {session.title}
+          </div>
+          {session.objective && (
+            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 10, fontStyle: "italic" }}>{session.objective}</div>
+          )}
+
+          {session.activities?.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", marginBottom: 6 }}>Activities</div>
+              {session.activities.map((act, aIdx) => (
+                <div key={aIdx} style={{ fontSize: 12, color: "#1c1917", marginBottom: 4 }}>
+                  <strong>{act.time}</strong> — {act.activity}{act.keyFocus ? ` (${act.keyFocus})` : ""}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {session.content?.length > 0 ? (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", marginBottom: 6 }}>Content</div>
+              {session.content.map((block, cIdx) => (
+                <div key={cIdx} style={{ marginBottom: 8 }}>
+                  {block.heading && <div style={{ fontSize: 12, fontWeight: 700, color: "#1c1917" }}>{block.heading}</div>}
+                  <div style={{ fontSize: 12, color: "#374151", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{block.body}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: "#9ca3af", fontStyle: "italic", marginBottom: 10 }}>
+              Detailed content not added yet.
+            </div>
+          )}
+        {session.reflection && (
+  <div style={{ marginBottom: 10 }}>
+    <div style={{ fontSize: 12, fontWeight: 800, color: "#1c1917", marginBottom: 6 }}>Reflection</div>
+    <div style={{ fontSize: 12, color: "#374151", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{session.reflection}</div>
+  </div>
+)}
+          {session.homePractice && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", marginBottom: 4 }}>Home Practice</div>
+              <div style={{ fontSize: 12, color: "#374151" }}>{session.homePractice}</div>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+// End: Snehal change
+
 export default function ParentModulesManagementTab({ setToast }) {
   const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ moduleNumber: "", title: "", category: "", sessions: [] });
   const [saving, setSaving] = useState(false);
 
@@ -150,6 +446,7 @@ export default function ParentModulesManagementTab({ setToast }) {
   const [teachers, setTeachers] = useState([]);
   const [classes, setClasses] = useState([]);
   const [assigningModule, setAssigningModule] = useState(null);
+  const [viewingModule, setViewingModule] = useState(null);
 
   useEffect(() => {
     getAdminTeachers()
@@ -172,19 +469,7 @@ export default function ParentModulesManagementTab({ setToast }) {
   useEffect(() => { loadModules(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openAddForm = () => {
-    setEditingId(null);
     setForm({ moduleNumber: "", title: "", category: "", sessions: [] });
-    setShowForm(true);
-  };
-
-  const openEditForm = (mod) => {
-    setEditingId(mod._id);
-    setForm({
-      moduleNumber: mod.moduleNumber || "",
-      title: mod.title || "",
-      category: mod.category || "",
-      sessions: mod.sessions?.length ? JSON.parse(JSON.stringify(mod.sessions)) : [],
-    });
     setShowForm(true);
   };
 
@@ -242,15 +527,9 @@ export default function ParentModulesManagementTab({ setToast }) {
       sessions: form.sessions,
     };
     try {
-      if (editingId) {
-        await updateParentModule(editingId, payload);
-        setToast?.({ msg: "Module updated successfully!", type: "success" });
-      } else {
-        await createParentModule(payload);
-        setToast?.({ msg: "Module added successfully!", type: "success" });
-      }
+      await createParentModule(payload);
+      setToast?.({ msg: "Module added successfully!", type: "success" });
       setShowForm(false);
-      setEditingId(null);
       loadModules();
     } catch (error) {
       setToast?.({ msg: error.message || "Could not save module.", type: "error" });
@@ -280,9 +559,7 @@ export default function ParentModulesManagementTab({ setToast }) {
 
       {showForm && (
         <div style={{ background: "white", borderRadius: 16, border: "1px solid #f1f5f9", borderTop: "3px solid #f59e0b", boxShadow: "0 1px 3px rgba(0,0,0,0.04)", padding: 24, marginBottom: 24, maxWidth: 720 }}>
-          <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 800, color: "#1c1917" }}>
-            {editingId ? "Edit Module" : "Add New Module"}
-          </h3>
+          <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 800, color: "#1c1917" }}>Add New Module</h3>
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div>
               <label style={labelStyle}>Module Number</label>
@@ -340,7 +617,7 @@ export default function ParentModulesManagementTab({ setToast }) {
 
             <button type="submit" disabled={saving}
               style={{ marginTop: 4, padding: "12px 20px", borderRadius: 10, border: "none", background: saving ? "#fcd34d" : "linear-gradient(135deg,#f59e0b,#d97706)", color: "white", fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: saving ? "not-allowed" : "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-              {saving ? "Saving..." : editingId ? "Update Module" : "Save Module"}
+              {saving ? "Saving..." : "Save Module"}
             </button>
           </form>
         </div>
@@ -364,27 +641,36 @@ export default function ParentModulesManagementTab({ setToast }) {
               {mod.objective && <div style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.5, marginBottom: 12 }}>{mod.objective}</div>}
 
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <button onClick={() => openEditForm(mod)} style={{ flex: 1, ...smallBtn("#e0f2fe", "#0369a1"), padding: "8px" }}>✏️ Edit</button>
+                {/* Start: Snehal change — View replaces Edit on the card */}
+                <button onClick={() => setViewingModule(mod)} style={{ flex: 1, ...smallBtn("#e0f2fe", "#0369a1"), padding: "8px" }}>👁️ View</button>
+                {/* End: Snehal change */}
                 <button onClick={() => handleDelete(mod)} style={{ flex: 1, ...smallBtn("#fee2e2", "#dc2626"), padding: "8px" }}>🗑️ Delete</button>
               </div>
-              {/* Start: Snehal change — Assign button */}
               <button onClick={() => setAssigningModule(mod)}
                 style={{ width: "100%", marginTop: 8, ...smallBtn("#dcfce7", "#15803d"), padding: "8px" }}>
                 🔗 Assign to Teacher / Class
               </button>
-              {/* End: Snehal change */}
             </div>
           ))}
         </div>
       )}
 
-      {/* Start: Snehal change — render Assign modal */}
       {assigningModule && (
         <AssignModal
           mod={assigningModule}
           teachers={teachers}
           classes={classes}
           onClose={() => setAssigningModule(null)}
+          setToast={setToast}
+        />
+      )}
+
+      {/* Start: Snehal change — render Detail modal (view + inline edit) */}
+      {viewingModule && (
+        <ModuleDetailModal
+          mod={viewingModule}
+          onClose={() => setViewingModule(null)}
+          onSaved={() => loadModules()}
           setToast={setToast}
         />
       )}
