@@ -43,14 +43,10 @@ export async function validatePasswordAgainstPolicy(password) {
   }
 }
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  console.warn("WARNING: JWT_SECRET is not set. Using insecure default. Set JWT_SECRET in backend/.env for production.");
-}
-
-const JWT_ACCESS_SECRET  = process.env.JWT_ACCESS_SECRET  || JWT_SECRET || "dev_access_secret_change_me";
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || JWT_SECRET || "dev_refresh_secret_change_me";
-const JWT_RESET_SECRET   = process.env.JWT_RESET_SECRET   || JWT_SECRET || "dev_reset_secret_change_me";
+const getJwtSecret = () => process.env.JWT_SECRET || "dev_secret_change_me";
+const getAccessSecret = () => process.env.JWT_ACCESS_SECRET || getJwtSecret() || "dev_access_secret_change_me";
+const getRefreshSecret = () => process.env.JWT_REFRESH_SECRET || getJwtSecret() || "dev_refresh_secret_change_me";
+const getResetSecret = () => process.env.JWT_RESET_SECRET || getJwtSecret() || "dev_reset_secret_change_me";
 
 const ROLE_PERMISSIONS = {
   super_admin: [
@@ -73,6 +69,11 @@ const ROLE_PERMISSIONS = {
     "provide_feedback", "track_teacher_performance"
   ],
   teacher: [
+    "view_courses", "attend_sessions", "mark_participation",
+    "submit_assignments", "view_feedback", "track_progress",
+    "download_certificates"
+  ],
+  fellow: [
     "view_courses", "attend_sessions", "mark_participation",
     "submit_assignments", "view_feedback", "track_progress",
     "download_certificates"
@@ -104,10 +105,10 @@ export function signToken(user) {
       role: user.role, 
       email: user.email, 
       name: user.name, 
-      type: "access",
-      permissions
+      permissions,
+      type: "access"
     },
-    JWT_ACCESS_SECRET,
+    getAccessSecret(),
     { expiresIn: "7d" }
   );
 }
@@ -115,13 +116,13 @@ export function signToken(user) {
 export function createPasswordResetToken(email) {
   return jwt.sign(
     { email, purpose: "password_reset", type: "reset" },
-    JWT_RESET_SECRET,
+    getResetSecret(),
     { expiresIn: "15m" }
   );
 }
 
 export function verifyPasswordResetToken(token) {
-  const payload = jwt.verify(token, JWT_RESET_SECRET);
+  const payload = jwt.verify(token, getResetSecret());
   if (payload?.purpose !== "password_reset" || !payload?.email) {
     throw new Error("Invalid reset token");
   }
@@ -137,8 +138,8 @@ export async function requireAuth(req, res, next) {
   }
 
   try {
-    const payload = jwt.verify(token, JWT_ACCESS_SECRET);
-    if (payload.type !== "access") {
+    const payload = jwt.verify(token, getAccessSecret());
+    if (payload.type && payload.type !== "access") {
       return res.status(401).json({ message: "Invalid token type" });
     }
     const user = await User.findById(payload.id).select("_id role name email status permissions passwordChangedAt passwordExpiresAt").lean();

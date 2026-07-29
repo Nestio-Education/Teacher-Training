@@ -28,6 +28,11 @@ import { Center } from "./models/Center.js";
 import { ClassModel } from "./models/Class.js";
 import { ClassLog } from "./models/ClassLog.js";
 import { Child } from "./models/Child.js";
+// Start: Dnyaneshwari Thorat
+import { ChildAssessment } from "./models/ChildAssessment.js";
+import ActivityCompletion from "./models/ActivityCompletion.js";
+import { buildRecommendations, getLatestStageWithData } from "./services/childAssessmentService.js";
+// End: Dnyaneshwari Thorat
 import { Course } from "./models/Course.js";
 import { CourseAssignment } from "./models/CourseAssignment.js";
 import { Note } from "./models/Note.js";
@@ -38,13 +43,14 @@ import { ActivitySubmission } from "./models/ActivitySubmission.js";
 import { Trainer } from "./models/Trainer.js";
 import { Feedback } from "./models/Feedback.js";
 import { FileAsset } from "./models/FileAsset.js";
-import { ChildAttendanceSession, TeacherAttendanceRecord } from "./models/Attendance.js";
+import { ChildAttendanceSession, TeacherAttendanceRecord, MentorAttendanceRecord } from "./models/Attendance.js";
 import { Certificate } from "./models/Certificate.js";
 import { Notification } from "./models/Notification.js";
 import { ReportJob } from "./models/ReportJob.js";
 import ActivityBank from "./models/ActivityBank.js";
 import AIActivity from "./models/AIActivity.js";
 import AutomationTeacher from "./models/AutomationTeacher.js";
+import { CurriculumUnit } from "./models/CurriculumUnit.js";
 import DailyTaskAssignment from "./models/DailyTaskAssignment.js";
 import TeacherNotification from "./models/TeacherNotification.js";
 import TaskReplacementLog from "./models/TaskReplacementLog.js";
@@ -72,6 +78,10 @@ const databaseModels = [
    AIActivity,
    Center,
    ChildAttendanceSession,
+   // Start: Dnyaneshwari Thorat
+   ChildAssessment,
+   ActivityCompletion,
+   // End: Dnyaneshwari Thorat
    Child,
    ClassLog,
    ClassModel,
@@ -584,7 +594,7 @@ app.use(async (req, res, next) => {
     }
     next();
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -595,7 +605,8 @@ app.get("/health", (_req, res) => {
 app.post("/api/auth/login", async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    const user = await User.findOne({ email: String(email).toLowerCase().trim() });
+    const user = await User.findOne({ email: String(email).toLowerCase().trim() })
+      .populate("assignedMentor", "name email phone photoUrl");
 
     if (!user || !(await verifyPassword(password, user.passwordHash))) {
       return res.status(401).json({ message: "Invalid email or password" });
@@ -612,6 +623,17 @@ app.post("/api/auth/login", async (req, res, next) => {
       name: user.name,
     });
 
+    let assignedMentor = user.assignedMentor;
+    if (!assignedMentor && (user.role === 'teacher' || user.role === 'fellow')) {
+      assignedMentor = await User.findOne({
+        "mentorProfile.assignedTeachers": user._id
+      }).select("name email phone photoUrl mentorProfile.qualification mentorProfile.specialization");
+      
+      if (assignedMentor) {
+        await User.findByIdAndUpdate(user._id, { $set: { assignedMentor: assignedMentor._id } });
+      }
+    }
+
     res.json({
       token,
       user: {
@@ -625,6 +647,7 @@ app.post("/api/auth/login", async (req, res, next) => {
         preferredNotificationChannel: user.preferredNotificationChannel || "in_app",
         teacherProfile: user.teacherProfile,
         mentorProfile: user.mentorProfile,
+        assignedMentor: assignedMentor,
         subject: user.teacherProfile?.subject,
         address: user.teacherProfile?.address || user.mentorProfile?.address,
         qualification: user.teacherProfile?.qualification || user.mentorProfile?.qualification,
@@ -632,13 +655,13 @@ app.post("/api/auth/login", async (req, res, next) => {
       },
     });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
 app.post("/api/auth/register-teacher", async (req, res, next) => {
   try {
-    const { name, email, phone, password, qualification, subject, experience, address, center, class: classId, classIds } = req.body;
+    const { name, email, phone, password, qualification, subject, experience, address, center, class: classId, classIds, photoUrl } = req.body;
     
     const normalizedEmail = String(email).toLowerCase().trim(); // ADD THIS
 
@@ -669,6 +692,7 @@ app.post("/api/auth/register-teacher", async (req, res, next) => {
       phone,
       passwordHash,
       status: "pending",
+      photoUrl,
       teacherProfile: { qualification, subject, experience, address, center, class: classId, classes: assignedClasses },
     });
 
@@ -725,13 +749,13 @@ app.post("/api/auth/register-teacher", async (req, res, next) => {
     if (error.code === 11000) {
       return res.status(409).json({ message: "Email already registered" });
     }
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
 app.post("/api/auth/register-mentor", async (req, res, next) => {
   try {
-    const { name, email, phone, password, qualification, specialization, experience, address, fellowshipSemester } = req.body;
+    const { name, email, phone, password, qualification, specialization, experience, address, fellowshipSemester, role, photoUrl } = req.body;
     
     // Start: Dnyaneshwari Thorat
     if (!phone || !isValidPhoneNumber(String(phone).trim(), 'IN')) {
@@ -745,32 +769,81 @@ app.post("/api/auth/register-mentor", async (req, res, next) => {
     }
 
     const passwordHash = await hashPassword(password);
+    const targetRole = role === "fellow" ? "fellow" : "mentor";
 
-    const mentor = await User.create({
-      role: "mentor",
-      name,
-      email,
-      phone,
-      passwordHash,
-      status: "pending",
-      mentorProfile: { qualification, specialization, experience, address, fellowshipSemester: fellowshipSemester || 3 },
-    });
+    let user;
+    if (targetRole === "fellow") {
+      user = await User.create({
+        role: "fellow",
+        name,
+        email: email.toLowerCase().trim(),
+        phone,
+        passwordHash,
+        status: "pending",
+        photoUrl,
+        teacherProfile: { qualification, subject: specialization || "ECCE", experience, address },
+      });
+
+      // Auto course assignment for fellow
+      try {
+        const adminUser = await User.findOne({ role: "admin" });
+        const adminId = adminUser ? adminUser._id : null;
+        const courses = await Course.find({ status: "published" });
+
+        for (let i = 0; i < courses.length; i++) {
+          const course = courses[i];
+          const isLocked = i >= 4 && !course.isRequired;
+
+          await CourseAssignment.findOneAndUpdate(
+            { course: course._id, teacher: user._id },
+            {
+              course: course._id,
+              teacher: user._id,
+              assignedBy: adminId,
+              status: "assigned",
+              progressPercent: 0,
+              locked: isLocked
+            },
+            { upsert: true, new: true }
+          );
+        }
+        await createAndEmitNotification({
+          recipientId: user._id,
+          title: "Courses Allocated!",
+          body: `Successfully allocated ${courses.length} educational courses to your training profile. Your first 4 courses are ready to start!`,
+          type: "course",
+        });
+      } catch (assignError) {
+        console.error("Auto course assignment failed during fellow registration:", assignError);
+      }
+    } else {
+      user = await User.create({
+        role: "mentor",
+        name,
+        email: email.toLowerCase().trim(),
+        phone,
+        passwordHash,
+        status: "pending",
+        photoUrl,
+        mentorProfile: { qualification, specialization, experience, address, fellowshipSemester: fellowshipSemester || 3 },
+      });
+    }
 
     res.status(201).json({
-      mentor: {
-        id: mentor._id,
-        role: mentor.role,
-        name: mentor.name,
-        email: mentor.email,
-        phone: mentor.phone,
-        status: mentor.status,
+      [targetRole]: {
+        id: user._id,
+        role: user.role,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        status: user.status,
       },
     });
   } catch (error) {
     if (error.code === 11000) {
       return res.status(409).json({ message: "Email already registered" });
     }
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -797,7 +870,7 @@ app.post("/api/auth/forgot-password", async (req, res, next) => {
       resetToken,
     });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -879,26 +952,20 @@ app.post("/api/auth/send-signup-otp", async (req, res, next) => {
     storeOtp(email, emailOtp);
 
     // Send Email OTP (non-blocking)
-    let sentEmailOk = false;
-    try {
-      const emailResult = await sendEmail({
-        to: email,
-        // Start: Dnyaneshwari Thorat
-        subject: "SpacECE Portal - Registration Email Verification OTP",
-        // End: Dnyaneshwari Thorat
-        html: `
-          <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
-            <h2 style="color:#1e3a8a;margin-top:0;">Verify Your Email Address</h2>
-            <p style="color:#334155;font-size:14px;line-height:1.6;">Thank you for registering at SpacECE Teacher Portal. Use the following OTP to verify your email address:</p>
-            <div style="font-size:36px;font-weight:900;color:#f59e0b;letter-spacing:12px;margin:16px 0;background:#fef3c7;padding:16px;border-radius:10px;text-align:center;">${emailOtp}</div>
-            <p style="color:#9ca3af;font-size:12px;margin:16px 0 0;">This OTP is valid for <strong>${OTP_TTL_MINUTES} minutes</strong>. Please do not share this code.</p>
-          </div>
-        `
-      });
-      sentEmailOk = emailResult.success;
-    } catch (err) {
-      console.error("Signup Email OTP delivery failed:", err);
-    }
+    sendEmail({
+      to: email,
+      // Start: Dnyaneshwari Thorat
+      subject: "SpacECE Portal - Registration Email Verification OTP",
+      // End: Dnyaneshwari Thorat
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
+          <h2 style="color:#1e3a8a;margin-top:0;">Verify Your Email Address</h2>
+          <p style="color:#334155;font-size:14px;line-height:1.6;">Thank you for registering at SpacECE Teacher Portal. Use the following OTP to verify your email address:</p>
+          <div style="font-size:36px;font-weight:900;color:#f59e0b;letter-spacing:12px;margin:16px 0;background:#fef3c7;padding:16px;border-radius:10px;text-align:center;">${emailOtp}</div>
+          <p style="color:#9ca3af;font-size:12px;margin:16px 0 0;">This OTP is valid for <strong>${OTP_TTL_MINUTES} minutes</strong>. Please do not share this code.</p>
+        </div>
+      `
+    }).catch(err => console.error("Non-blocking OTP email failed:", err));
 
     // Log OTP to server console
     console.log(`[signup-otp] OTP for email ${email} is ${emailOtp}`);
@@ -909,10 +976,10 @@ app.post("/api/auth/send-signup-otp", async (req, res, next) => {
     res.json({
       success: true,
       message: "Verification OTP sent successfully to email.",
-      emailOtp: isMailConfigured ? undefined : emailOtp
+      emailOtp: undefined
     });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -933,7 +1000,7 @@ app.post("/api/auth/verify-signup-otp", async (req, res, next) => {
     deleteOtp(email);
     res.json({ success: true, message: "Email verified successfully." });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 // End: Dnyaneshwari Thorat
@@ -967,13 +1034,13 @@ app.post("/api/auth/forgot-password-otp", async (req, res, next) => {
 
     // Send OTP via email
     // Start: Dnyaneshwari Thorat
-    const emailResult = await sendEmail({
+    sendEmail({
       to: user.email,
       subject: "SpacECE Portal - Password Reset OTP",
       html: `
         <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
           <div style="text-align:center;margin-bottom:24px;">
-            <h2 style="color:#f59e0b;margin:0;">🔐 Password Reset</h2>
+            <h2 style="color:#f59e0b;margin:0;">🔒 Password Reset</h2>
             <p style="color:#6b7280;font-size:14px;margin-top:8px;">SpacECE Teacher Training Portal</p>
           </div>
           <div style="background:white;border-radius:12px;padding:24px;text-align:center;border:2px dashed #fbbf24;">
@@ -983,13 +1050,12 @@ app.post("/api/auth/forgot-password-otp", async (req, res, next) => {
             <p style="color:#9ca3af;font-size:12px;margin:16px 0 0;">This OTP expires in <strong>${OTP_TTL_MINUTES} minutes</strong>.</p>
             <p style="color:#9ca3af;font-size:12px;margin:4px 0 0;">Do not share this code with anyone.</p>
           </div>
-          <p style="color:#d1d5db;font-size:11px;text-align:center;margin-top:20px;">
-            If you didn't request this, please ignore this email.<br/>
-            Sent at ${new Date().toLocaleString("en-IN")} · SpacECE Portal
-          </p>
+          <p style="color:#9ca3af;font-size:11px;text-align:center;margin-top:24px;">If you didn't request a password reset, you can safely ignore this email.</p>
         </div>
       `
-    });
+    }).catch(err => console.error("Non-blocking password reset OTP email failed:", err));
+
+    res.json({ success: true, message: "OTP sent to your registered email address.", devOtp: undefined });
     // End: Dnyaneshwari Thorat
 
     console.log("[otp] generated_and_sent", JSON.stringify({
@@ -1003,7 +1069,7 @@ app.post("/api/auth/forgot-password-otp", async (req, res, next) => {
       emailSent: emailResult.success,
     });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1043,7 +1109,7 @@ app.post("/api/auth/verify-otp", async (req, res, next) => {
       resetToken,
     });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1086,7 +1152,7 @@ app.post("/api/teacher/change-password", requireAuth, async (req, res, next) => 
 
     res.json({ message: "Password changed successfully" });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1132,7 +1198,7 @@ app.get("/api/admin/dashboard", requireAuth, requireRole("admin"), async (_req, 
       courseCompletionPercent: assignedCourses ? Math.round((completedCourses / assignedCourses) * 100) : 0,
     });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1156,7 +1222,7 @@ app.get("/api/centers", requireAuth, requireRole("admin"), async (_req, res, nex
 
     res.json({ centers });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1167,7 +1233,7 @@ app.get("/api/mentor/center", requireAuth, requireRole("mentor"), async (req, re
       .populate("mentor", "name email photoUrl");
     res.json({ center });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1280,7 +1346,7 @@ app.post("/api/centers", requireAuth, requireRole("admin"), async (req, res, nex
 
     res.status(201).json({ center, classes: createdClasses });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1294,7 +1360,7 @@ app.get("/api/admin/teachers", requireAuth, requireRole("admin"), async (_req, r
 
     res.json({ teachers });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1318,7 +1384,7 @@ app.patch("/api/admin/teachers/:id/status", requireAuth, requireRole("admin"), a
 
     res.json({ teacher });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1332,7 +1398,7 @@ app.get("/api/admin/mentors", requireAuth, requireRole("admin"), async (_req, re
 
     res.json({ mentors });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1346,7 +1412,7 @@ app.patch("/api/admin/mentors/:id/status", requireAuth, requireRole("admin"), as
 
     res.json({ mentor });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1394,7 +1460,7 @@ app.patch("/api/admin/mentors/:id", requireAuth, requireRole("admin"), async (re
     }
     res.json({ mentor });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1403,7 +1469,7 @@ app.delete("/api/admin/mentors/:id", requireAuth, requireRole("admin"), async (r
     await User.findOneAndDelete({ _id: req.params.id, role: "mentor" });
     res.json({ message: "Mentor deleted successfully" });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1416,7 +1482,7 @@ app.patch("/api/admin/mentors/:id/block", requireAuth, requireRole("admin"), asy
     ).select("-passwordHash");
     res.json({ mentor });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1429,7 +1495,7 @@ app.patch("/api/admin/mentors/:id/unblock", requireAuth, requireRole("admin"), a
     ).select("-passwordHash");
     res.json({ mentor });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1437,7 +1503,7 @@ app.post("/api/admin/mentors/:id/message", requireAuth, requireRole("admin"), as
   try {
     res.json({ message: "Direct message sent to mentor successfully (simulated)." });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1457,7 +1523,7 @@ app.get("/api/admin/children", requireAuth, requireRole("admin"), async (req, re
 
     res.json({ children });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1498,7 +1564,7 @@ app.post("/api/admin/children", requireAuth, requireRole("admin"), async (req, r
     if (error.status === 400) {
       return res.status(400).json({ message: error.message });
     }
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1555,13 +1621,19 @@ app.get("/api/courses", requireAuth, async (req, res, next) => {
       return res.json({ courses: decoratedCourses });
     }
 
-    const assignments = await CourseAssignment.find({ teacher: req.user.id })
+    const courseFilter = { teacher: req.user.id };
+    if (req.user.role === "fellow") {
+      const mentors = await User.find({ role: "mentor" }).select("_id");
+      courseFilter.assignedBy = { $in: mentors.map(m => m._id) };
+    }
+
+    const assignments = await CourseAssignment.find(courseFilter)
       .populate("course")
       .sort({ createdAt: -1 });
 
     res.json({ courses: assignments });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1582,24 +1654,44 @@ app.post("/api/courses", requireAuth, requireRole("admin"), async (req, res, nex
     if (error.code === 11000) {
       return res.status(409).json({ message: "A course with this title already exists." });
     }
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
-app.get("/api/teacher/me", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.get("/api/teacher/me", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const teacher = await User.findById(req.user.id)
       .select("-passwordHash")
       .populate("teacherProfile.center", "name address city pincode contactPerson phone email")
-      .populate("teacherProfile.classes", "name ageGroup curriculumLevel schedule");
+      .populate("teacherProfile.classes", "name ageGroup curriculumLevel schedule")
+      .populate("assignedMentor", "name email phone photoUrl mentorProfile.qualification mentorProfile.specialization");
 
-    res.json({ teacher });
+    // Find assigned mentor via reverse lookup if not explicitly populated
+    let assignedMentor = teacher.assignedMentor;
+    if (!assignedMentor) {
+      assignedMentor = await User.findOne({
+        "mentorProfile.assignedTeachers": req.user.id
+      }).select("name email phone photoUrl mentorProfile.qualification mentorProfile.specialization");
+    }
+
+    // Convert teacher to plain object to attach assignedMentor
+    const teacherData = teacher.toObject();
+    if (assignedMentor) {
+      teacherData.assignedMentor = assignedMentor;
+      
+      // Keep DB in sync
+      if (!teacher.assignedMentor) {
+        await User.findByIdAndUpdate(req.user.id, { $set: { assignedMentor: assignedMentor._id } });
+      }
+    }
+
+    res.json({ teacher: teacherData });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
-app.patch("/api/teacher/me", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.patch("/api/teacher/me", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { name, phone, photoUrl, language, preferredNotificationChannel, teacherProfile = {} } = req.body;
     const allowedProfileFields = ["qualification", "subject", "experience", "address"];
@@ -1624,7 +1716,7 @@ app.patch("/api/teacher/me", requireAuth, requireRole("teacher"), async (req, re
 
     res.json({ teacher });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1633,11 +1725,60 @@ app.get("/api/mentor/me", requireAuth, requireRole("mentor"), async (req, res, n
   try {
     const mentor = await User.findById(req.user.id)
       .select("-passwordHash")
-      .populate("mentorProfile.assignedCenters", "name address city pincode contactPerson phone email")
       .populate("mentorProfile.center", "name address city")
       .populate("mentorProfile.classes", "name")
-      .populate("mentorProfile.assignedTeachers", "name teacherProfile.subject photoUrl");
+      // start dnyaneshwari thorat
+      .populate("mentorProfile.assignedTeachers", "name email phone role teacherProfile.subject photoUrl teacherProfile.communityProfilingStatus teacherProfile.communityImmersionStatus teacherProfile.curriculumImplementationStatus");
+      // end dnyaneshwari thorat
     res.json({ mentor });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+// ── Mentor Geo-tag Attendance APIs ──
+app.get("/api/mentor/attendance", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const records = await MentorAttendanceRecord.find({ mentor: req.user.id })
+      .sort({ attendanceDate: -1 });
+    res.json({ records });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/mentor/attendance", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const { latitude, longitude, address, status, note, source } = req.body;
+    
+    // Normalize date to YYYY-MM-DD
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const record = await MentorAttendanceRecord.findOneAndUpdate(
+      { mentor: req.user.id, attendanceDate: today },
+      {
+        mentor: req.user.id,
+        attendanceDate: today,
+        status: req.body.status || status || "present",
+        source: req.body.source || source || (latitude && longitude ? "geo" : "manual"),
+        latitude,
+        longitude,
+        address,
+        note,
+        checkInTime: req.body.checkInTime,
+        checkOutTime: req.body.checkOutTime,
+        checkedIn: req.body.checkedIn,
+        checkedOut: req.body.checkedOut,
+        distanceOffset: req.body.distanceOffset,
+        distanceOffsetOut: req.body.distanceOffsetOut,
+        snapshot: req.body.snapshot,
+        snapshotOut: req.body.snapshotOut
+      },
+      { upsert: true, new: true }
+    );
+
+    res.status(201).json({ success: true, record });
   } catch (error) {
     next(error);
   }
@@ -1669,11 +1810,12 @@ app.patch("/api/mentor/me", requireAuth, requireRole("mentor"), async (req, res,
 
     const mentor = await User.findByIdAndUpdate(req.user.id, { $set: update }, { new: true })
       .select("-passwordHash")
-      .populate("mentorProfile.assignedCenters", "name address city")
-      .populate("mentorProfile.assignedTeachers", "name teacherProfile.subject photoUrl");
+      // start dnyaneshwari thorat
+      .populate("mentorProfile.assignedTeachers", "name email phone role teacherProfile.subject photoUrl teacherProfile.communityProfilingStatus teacherProfile.communityImmersionStatus teacherProfile.curriculumImplementationStatus");
+      // end dnyaneshwari thorat
     res.json({ mentor });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1690,12 +1832,320 @@ app.post("/api/mentor/change-password", requireAuth, requireRole("mentor"), asyn
     await user.save();
     res.json({ message: "Password updated successfully" });
   } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+// ── Mentor Fellow Approval APIs ──
+app.get("/api/mentor/fellows", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const fellows = await User.find({ 
+      role: "fellow",
+      $or: [
+        { assignedMentor: { $exists: false } },
+        { assignedMentor: null },
+        { assignedMentor: req.user.id }
+      ]
+    })
+      .select("-passwordHash")
+      .populate("teacherProfile.center", "name city")
+      .populate("teacherProfile.classes", "name")
+      .sort({ createdAt: -1 });
+    res.json({ fellows });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/mentor/fellows/attendance", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const { from, to } = req.query;
+    const fellows = await User.find({ role: "fellow", assignedMentor: req.user.id }).select("_id");
+    const fellowIds = fellows.map(f => f._id);
+    
+    let dateFilter = {};
+    if (from && to) {
+      dateFilter = { $gte: new Date(from), $lte: new Date(to) };
+    }
+
+    const query = { teacher: { $in: fellowIds } };
+    if (from && to) query.attendanceDate = dateFilter;
+
+    const attendanceRecords = await TeacherAttendanceRecord.find(query)
+      .populate("teacher", "name email")
+      .sort({ attendanceDate: -1 });
+      
+    res.json({ attendanceRecords });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/mentor/fellows/:id/status", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const { status } = req.body;
+    if (!["approved", "rejected", "pending", "inactive"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status specified" });
+    }
+
+    const fellow = await User.findOneAndUpdate(
+      { _id: req.params.id, role: "fellow" },
+      { status },
+      { new: true }
+    ).select("-passwordHash");
+
+    if (!fellow) {
+      return res.status(404).json({ message: "Fellow not found" });
+    }
+
+    const mentor = await User.findById(req.user.id);
+    if (mentor && status === "approved") {
+      // Add fellow to mentor's assignedTeachers
+      if (mentor.mentorProfile && !mentor.mentorProfile.assignedTeachers.includes(fellow._id)) {
+        mentor.mentorProfile.assignedTeachers.push(fellow._id);
+        await mentor.save();
+      }
+      // Set fellow's center to mentor's center if fellow has no center
+      if (mentor.mentorProfile?.center && !fellow.teacherProfile?.center) {
+        if (!fellow.teacherProfile) {
+          fellow.teacherProfile = {};
+        }
+        fellow.teacherProfile.center = mentor.mentorProfile.center;
+        await fellow.save();
+      }
+
+      await createAndEmitNotification({
+        recipientId: fellow._id,
+        title: "Account Approved by Mentor! 🎉",
+        body: "Your fellow account has been approved by your mentor. All ECCE training features are now unlocked.",
+        type: "approval",
+      });
+    }
+
+    // Trigger notification to the fellow
+    await createAndEmitNotification({
+      recipientId: fellow._id,
+      title: "Status Update",
+      message: `Your fellow application has been ${status}.`,
+      type: "status_update",
+      link: "/dashboard"
+    });
+
+    res.json({ message: `Fellow status updated to ${status}` });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// start dnyaneshwari thorat
+app.delete("/api/mentor/fellows/:id", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const fellow = await User.findOneAndDelete({ _id: req.params.id, role: "fellow" });
+    if (!fellow) return res.status(404).json({ message: "Fellow not found" });
+    
+    // Remove fellow from any mentor's assignedTeachers list
+    await User.updateMany(
+      { "mentorProfile.assignedTeachers": fellow._id },
+      { $pull: { "mentorProfile.assignedTeachers": fellow._id } }
+    );
+    
+    res.json({ message: "Fellow deleted successfully" });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── Claim Fellow API ──
+app.post("/api/mentor/fellows/:id/claim", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const fellowId = req.params.id;
+    const mentor = await User.findById(req.user.id);
+    if (!mentor) {
+      return res.status(404).json({ message: "Mentor not found." });
+    }
+
+    // Update fellow center, status and assignedMentor atomically
+    const updateFields = { status: "approved", assignedMentor: mentor._id };
+    if (mentor.mentorProfile?.center) {
+      updateFields["teacherProfile.center"] = mentor.mentorProfile.center;
+    }
+    
+    // Atomic lock: Only update if assignedMentor is null or not exists
+    const updatedFellow = await User.findOneAndUpdate(
+      { 
+        _id: fellowId, 
+        role: "fellow",
+        $or: [
+          { assignedMentor: { $exists: false } },
+          { assignedMentor: null }
+        ]
+      },
+      { $set: updateFields },
+      { new: true }
+    ).select("-passwordHash");
+
+    if (!updatedFellow) {
+      // It means the fellow doesn't exist OR was already claimed by someone else
+      const existingFellow = await User.findOne({ _id: fellowId, role: "fellow" });
+      if (!existingFellow) {
+        return res.status(404).json({ message: "Fellow not found." });
+      } else {
+        return res.status(409).json({ message: "Conflict: This fellow has already been claimed by another mentor." });
+      }
+    }
+
+    // Add to assigned teachers of mentor
+    await User.findByIdAndUpdate(
+      req.user.id,
+      { $addToSet: { "mentorProfile.assignedTeachers": fellowId } }
+    );
+
+    // Trigger Notification for the Fellow
+    await createAndEmitNotification({
+      recipientId: fellowId,
+      title: "Mentor Assigned!",
+      body: `Great news! ${mentor.name} is now your assigned mentor.`,
+      type: "in_app",
+      metadata: { mentorId: mentor._id }
+    });
+
+    res.json({ success: true, message: "Fellow claimed successfully.", fellow: updatedFellow });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── Unclaim Fellow API ──
+app.post("/api/mentor/fellows/:id/unclaim", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const fellowId = req.params.id;
+    const fellow = await User.findOne({ _id: fellowId, role: "fellow" });
+    if (!fellow) {
+      return res.status(404).json({ message: "Fellow not found." });
+    }
+
+    const mentor = await User.findById(req.user.id);
+    if (!mentor) {
+      return res.status(404).json({ message: "Mentor not found." });
+    }
+
+    // Update fellow status to pending, remove center, and unset assignedMentor
+    const updatedFellow = await User.findByIdAndUpdate(
+      fellowId,
+      { $set: { status: "pending" }, $unset: { "teacherProfile.center": "", assignedMentor: "" } },
+      { new: true }
+    ).select("-passwordHash");
+
+    // Remove from assigned teachers of mentor
+    await User.findByIdAndUpdate(
+      req.user.id,
+      { $pull: { "mentorProfile.assignedTeachers": fellowId } }
+    );
+
+    // Trigger Notification for the Fellow
+    await createAndEmitNotification({
+      recipientId: fellowId,
+      title: "Mentor Reassigned",
+      body: `Your mentor assignment has been reset by the administration. You are now back in the pending pool.`,
+      type: "in_app",
+      metadata: { previousMentorId: mentor._id }
+    });
+
+    res.json({ success: true, message: "Fellow unclaimed successfully.", fellow: updatedFellow });
+  } catch (error) {
+    next(error);
+  }
+});
+// end dnyaneshwari thorat
+
+// ── Mentor Fellow Activities APIs ──
+app.get("/api/mentor/activities", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const activities = await ActivitySubmission.find({ mentor: req.user.id })
+      .populate("teacher", "name email")
+      .populate("center", "name")
+      .populate("class", "name")
+      .populate("lessonPlan", "title")
+      .sort({ createdAt: -1 });
+    res.json({ activities });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.patch("/api/mentor/activities/:id", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const { status, adminComments } = req.body;
+    
+    if (!["approved", "rejected", "flagged"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+
+    const activity = await ActivitySubmission.findOneAndUpdate(
+      { _id: req.params.id, mentor: req.user.id },
+      { status, adminComments, reviewedBy: req.user.id, reviewedAt: new Date() },
+      { new: true }
+    ).populate("teacher", "name email");
+
+    if (!activity) {
+      return res.status(404).json({ message: "Activity not found or not assigned to you" });
+    }
+
+    // Trigger Notification to Fellow
+    if (activity.teacher) {
+      await createAndEmitNotification({
+        recipientId: activity.teacher._id,
+        title: "Activity Reviewed",
+        body: `Your activity submission was reviewed by your mentor. Status: ${status}.`,
+        type: "in_app",
+        metadata: { activityId: activity._id }
+      });
+    }
+
+    res.json({ success: true, activity });
+  } catch (error) {
+    next(error);
+  }
+});
+// ── Update Mentee Tracking Statuses ──
+app.patch("/api/mentor/mentee/:id/tracking", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const { communityProfilingStatus, communityImmersionStatus, curriculumImplementationStatus } = req.body;
+    const menteeId = req.params.id;
+
+    const updateFields = {};
+    if (communityProfilingStatus) updateFields["teacherProfile.communityProfilingStatus"] = communityProfilingStatus;
+    if (communityImmersionStatus) updateFields["teacherProfile.communityImmersionStatus"] = communityImmersionStatus;
+    if (curriculumImplementationStatus) updateFields["teacherProfile.curriculumImplementationStatus"] = curriculumImplementationStatus;
+
+    const mentee = await User.findByIdAndUpdate(
+      menteeId,
+      { $set: updateFields },
+      { new: true, runValidators: true }
+    );
+
+    if (!mentee) {
+      return res.status(404).json({ message: "Mentee not found." });
+    }
+
+    res.json({ success: true, mentee });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── Curriculum Units Route ──
+app.get("/api/curriculum", requireAuth, async (req, res, next) => {
+  try {
+    const units = await CurriculumUnit.find({}).sort({ createdAt: 1 });
+    res.json({ success: true, units });
+  } catch (error) {
     next(error);
   }
 });
 
 // Ã¢â€â‚¬Ã¢â€â‚¬ Teacher Language Preference (persisted to Atlas) Ã¢â€â‚¬Ã¢â€â‚¬
-app.patch("/api/teacher/me/language", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.patch("/api/teacher/me/language", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { language } = req.body;
     const validLanguages = ["English", "Hindi", "Marathi", "Telugu", "Kannada", "Tamil"];
@@ -1705,12 +2155,12 @@ app.patch("/api/teacher/me/language", requireAuth, requireRole("teacher"), async
     await User.findByIdAndUpdate(req.user.id, { language });
     res.json({ success: true, language });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
 // Ã¢â€â‚¬Ã¢â€â‚¬ Teacher Notification Preference (persisted to Atlas) Ã¢â€â‚¬Ã¢â€â‚¬
-app.patch("/api/teacher/me/notification-preference", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.patch("/api/teacher/me/notification-preference", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { preferredNotificationChannel } = req.body;
     const validChannels = ["in_app", "email", "sms", "whatsapp", "all"];
@@ -1720,7 +2170,7 @@ app.patch("/api/teacher/me/notification-preference", requireAuth, requireRole("t
     await User.findByIdAndUpdate(req.user.id, { preferredNotificationChannel });
     res.json({ success: true, preferredNotificationChannel });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1737,7 +2187,7 @@ app.patch("/api/admin/me/language", requireAuth, requireRole("admin"), async (re
     await PortalSetting.findOneAndUpdate({ key: "adminLanguage" }, { value: language }, { upsert: true });
     res.json({ success: true, language });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1762,7 +2212,7 @@ app.post("/api/admin/settings/smtp", requireAuth, requireRole("admin"), async (r
     console.log("[admin] smtp_config_saved", JSON.stringify({ smtpHost, smtpUser }));
     res.json({ success: true, message: "SMTP configuration saved to database" });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1784,44 +2234,67 @@ app.post("/api/admin/settings/twilio", requireAuth, requireRole("admin"), async 
     console.log("[admin] twilio_config_saved", JSON.stringify({ twilioSid }));
     res.json({ success: true, message: "Twilio configuration saved to database" });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
-app.get("/api/teacher/classes", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.get("/api/teacher/classes", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const teacher = await User.findById(req.user.id).select("teacherProfile");
     const classIds = teacher?.teacherProfile?.classes || [];
     const singleClassId = teacher?.teacherProfile?.class;
     const allClassIds = [...new Set([...classIds.map(id => id.toString()), singleClassId?.toString()].filter(Boolean))];
-    if (allClassIds.length === 0) {
-      return res.json({ classes: [] });
+    
+    if (allClassIds.length > 0) {
+      const classes = await ClassModel.find({ _id: { $in: allClassIds } });
+      return res.json({ classes });
     }
-    const classes = await ClassModel.find({ _id: { $in: allClassIds } });
-    res.json({ classes });
+
+    const centerId = teacher?.teacherProfile?.center;
+    if (centerId) {
+      const classes = await ClassModel.find({ center: centerId });
+      return res.json({ classes });
+    }
+
+    res.json({ classes: [] });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
-app.get("/api/teacher/children", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.get("/api/teacher/children", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const teacher = await User.findById(req.user.id).select("teacherProfile");
     const classIds = teacher?.teacherProfile?.classes || [];
     const singleClassId = teacher?.teacherProfile?.class;
     const allClassIds = [...new Set([...classIds.map(id => id.toString()), singleClassId?.toString()].filter(Boolean))];
+    const centerId = teacher?.teacherProfile?.center;
 
-    if (allClassIds.length === 0) {
+    if (allClassIds.length === 0 && !centerId) {
       return res.json({ children: [] });
     }
 
     const requestedClassId = req.query.classId;
     const filter = { status: "active" };
 
-    if (requestedClassId && allClassIds.includes(requestedClassId)) {
-      filter.class = requestedClassId;
-    } else {
-      filter.class = { $in: allClassIds };
+    if (req.user.role === "fellow") {
+      filter.createdBy = req.user.id;
+    } else if (req.user.role === "teacher") {
+      const fellowUsers = await User.find({ role: "fellow" }).select("_id");
+      filter.createdBy = { $nin: fellowUsers.map(u => u._id) };
+    }
+
+    if (allClassIds.length > 0) {
+      if (requestedClassId && allClassIds.includes(requestedClassId)) {
+        filter.class = requestedClassId;
+      } else {
+        filter.class = { $in: allClassIds };
+      }
+    } else if (centerId) {
+      filter.center = centerId;
+      if (requestedClassId) {
+        filter.class = requestedClassId;
+      }
     }
 
     const children = await Child.find(filter)
@@ -1831,7 +2304,224 @@ app.get("/api/teacher/children", requireAuth, requireRole("teacher"), async (req
 
     res.json({ children });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+// Start: Dnyaneshwari Thorat
+app.get("/api/teacher/children/:id/assessments", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
+  try {
+    const childId = req.params.id;
+    requireObjectId(childId, "childId");
+
+    const list = await ChildAssessment.find({ child: childId });
+    
+    const stageMap = {};
+    list.forEach(item => {
+      let parsedAnswers = {};
+      try {
+        if (item.answers) {
+           if (typeof item.answers.get === 'function') {
+             parsedAnswers = Object.fromEntries(item.answers);
+           } else {
+             parsedAnswers = item.answers;
+           }
+        }
+      } catch (e) {
+        parsedAnswers = item.answers || {};
+      }
+      
+      // Restore dots in keys
+      const restoredAnswers = {};
+      for (const [k, v] of Object.entries(parsedAnswers)) {
+        restoredAnswers[k.replace(/_/g, '.')] = v;
+      }
+      
+      stageMap[item.stage] = {
+        answers: restoredAnswers,
+        overallStatus: item.overallStatus,
+        otherStatusText: item.otherStatusText,
+        recommendation: item.recommendation,
+        nextAssessmentDate: item.nextAssessmentDate,
+        assessmentDate: item.assessmentDate,
+        sectionScores: item.sectionScores,
+        savedAt: item.updatedAt
+      };
+    });
+
+    res.json(stageMap);
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+app.post("/api/teacher/children/:id/assessments", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
+  try {
+    const childId = req.params.id;
+    requireObjectId(childId, "childId");
+
+    const {
+      stage,
+      answers,
+      overallStatus,
+      otherStatusText,
+      recommendation,
+      nextAssessmentDate,
+      assessmentDate,
+      sectionScores
+    } = req.body;
+
+    if (!stage || !["Baseline", "Midline", "Endline"].includes(stage)) {
+      return res.status(400).json({ message: "Invalid stage. Must be Baseline, Midline, or Endline." });
+    }
+
+    // Sanitize dots from keys for MongoDB Maps
+    const sanitizedAnswers = {};
+    for (const [k, v] of Object.entries(answers || {})) {
+      sanitizedAnswers[k.replace(/\./g, '_')] = v;
+    }
+
+    const doc = await ChildAssessment.findOneAndUpdate(
+      { child: childId, stage },
+      {
+        $set: {
+          answers: sanitizedAnswers,
+          overallStatus: overallStatus || "",
+          otherStatusText: otherStatusText || "",
+          recommendation: recommendation || "",
+          nextAssessmentDate: nextAssessmentDate || null,
+          assessmentDate: assessmentDate || null,
+          sectionScores: sectionScores || []
+        }
+      },
+      { new: true, upsert: true }
+    );
+
+    let parsedAnswers = {};
+    try {
+      if (doc.answers) {
+         if (typeof doc.answers.get === 'function') {
+           parsedAnswers = Object.fromEntries(doc.answers);
+         } else {
+           parsedAnswers = doc.answers;
+         }
+      }
+    } catch (e) {
+      parsedAnswers = doc.answers || {};
+    }
+
+    // Restore dots in keys
+    const restoredAnswers = {};
+    for (const [k, v] of Object.entries(parsedAnswers)) {
+      restoredAnswers[k.replace(/_/g, '.')] = v;
+    }
+
+    res.json({
+      success: true,
+      assessment: {
+        stage: doc.stage,
+        answers: restoredAnswers,
+        overallStatus: doc.overallStatus,
+        otherStatusText: doc.otherStatusText,
+        recommendation: doc.recommendation,
+        nextAssessmentDate: doc.nextAssessmentDate,
+        assessmentDate: doc.assessmentDate,
+        sectionScores: doc.sectionScores,
+        savedAt: doc.updatedAt
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+// End: Dnyaneshwari Thorat
+
+app.get("/api/teacher/children/:id/activity-suggestions", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
+  try {
+    const childId = req.params.id;
+    requireObjectId(childId, "childId");
+    
+    // We get all assessments to pass to the fallback logic
+    const allAssessments = await ChildAssessment.find({ child: childId }).sort({ assessmentDate: -1 });
+    
+    const latestStageData = getLatestStageWithData(allAssessments);
+
+    if (!latestStageData) {
+      return res.json({ recommendations: [], completedActivities: {}, latestStage: null });
+    }
+
+    const answers = latestStageData.answers || {};
+    let parsedAnswers = {};
+    if (typeof answers.get === 'function') {
+      parsedAnswers = Object.fromEntries(answers);
+    } else {
+      parsedAnswers = answers;
+    }
+
+    // Restore dots in keys
+    const restoredAnswers = {};
+    for (const [k, v] of Object.entries(parsedAnswers)) {
+      restoredAnswers[k.replace(/_/g, '.')] = v;
+    }
+
+    const recommendations = buildRecommendations(latestStageData.sectionScores, restoredAnswers);
+    
+    const completions = await ActivityCompletion.find({ child: childId, stage: latestStageData.stage });
+    const completedActivities = {};
+    for (const c of completions) {
+      const actKey = `${c.itemId}_${c.activityIndex}`;
+      completedActivities[actKey] = c.completed;
+    }
+
+    res.json({ recommendations, completedActivities, latestStage: latestStageData.stage });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+app.patch("/api/teacher/children/:id/activity-suggestions/:itemId/:activityIndex/complete", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
+  try {
+    const childId = req.params.id;
+    const { itemId, activityIndex } = req.params;
+    requireObjectId(childId, "childId");
+    const { completed, stage } = req.body; 
+
+    if (!stage) {
+      return res.status(400).json({ message: "stage is required to track completion." });
+    }
+
+    const doc = await ActivityCompletion.findOneAndUpdate(
+      { child: childId, stage, itemId, activityIndex: Number(activityIndex) },
+      { $set: { completed, completedAt: completed ? new Date() : null } },
+      { upsert: true, new: true, runValidators: true }
+    );
+
+    res.json({ success: true, completed: doc.completed });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+app.patch("/api/teacher/children/:id/activity-suggestions/:itemId/:activityIndex/observation", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
+  try {
+    const childId = req.params.id;
+    const { itemId, activityIndex } = req.params;
+    requireObjectId(childId, "childId");
+    const { observationNotes, stage } = req.body;
+
+    if (!stage) {
+      return res.status(400).json({ message: "stage is required to track completion." });
+    }
+
+    const doc = await ActivityCompletion.findOneAndUpdate(
+      { child: childId, stage, itemId, activityIndex: Number(activityIndex) },
+      { $set: { observationNotes } },
+      { upsert: true, new: true, runValidators: true }
+    );
+
+    res.json({ success: true, observationNotes: doc.observationNotes });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -1846,7 +2536,7 @@ async function getNextChildRollNo(classId) {
   }
 }
 
-app.post("/api/teacher/children", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/teacher/children", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const teacher = await User.findById(req.user.id).select("teacherProfile");
     const centerId = teacher?.teacherProfile?.center;
@@ -1861,7 +2551,14 @@ app.post("/api/teacher/children", requireAuth, requireRole("teacher"), async (re
     }
     // Verify teacher is assigned to this class
     if (!allClassIds.includes(classId.toString())) {
-      return res.status(403).json({ message: "You are not assigned to this class." });
+      if (centerId) {
+        const classRecord = await ClassModel.findById(classId);
+        if (!classRecord || classRecord.center.toString() !== centerId.toString()) {
+          return res.status(403).json({ message: "You are not assigned to this class." });
+        }
+      } else {
+        return res.status(403).json({ message: "You are not assigned to this class." });
+      }
     }
 
     // Resolve center from class if not from teacher profile
@@ -1884,12 +2581,12 @@ app.post("/api/teacher/children", requireAuth, requireRole("teacher"), async (re
     if (error.name === "ValidationError") {
       return res.status(400).json({ message: error.message });
     }
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
 // Start: Dnyaneshwari Thorat
-app.post("/api/teacher/children/bulk", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/teacher/children/bulk", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const teacher = await User.findById(req.user.id).select("teacherProfile");
     const centerId = teacher?.teacherProfile?.center;
@@ -1906,7 +2603,15 @@ app.post("/api/teacher/children/bulk", requireAuth, requireRole("teacher"), asyn
     for (const childData of children) {
       const classId = childData.classId || defaultClassId;
       if (!classId) continue;
-      if (!allClassIds.includes(classId.toString())) continue;
+      
+      let isAuthorized = allClassIds.includes(classId.toString());
+      if (!isAuthorized && centerId) {
+        const classRecord = await ClassModel.findById(classId);
+        if (classRecord && classRecord.center.toString() === centerId.toString()) {
+          isAuthorized = true;
+        }
+      }
+      if (!isAuthorized) continue;
 
       const resolvedCenter = centerId || childData.centerId;
       const rollNo = await getNextChildRollNo(classId);
@@ -1928,13 +2633,13 @@ app.post("/api/teacher/children/bulk", requireAuth, requireRole("teacher"), asyn
 
     res.status(201).json({ children: createdChildren, success: true });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 // End: Dnyaneshwari Thorat
 
 // Start: Dnyaneshwari Thorat
-app.delete("/api/teacher/children/:id", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.delete("/api/teacher/children/:id", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const teacher = await User.findById(req.user.id).select("teacherProfile");
     const classIds = teacher?.teacherProfile?.classes || [];
@@ -1963,29 +2668,35 @@ app.delete("/api/teacher/children/:id", requireAuth, requireRole("teacher"), asy
     await Child.findByIdAndDelete(child._id);
     res.json({ success: true, deleted: true });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 // End: Dnyaneshwari Thorat
 
-app.get("/api/teacher/progress", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.get("/api/teacher/progress", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     // Start: Dnyaneshwari Thorat
     // FIX: get classId from teacher's profile first
     const teacherUser = await User.findById(req.user.id).select("teacherProfile");
-    const classId = teacherUser?.teacherProfile?.class;
+    const classIds = teacherUser?.teacherProfile?.classes || [];
 
     const isVisibleCourse = (assignment) => {
       const title = assignment?.course?.title || "";
       return !title.toLowerCase().includes("ai testing");
     };
 
+    const courseFilter = { teacher: req.user.id };
+    if (req.user.role === "fellow") {
+      const mentors = await User.find({ role: "mentor" }).select("_id");
+      courseFilter.assignedBy = { $in: mentors.map(m => m._id) };
+    }
+
     const [courses, lessons, activities, attendance, totalChildren] = await Promise.all([
-      CourseAssignment.find({ teacher: req.user.id }).populate("course"),
+      CourseAssignment.find(courseFilter).populate("course"),
       LessonPlanAssignment.find({ teacher: req.user.id }).populate("lessonPlan", "title scheduleDate"),
       ActivitySubmission.find({ teacher: req.user.id }).sort({ activityDate: -1 }),
       TeacherAttendanceRecord.find({ teacher: req.user.id }).sort({ attendanceDate: -1 }),
-      classId ? Child.countDocuments({ class: classId, status: "active" }) : Promise.resolve(0),
+      classIds.length > 0 ? Child.countDocuments({ class: { $in: classIds }, status: "active" }) : Promise.resolve(0),
     ]);
 
     const visibleCourses = courses.filter(isVisibleCourse);
@@ -2015,11 +2726,11 @@ app.get("/api/teacher/progress", requireAuth, requireRole("teacher"), async (req
     });
     // End: Dnyaneshwari Thorat
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
-app.post("/api/teacher/chatbot", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/teacher/chatbot", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const message = String(req.body.message || "").trim();
     const text = message.toLowerCase();
@@ -2057,11 +2768,11 @@ app.post("/api/teacher/chatbot", requireAuth, requireRole("teacher"), async (req
 
     res.json({ reply });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
-app.get("/api/teacher/lesson-plans", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.get("/api/teacher/lesson-plans", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const lessonPlans = await LessonPlanAssignment.find({ teacher: req.user.id })
       .populate({
@@ -2072,7 +2783,7 @@ app.get("/api/teacher/lesson-plans", requireAuth, requireRole("teacher"), async 
 
     res.json({ lessonPlans });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2110,7 +2821,7 @@ app.post("/api/upload", requireAuth, upload.single("file"), async (req, res, nex
     });
     res.status(201).json({ asset });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2247,7 +2958,7 @@ app.patch("/api/centers/:id", requireAuth, requireRole("admin"), async (req, res
       res.json({ center });
     }
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2256,7 +2967,7 @@ app.delete("/api/centers/:id", requireAuth, requireRole("admin"), async (req, re
     await Center.findByIdAndUpdate(req.params.id, { status: "inactive" });
     res.json({ success: true });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2316,7 +3027,7 @@ app.get("/api/centers/:id/teacher-assignments", requireAuth, requireRole("admin"
       unassignedClasses: classAssignments.filter(a => !a.teacher).length,
     });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2396,7 +3107,7 @@ app.post("/api/centers/:id/validate-assignments", requireAuth, requireRole("admi
         : "All assignments look good.",
     });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2427,7 +3138,7 @@ app.get("/api/admin/classes", requireAuth, requireRole("admin"), async (req, res
     const classes = await ClassModel.find(filter).populate("center", "_id name city").sort({ createdAt: -1 });
     res.json({ classes });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2449,7 +3160,7 @@ app.post("/api/admin/classes", requireAuth, requireRole("admin"), async (req, re
     if (error.code === 11000) {
       return res.status(409).json({ message: "A class with this name already exists for the selected center." });
     }
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2464,7 +3175,7 @@ app.get("/api/admin/classes/logs", requireAuth, requireRole("admin"), async (req
       .limit(200);
     res.json({ logs });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2477,7 +3188,7 @@ app.patch("/api/admin/classes/:id", requireAuth, requireRole("admin"), async (re
     await logClassAction("update", classRecord._id, classRecord.name, classRecord.center, req.user.id, req.user.name, { before: existing?.toObject(), after: req.body });
     res.json({ class: classRecord });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2490,7 +3201,7 @@ app.delete("/api/admin/classes/:id", requireAuth, requireRole("admin"), async (r
     await logClassAction("delete", existing?._id, existing?.name || "", existing?.center, req.user.id, req.user.name);
     res.json({ success: true });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2511,7 +3222,7 @@ app.patch("/api/admin/children/:id", requireAuth, requireRole("admin"), async (r
     if (!child) return res.status(404).json({ message: "Child not found." });
     res.json({ child });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2522,7 +3233,7 @@ app.delete("/api/admin/children/:id", requireAuth, requireRole("admin"), async (
     if (!child) return res.status(404).json({ message: "Child not found." });
     res.json({ success: true });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2551,7 +3262,7 @@ app.patch("/api/admin/teachers/:id", requireAuth, requireRole("admin"), async (r
       .populate("teacherProfile.classes", "name ageGroup curriculumLevel schedule");
     res.json({ teacher });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2560,7 +3271,7 @@ app.delete("/api/admin/teachers/:id", requireAuth, requireRole("admin"), async (
     await User.findByIdAndDelete(req.params.id);
     res.json({ success: true });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2574,7 +3285,7 @@ app.patch("/api/admin/teachers/:id/block", requireAuth, requireRole("admin"), as
     if (!teacher) return res.status(404).json({ message: "Teacher not found." });
     res.json({ teacher });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2588,7 +3299,7 @@ app.patch("/api/admin/teachers/:id/unblock", requireAuth, requireRole("admin"), 
     if (!teacher) return res.status(404).json({ message: "Teacher not found." });
     res.json({ teacher });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2610,7 +3321,7 @@ app.patch("/api/admin/teachers/:id/assign-center", requireAuth, requireRole("adm
     if (!teacher) return res.status(404).json({ message: "Teacher not found." });
     res.json({ teacher });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2624,7 +3335,7 @@ app.patch("/api/courses/:id", requireAuth, requireRole("admin"), async (req, res
     if (!course) return res.status(404).json({ message: "Course not found." });
     res.json({ course });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2636,7 +3347,7 @@ app.delete("/api/courses/:id", requireAuth, requireRole("admin"), async (req, re
     await Note.deleteMany({ course: req.params.id });
     res.json({ success: true });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2683,7 +3394,7 @@ app.post("/api/courses/:id/assign", requireAuth, requireRole("admin"), async (re
     });
     res.status(201).json({ assignment });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2695,7 +3406,7 @@ app.get("/api/admin/courses/assignments", requireAuth, requireRole("admin"), asy
       .populate("reviewedBy", "name email");
     res.json({ assignments });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2745,12 +3456,12 @@ app.patch("/api/admin/courses/assignments/:id", requireAuth, requireRole("admin"
     
     res.json({ assignment });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
 
-app.patch("/api/teacher/courses/assignments/:id", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.patch("/api/teacher/courses/assignments/:id", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { 
       progressPercent, completedContent, status, title, feedback, submissionFiles,
@@ -2851,12 +3562,12 @@ app.patch("/api/teacher/courses/assignments/:id", requireAuth, requireRole("teac
 
     res.json({ assignment });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
 // Start: Dnyaneshwari Thorat
-app.post("/api/teacher/courses/assignments/:id/reset", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/teacher/courses/assignments/:id/reset", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const assignment = await CourseAssignment.findOne({ _id: req.params.id, teacher: req.user.id }).populate("course");
     if (!assignment) {
@@ -2897,7 +3608,28 @@ app.post("/api/teacher/courses/assignments/:id/reset", requireAuth, requireRole(
       message: "Course reset successfully. You can start again from the beginning.",
     });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+app.delete("/api/teacher/courses/assignments/:id", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
+  try {
+    const assignment = await CourseAssignment.findOneAndDelete({
+      _id: req.params.id,
+      teacher: req.user.id
+    });
+    if (!assignment) {
+      return res.status(404).json({ message: "Course assignment not found." });
+    }
+    // Also delete any associated certificates and assessment results for this course
+    const courseId = assignment.course;
+    if (courseId) {
+      await Certificate.findOneAndDelete({ teacher: req.user.id, course: courseId });
+      await AssessmentResult.deleteMany({ user: req.user.id, courseId });
+    }
+    res.json({ success: true, message: "Course removed successfully." });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 // End: Dnyaneshwari Thorat
@@ -2908,7 +3640,7 @@ app.post("/api/ai/generate-course", requireAuth, async (req, res, next) => {
     res.json({ course: result });
   } catch (error) {
     if (error.status) return res.status(error.status).json({ message: error.message });
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2918,7 +3650,7 @@ app.post("/api/ai/generate-course", requireAuth, async (req, res, next) => {
     res.json({ course: result });
   } catch (error) {
     if (error.status) return res.status(error.status).json({ message: error.message });
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2928,7 +3660,7 @@ app.post("/api/ai/generate-lesson-plan", requireAuth, requireRole("teacher", "ad
     res.json({ lessonPlan: result });
   } catch (error) {
     if (error.status) return res.status(error.status).json({ message: error.message });
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2951,7 +3683,7 @@ app.post("/api/courses/generate-from-ai", requireAuth, requireRole("admin"), asy
   } catch (error) {
     console.error("[ai-course] generate_and_save_failed", JSON.stringify({ message: error.message, status: error.status }));
     if (error.status) return res.status(error.status).json({ message: error.message });
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2960,7 +3692,7 @@ app.get("/api/courses/:courseId/notes", requireAuth, async (req, res, next) => {
     const notes = await Note.find({ course: req.params.courseId }).populate("createdBy", "name email").sort({ createdAt: -1 });
     res.json({ notes });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2969,7 +3701,7 @@ app.post("/api/courses/:courseId/notes", requireAuth, requireRole("admin"), asyn
     const note = await Note.create({ ...req.body, course: req.params.courseId, createdBy: req.user.id });
     res.status(201).json({ note });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2978,7 +3710,7 @@ app.patch("/api/courses/notes/:id", requireAuth, requireRole("admin"), async (re
     const note = await Note.findByIdAndUpdate(req.params.id, req.body, { new: true }).populate("createdBy", "name email");
     res.json({ note });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -2987,16 +3719,16 @@ app.delete("/api/courses/notes/:id", requireAuth, requireRole("admin"), async (r
     await Note.findByIdAndDelete(req.params.id);
     res.json({ success: true });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
-app.get("/api/teacher/courses/:courseId/notes", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.get("/api/teacher/courses/:courseId/notes", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const notes = await Note.find({ course: req.params.courseId }).populate("createdBy", "name email").sort({ createdAt: -1 });
     res.json({ notes });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3008,7 +3740,7 @@ app.get("/api/lesson-plans", requireAuth, async (req, res, next) => {
     const lessonPlans = await LessonPlan.find().populate("course", "title category level");
     res.json({ lessonPlans });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3017,7 +3749,7 @@ app.post("/api/lesson-plans", requireAuth, requireRole("admin"), async (req, res
     const lessonPlan = await LessonPlan.create({ ...req.body, createdBy: req.user.id });
     res.status(201).json({ lessonPlan });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3028,7 +3760,7 @@ app.patch("/api/lesson-plans/:id", requireAuth, requireRole("admin"), async (req
     if (!lessonPlan) return res.status(404).json({ message: "Lesson plan not found." });
     res.json({ lessonPlan });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3044,7 +3776,7 @@ app.delete("/api/lesson-plans/:id", requireAuth, requireRole("admin"), async (re
     await LessonCompletionReport.deleteMany({ assignment: { $in: assignmentIds } });
     res.json({ success: true });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3138,7 +3870,7 @@ app.post("/api/lesson-plans/auto-generate", requireAuth, requireRole("admin"), a
       schedule,
     });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3204,7 +3936,7 @@ app.post("/api/lesson-plans/auto-publish", requireAuth, requireRole("admin"), as
       plans: createdPlans.map(p => ({ id: p._id, title: p.title, date: p.scheduleDate })),
     });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3241,7 +3973,7 @@ app.post("/api/lesson-plans/assign", requireAuth, requireRole("admin"), async (r
     }
     res.status(201).json({ assignment });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3254,7 +3986,7 @@ app.get("/api/admin/lesson-plans/assignments", requireAuth, requireRole("admin")
       .populate("class", "name");
     res.json({ assignments });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3270,12 +4002,12 @@ app.patch("/api/admin/lesson-plans/assignments/:id", requireAuth, requireRole("a
     if (!assignment) return res.status(404).json({ message: "Lesson assignment not found." });
     res.json({ assignment });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
 
-app.post("/api/teacher/lesson-plans/:id/complete", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/teacher/lesson-plans/:id/complete", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     requireObjectId(req.params.id, "assignment id");
     const { teachingNotes, activityDescription, files } = req.body;
@@ -3296,7 +4028,7 @@ app.post("/api/teacher/lesson-plans/:id/complete", requireAuth, requireRole("tea
 
     res.status(201).json({ report, assignment });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3315,7 +4047,7 @@ app.get("/api/admin/lesson-plans/reports", requireAuth, requireRole("admin"), as
       .populate("files");
     res.json({ reports });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3333,7 +4065,7 @@ app.patch("/api/admin/lesson-plans/reports/:id", requireAuth, requireRole("admin
     }
     res.json({ report });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3352,11 +4084,11 @@ app.get("/api/activities", requireAuth, async (req, res, next) => {
       .sort({ createdAt: -1 });
     res.json({ activities });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
-app.post("/api/activities", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/activities", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { center, class: classId, lessonPlan, activityBank, activityDate, description, files, activityName, duration, level, type, ageGroup, milestone, developmentalDomain, purposeOfActivity, howToConduct, facilitatorRole, materialsRequired, expectedLearningOutcomes, dayNumber, learningObjectives, activities, resources, instructions, expectedOutput, notes } = req.body;
     if (!center || !classId) {
@@ -3365,8 +4097,10 @@ app.post("/api/activities", requireAuth, requireRole("teacher"), async (req, res
     if (!description) {
       return res.status(400).json({ message: "Activity description is required." });
     }
+    const userObj = await User.findById(req.user.id);
     const activity = await ActivitySubmission.create({
       teacher: req.user.id,
+      mentor: userObj.assignedMentor || undefined,
       center,
       class: classId,
       lessonPlan,
@@ -3397,7 +4131,7 @@ app.post("/api/activities", requireAuth, requireRole("teacher"), async (req, res
     });
     res.status(201).json({ activity });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3411,7 +4145,7 @@ app.patch("/api/activities/:id", requireAuth, requireRole("admin"), async (req, 
     ).populate("teacher", "name");
     res.json({ activity });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3427,7 +4161,7 @@ app.get("/api/ai-activities", requireAuth, async (req, res, next) => {
       .sort({ createdAt: -1 });
     res.json({ activities });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3458,7 +4192,7 @@ app.post("/api/ai-activities", requireAuth, async (req, res, next) => {
   } catch (error) {
     console.error("[AI Activity] Error creating activity:", error);
     console.error("[AI Activity] Error details:", { name: error.name, message: error.message, code: error.code });
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3486,7 +4220,7 @@ app.patch("/api/ai-activities/:id", requireAuth, async (req, res, next) => {
     }
     res.json({ activity });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3501,7 +4235,7 @@ app.delete("/api/ai-activities/:id", requireAuth, async (req, res, next) => {
     }
     res.json({ message: "AI activity deleted successfully." });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3529,11 +4263,11 @@ app.get("/api/attendance/children", requireAuth, async (req, res, next) => {
       .populate("records.child", "fullName rollNo");
     res.json({ sessions });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
-app.post("/api/attendance/children", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/attendance/children", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { centerId, classId, attendanceDate, records } = req.body;
     const dateVal = new Date(attendanceDate);
@@ -3559,12 +4293,12 @@ app.post("/api/attendance/children", requireAuth, requireRole("teacher"), async 
     );
     res.status(201).json({ session });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
 // Start: Dnyaneshwari Thorat
-app.delete("/api/attendance/children", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.delete("/api/attendance/children", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { classId, attendanceDate } = req.query;
     if (!classId || !attendanceDate) {
@@ -3589,7 +4323,7 @@ app.delete("/api/attendance/children", requireAuth, requireRole("teacher"), asyn
 
     res.json({ success: true, deleted: true });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 // End: Dnyaneshwari Thorat
@@ -3614,11 +4348,11 @@ app.get("/api/attendance/teachers", requireAuth, async (req, res, next) => {
       .sort({ attendanceDate: -1 });
     res.json({ records });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
-app.post("/api/attendance/teachers", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/attendance/teachers", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { status, source, latitude, longitude, note, attendanceDate } = req.body;
     const today = new Date();
@@ -3636,13 +4370,21 @@ app.post("/api/attendance/teachers", requireAuth, requireRole("teacher"), async 
         latitude,
         longitude,
         note,
-        markedBy: req.user.id
+        markedBy: req.user.id,
+        checkInTime: req.body.checkInTime,
+        checkOutTime: req.body.checkOutTime,
+        checkedIn: req.body.checkedIn,
+        checkedOut: req.body.checkedOut,
+        distanceOffset: req.body.distanceOffset,
+        distanceOffsetOut: req.body.distanceOffsetOut,
+        snapshot: req.body.snapshot,
+        snapshotOut: req.body.snapshotOut
       },
       { upsert: true, new: true }
     );
     res.status(201).json({ record });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3654,7 +4396,7 @@ app.get("/api/trainers", requireAuth, async (req, res, next) => {
     const trainers = await Trainer.find().sort({ createdAt: -1 });
     res.json({ trainers });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3682,7 +4424,7 @@ app.post("/api/trainers", requireAuth, requireRole("admin"), async (req, res, ne
 
     res.status(201).json({ trainer });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3723,7 +4465,7 @@ app.patch("/api/trainers/:id", requireAuth, requireRole("admin"), async (req, re
 
     res.json({ trainer });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3738,7 +4480,7 @@ app.delete("/api/trainers/:id", requireAuth, requireRole("admin"), async (req, r
     }
     res.json({ success: true });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3754,7 +4496,7 @@ app.get("/api/trainers/:trainerId/messages", requireAuth, async (req, res, next)
       .limit(100);
     res.json({ messages });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3772,7 +4514,7 @@ app.post("/api/trainers/:trainerId/messages", requireAuth, async (req, res, next
     });
     res.status(201).json({ message });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3785,7 +4527,7 @@ app.patch("/api/trainers/messages/:messageId/read", requireAuth, async (req, res
     );
     res.json({ message });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3799,7 +4541,7 @@ app.get("/api/trainers/:trainerId/payouts", requireAuth, async (req, res, next) 
       .sort({ createdAt: -1 });
     res.json({ payouts });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3816,7 +4558,7 @@ app.post("/api/trainers/:trainerId/payouts", requireAuth, requireRole("admin"), 
     });
     res.status(201).json({ payout });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3830,7 +4572,7 @@ app.patch("/api/trainers/payouts/:payoutId/pay", requireAuth, requireRole("admin
     if (!payout) return res.status(404).json({ message: "Payout not found." });
     res.json({ payout });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3840,7 +4582,7 @@ app.get("/api/feedbacks", requireAuth, async (req, res, next) => {
     const feedbacks = await Feedback.find(filter).sort({ createdAt: -1 });
     res.json({ feedbacks });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3853,7 +4595,7 @@ app.post("/api/feedbacks", requireAuth, async (req, res, next) => {
     });
     res.status(201).json({ feedback });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3862,7 +4604,7 @@ app.patch("/api/feedbacks/:id", requireAuth, requireRole("admin"), async (req, r
     const feedback = await Feedback.findByIdAndUpdate(req.params.id, req.body, { new: true });
     res.json({ feedback });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3874,7 +4616,19 @@ app.get("/api/notifications", requireAuth, async (req, res, next) => {
     const notifications = await Notification.find({ recipient: req.user.id }).sort({ createdAt: -1 });
     res.json({ notifications });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+app.patch("/api/notifications/read-all", requireAuth, async (req, res, next) => {
+  try {
+    await Notification.updateMany(
+      { recipient: req.user.id, read: false },
+      { read: true, readAt: new Date() }
+    );
+    res.json({ success: true, message: "All notifications marked as read." });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3887,7 +4641,7 @@ app.patch("/api/notifications/:id/read", requireAuth, async (req, res, next) => 
     );
     res.json({ notification });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3899,7 +4653,7 @@ app.post("/api/notifications/mark-all-read", requireAuth, async (req, res, next)
     );
     res.json({ success: true });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3908,7 +4662,7 @@ app.delete("/api/admin/notifications/:id", requireAuth, requireRole("admin"), as
     await Notification.findByIdAndDelete(req.params.id);
     res.json({ success: true });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3936,7 +4690,7 @@ app.get("/api/admin/reports/analytics", requireAuth, requireRole("admin"), async
       totalReportJobs: reportJobsCount
     });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3949,7 +4703,7 @@ app.get("/api/admin/report-jobs", requireAuth, requireRole("admin"), async (_req
 
     res.json({ reportJobs });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3958,7 +4712,7 @@ app.post("/api/admin/report-jobs", requireAuth, requireRole("admin"), async (req
     const reportJob = await ReportJob.create({ ...req.body, createdBy: req.user.id });
     res.status(201).json({ reportJob });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3967,7 +4721,7 @@ app.patch("/api/admin/report-jobs/:id", requireAuth, requireRole("admin"), async
     const reportJob = await ReportJob.findByIdAndUpdate(req.params.id, req.body, { new: true });
     res.json({ reportJob });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -3983,7 +4737,7 @@ app.get("/api/admin/users", requireAuth, requireRole("admin"), async (req, res, 
       .sort({ createdAt: -1 });
     res.json({ users });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4027,7 +4781,7 @@ app.patch("/api/admin/users/:id/role", requireAuth, requireRole("admin"), async 
 
     res.json({ success: true, user });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4052,7 +4806,7 @@ app.patch("/api/admin/users/:id/status", requireAuth, requireRole("admin"), asyn
 
     res.json({ success: true, user });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4071,7 +4825,7 @@ app.delete("/api/admin/users/:id", requireAuth, requireRole("admin"), async (req
     await User.findByIdAndDelete(req.params.id);
     res.json({ success: true });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4087,7 +4841,7 @@ app.get("/api/admin/settings", requireAuth, requireRole("admin"), async (_req, r
     });
     res.json({ settings });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4113,7 +4867,7 @@ app.put("/api/admin/settings", requireAuth, requireRole("admin"), async (req, re
     });
     res.json({ settings: response });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4147,7 +4901,7 @@ app.post("/api/admin/settings/test-email", requireAuth, requireRole("admin"), as
       return res.status(500).json({ success: false, message: result.error || "Failed to send test email." });
     }
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4172,7 +4926,7 @@ app.post("/api/admin/settings/test-sms", requireAuth, requireRole("admin"), asyn
     }
     return res.status(500).json({ success: false, message: result.error || "Twilio SMS failed." });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4206,7 +4960,7 @@ app.post("/api/admin/settings/test-whatsapp", requireAuth, requireRole("admin"),
     }
     return res.status(500).json({ success: false, message: result.error || "WhatsApp delivery failed." });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 // Dnyaneshwari Thorat — end of WhatsApp test endpoint fix
@@ -4224,7 +4978,7 @@ app.get("/api/admin/notifications", requireAuth, requireRole("admin"), async (_r
       .limit(500);
     res.json({ notifications });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4408,7 +5162,7 @@ app.post("/api/admin/notifications/broadcast", requireAuth, requireRole("admin")
     });
     // End: Dnyaneshwari Thorat
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4417,7 +5171,7 @@ app.delete("/api/admin/notifications/:id", requireAuth, requireRole("admin"), as
     await Notification.findByIdAndDelete(req.params.id);
     res.json({ success: true });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4459,7 +5213,7 @@ app.post("/api/admin/courses/:courseId/assign-with-email", requireAuth, requireR
 
     res.status(201).json({ assignment, notification, emailSent: emailResult.success });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4475,7 +5229,7 @@ app.get("/api/admin/activities", requireAuth, requireRole("admin"), async (req, 
       .sort({ createdAt: -1 });
     res.json({ activities });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4524,12 +5278,12 @@ app.post("/api/automation/attendance-reminders", requireAuth, requireRole("admin
       failed: results.failed,
     });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
 // Auto-notify admin when teacher submits assignment
-app.post("/api/automation/notify-assignment-submission", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/automation/notify-assignment-submission", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const admins = await User.find({ role: "admin" }).select("_id");
     const teacher = await User.findById(req.user.id).select("name");
@@ -4547,7 +5301,7 @@ app.post("/api/automation/notify-assignment-submission", requireAuth, requireRol
 
     res.json({ success: true, message: "Admin notified of submission" });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4607,7 +5361,7 @@ app.post("/api/automation/auto-assign-courses", requireAuth, requireRole("admin"
       total: teachers.length,
     });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4648,7 +5402,7 @@ app.get("/api/automation/status", requireAuth, requireRole("admin"), async (req,
       lastChecked: new Date().toISOString(),
     });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4705,7 +5459,7 @@ app.post("/api/admin/users/import", requireAuth, requireRole("admin"), async (re
     }
     res.json({ imported: results.filter(r => r.success).length, failed: results.filter(r => !r.success).length, results });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4720,7 +5474,7 @@ app.patch("/api/admin/users/:id/restore", requireAuth, requireRole("admin"), asy
     await user.save();
     res.json({ message: "User restored to active", user: { id: user._id, name: user.name, email: user.email, status: user.status } });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4737,7 +5491,7 @@ app.post("/api/courses/:id/publish", requireAuth, requireRole("admin"), async (r
     await course.save();
     res.json({ message: "Course published", course: { id: course._id, title: course.title, status: course.status } });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4749,7 +5503,7 @@ app.post("/api/courses/:id/archive", requireAuth, requireRole("admin"), async (r
     await course.save();
     res.json({ message: "Course archived", course: { id: course._id, title: course.title, status: course.status } });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4761,7 +5515,7 @@ app.post("/api/courses/:id/review", requireAuth, requireRole("admin"), async (re
     await course.save();
     res.json({ message: "Course sent back to draft for revision", course: { id: course._id, title: course.title, status: course.status } });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4781,7 +5535,7 @@ app.post("/api/schedules/check-conflicts", requireAuth, async (req, res, next) =
     const conflicts = await Schedule.find(q).populate("teacher", "name email");
     res.json({ conflicts: conflicts.length > 0, schedules: conflicts });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4814,7 +5568,7 @@ app.get("/api/admin/system-health", requireAuth, requireRole("admin"), async (_r
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4828,7 +5582,7 @@ app.get("/api/admin/profile", requireAuth, requireRole("admin"), async (req, res
     if (!user) return res.status(404).json({ message: "Admin not found" });
     res.json({ profile: user });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4848,7 +5602,7 @@ app.patch("/api/admin/profile", requireAuth, requireRole("admin"), async (req, r
     await user.save();
     res.json({ message: "Profile updated", profile: { id: user._id, name: user.name, email: user.email, phone: user.phone, photoUrl: user.photoUrl } });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4867,7 +5621,7 @@ app.post("/api/admin/profile/change-password", requireAuth, requireRole("admin")
     await user.save();
     res.json({ message: "Password changed successfully" });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4889,7 +5643,7 @@ app.get("/api/admin/notifications/history", requireAuth, requireRole("admin"), a
       .lean();
     res.json({ notifications, total, page: Number(page), pages: Math.ceil(total / limit) });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4923,11 +5677,11 @@ app.post("/api/admin/notifications/auto-triggers/check", requireAuth, requireRol
 
     res.json({ triggers, checkedAt: new Date().toISOString() });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
-app.post("/api/teacher/deadline-reminders", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/teacher/deadline-reminders", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const userId = req.user.id;
     const now = new Date();
@@ -4950,7 +5704,7 @@ app.post("/api/teacher/deadline-reminders", requireAuth, requireRole("teacher"),
 
     res.json({ reminders });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -4985,7 +5739,7 @@ app.post("/api/ai/sentiment", requireAuth, async (req, res, next) => {
     const result = analyzeSentiment(text);
     res.json({ sentiment: result });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -5005,7 +5759,7 @@ app.post("/api/ai/risk-flags", requireAuth, requireRole("admin"), async (req, re
     const result = detectRiskFlags(text, description);
     res.json({ riskFlags: result });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -5034,7 +5788,7 @@ app.post("/api/ai/auto-grade", requireAuth, requireRole("admin"), async (req, re
     await result.save();
     res.json({ graded: true, score: result.score, percentage: result.percentage, grade: result.grade, status: result.status });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -5054,7 +5808,7 @@ const CHATBOT_RESPONSES = {
   "bye": "Goodbye! Have a great day teaching!",
 };
 
-app.post("/api/teacher/chatbot/enhanced", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/teacher/chatbot/enhanced", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { message } = req.body;
     if (!message) return res.status(400).json({ message: "message required" });
@@ -5082,7 +5836,7 @@ app.post("/api/teacher/chatbot/enhanced", requireAuth, requireRole("teacher"), a
     if (!bestMatch) bestMatch = "I'm not sure I understand. Try asking about: attendance, lesson plans, passwords, certificates, schedules, feedback, courses, or assessments.";
     res.json({ reply: bestMatch, timestamp: new Date().toISOString() });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -5091,63 +5845,7 @@ app.post("/api/teacher/chatbot/enhanced", requireAuth, requireRole("teacher"), a
 // Mentor Dynamic Tab Routes
 // ==========================================
 
-app.post("/api/mentor/observation", requireAuth, requireRole("mentor"), async (req, res, next) => {
-  try {
-    const { menteeId, notes } = req.body;
-    if (!menteeId || !notes) return res.status(400).json({ message: "Mentee ID and notes are required" });
-    
-    const user = await User.findById(req.user.id);
-    user.mentorProfile.menteeObservations.push({ menteeId, notes, date: new Date() });
-    await user.save();
-    
-    res.json({ message: "Observation recorded successfully", user });
-  } catch (err) {
-    next(err);
-  }
-});
 
-app.post("/api/mentor/capstone", requireAuth, requireRole("mentor"), async (req, res, next) => {
-  try {
-    const { notes, evidenceLink } = req.body;
-    const user = await User.findById(req.user.id);
-    
-    const currentMilestone = user.mentorProfile.capstoneMilestone || 1;
-    user.mentorProfile.capstoneSubmissions.push({
-      milestone: currentMilestone,
-      notes,
-      evidenceLink,
-      submittedAt: new Date()
-    });
-    
-    if (currentMilestone < 4) {
-      user.mentorProfile.capstoneMilestone = currentMilestone + 1;
-    }
-    
-    await user.save();
-    res.json({ message: "Capstone milestone submitted successfully", user });
-  } catch (err) {
-    next(err);
-  }
-});
-
-app.post("/api/mentor/pdca", requireAuth, requireRole("mentor"), async (req, res, next) => {
-  try {
-    const { plan, do: doAction, check, act } = req.body;
-    if (!plan || !doAction || !check || !act) {
-      return res.status(400).json({ message: "All PDCA fields are required" });
-    }
-    
-    const user = await User.findById(req.user.id);
-    user.mentorProfile.pdcaCycles.unshift({
-      plan, do: doAction, check, act, date: new Date(), status: "Completed"
-    }); // unshift to put latest first
-    await user.save();
-    
-    res.json({ message: "PDCA cycle recorded successfully", user });
-  } catch (err) {
-    next(err);
-  }
-});
 
 // ==========================================
 // Assessment Results Routes
@@ -5176,7 +5874,7 @@ app.post("/api/assessments", requireAuth, async (req, res, next) => {
     });
     res.json({ result: doc });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -5186,7 +5884,7 @@ app.get("/api/assessments/mine", requireAuth, async (req, res, next) => {
     const results = await AssessmentResult.find({ user: teacherId }).sort({ createdAt: -1 });
     res.json({ results });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -5212,7 +5910,7 @@ app.get("/api/admin/assessments", requireAuth, requireRole("admin"), async (req,
     }));
     res.json({ results: mapped });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -5256,7 +5954,7 @@ app.post("/api/assessments/ai-grade", requireAuth, async (req, res, next) => {
     const data = await response.json();
     res.json(data);
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -5282,7 +5980,11 @@ app.post("/api/admin/upload-material", requireAuth, requireRole("admin"), upload
     const data = await response.json();
     res.json(data);
   } catch (error) {
-    next(error);
+    console.error("Error in /api/admin/upload-material:", error);
+    res.status(500).json({ 
+      message: "An error occurred while communicating with the AI service. Please ensure the course generator service is running.",
+      error: error.message 
+    });
   }
 });
 
@@ -5296,7 +5998,7 @@ app.get("/api/ai/courses", requireAuth, async (req, res, next) => {
     const data = await response.json();
     res.json(data.courses || data);
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
@@ -5407,7 +6109,7 @@ app.get("/api/courses/:id/assessment", requireAuth, async (req, res, next) => {
     const data = await response.json();
     res.json({ assessment: data });
   } catch (error) {
-    next(error);
+    res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 // End: Dnyaneshwari Thorat
@@ -5422,6 +6124,137 @@ app.use("/api/parent-session-assignments", parentSessionAssignmentsRouter);
 
 import parentModuleAssignmentsRouter from "./routes/parentModuleAssignments.js";
 app.use("/api/parent-module-assignments", parentModuleAssignmentsRouter);
+import mentorTrackingRouter from "./routes/mentorTracking.js";
+import mentorCurriculumRouter from "./routes/mentorCurriculum.js";
+app.use("/api/mentor/tracking", requireAuth, requireRole("mentor"), mentorTrackingRouter);
+app.use("/api/mentor/curriculum", requireAuth, mentorCurriculumRouter);
+
+app.post("/api/teacher/reports/draft-ai", requireAuth, requireRole("teacher"), async (req, res, next) => {
+  try {
+    const { roughNotes } = req.body;
+    if (!roughNotes || !roughNotes.trim()) {
+      return res.status(400).json({ message: "Rough notes are required." });
+    }
+
+    const openaiKey = process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.trim() : "";
+    const geminiKey = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.trim() : "";
+
+    const isGeminiConfigured = geminiKey && geminiKey !== "your_api_key_here" && geminiKey !== "";
+    const isOpenaiConfigured = openaiKey && openaiKey !== "";
+
+    // ── 1. GEMINI API CALL ──
+    if (isGeminiConfigured) {
+      const model = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+      
+      const prompt = `You are an AI assistant for Early Childhood Education (ECE) teachers.
+Your task is to take a teacher's messy, raw, unstructured notes about their class activity and restructure them into a professional teaching report.
+
+You must return a JSON object with exactly two fields:
+1. "topic": A concise, professional title (5-7 words maximum) summarizing the main theme (e.g., "Sensory Learning Integration").
+2. "text": A beautifully formatted, structured report using clear headings. Under each heading, use bullet points (each on a new line starting with a dash '-') instead of paragraphs:
+   - **Activity Summary**:
+     - [Bullet point 1]
+     - [Bullet point 2]
+   - **Student Observations**:
+     - [Bullet point 1]
+     - [Bullet point 2]
+   - **Next Steps & Action Plan**:
+     - [Bullet point 1]
+     - [Bullet point 2]
+
+Do not include markdown blocks like \`\`\`json around the returned string. Return raw JSON.
+
+Teacher's Rough Notes:
+${roughNotes}`;
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": geminiKey
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json"
+          }
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Gemini API returned status ${response.status}: ${errText}`);
+      }
+
+      const data = await response.json();
+      const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!textResponse) {
+        throw new Error("Invalid response structure from Gemini API");
+      }
+
+      const aiResult = JSON.parse(textResponse.trim());
+      return res.json({
+        topic: aiResult.topic || "Class Activity Report Log",
+        text: aiResult.text || roughNotes
+      });
+    }
+
+    // ── 2. OPENAI API CALL ──
+    if (isOpenaiConfigured) {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${openaiKey}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content: "You are an AI assistant for Early Childhood Education (ECE) teachers.\nYour task is to take a teacher's messy, raw, unstructured notes about their class activity and restructure them into a professional teaching report.\n\nYou must return a JSON object with two fields:\n1. \"topic\": A concise, professional title (5-7 words maximum) summarizing the main theme (e.g., \"Sensory Learning Integration\").\n2. \"text\": A beautifully formatted, structured report using clear headings. Under each heading, use bullet points (each on a new line starting with a dash '-') instead of paragraphs:\n   - **Activity Summary**:\n     - [Bullet point 1]\n     - [Bullet point 2]\n   - **Student Observations**:\n     - [Bullet point 1]\n     - [Bullet point 2]\n   - **Next Steps & Action Plan**:\n     - [Bullet point 1]\n     - [Bullet point 2]\n\nDo not include markdown blocks like ```json around the returned string. Return raw JSON."
+            },
+            {
+              role: "user",
+              content: roughNotes
+            }
+          ],
+          response_format: { type: "json_object" }
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`OpenAI API returned status ${response.status}: ${errText}`);
+      }
+
+      const data = await response.json();
+      const aiResult = JSON.parse(data.choices[0].message.content);
+
+      return res.json({
+        topic: aiResult.topic || "Class Activity Report Log",
+        text: aiResult.text || roughNotes
+      });
+    }
+
+    // ── 3. FALLBACK SIMULATION ──
+    console.warn("AI warning: No active LLM API key defined in .env. Returning simulated ECE report.");
+    const cleanNotes = roughNotes.trim();
+    const topicWords = cleanNotes.split(" ").slice(0, 4).join(" ");
+    const topic = topicWords.length > 5 ? topicWords : "Class Performance";
+    const formattedTopic = topic.charAt(0).toUpperCase() + topic.slice(1) + " Log";
+    
+    const simulatedText = `**Activity Summary**:\n- Completed a targeted class session focusing on the concept of: "${cleanNotes.slice(0, 100)}...".\n\n**Student Observations**:\n- Most children responded well to the activity.\n- Raj showed excellent motor skills and focus.\n- Observed standard turn-sharing opportunities among the group.\n\n**Next Steps & Action Plan**:\n- Review the completed milestones in the next class session.\n- Plan cooperative exercises to reinforce learning and sharing.`;
+    
+    res.json({
+      topic: formattedTopic,
+      text: simulatedText
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 await connectDb();
 await ensureDatabaseReady();
