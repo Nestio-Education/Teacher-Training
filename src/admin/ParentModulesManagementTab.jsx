@@ -50,13 +50,13 @@ function AssignModal({ mod, teachers, classes, onClose, setToast }) {
   useEffect(() => { loadAssignments(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAssign = async () => {
-    if (!teacherId && !classId) {
-  setToast?.({ msg: "Select at least a teacher or a class.", type: "error" });
-  return;
-}
+    if (!teacherId || !classId) {
+      setToast?.({ msg: "Select both a teacher and a class.", type: "error" });
+      return;
+    }
     setSaving(true);
     try {
-      await assignParentModule({ moduleId: mod._id, teacherId: teacherId || null, classId: classId || null });
+      await assignParentModule({ moduleId: mod._id, teacherId, classId });
       setToast?.({ msg: "Module assigned.", type: "success" });
       setTeacherId("");
       setClassId("");
@@ -121,7 +121,7 @@ function AssignModal({ mod, teachers, classes, onClose, setToast }) {
             {assignments.map((a) => (
               <div key={a._id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", background: "#fafafa", borderRadius: 8, border: "1px solid #e5e7eb" }}>
                 <div style={{ fontSize: 12, color: "#1c1917" }}>
-                  <strong>{a.teacher?.name || "No teacher"}</strong> — {a.class?.name || "No class"}
+                  <strong>{a.teacher?.name || "Unknown teacher"}</strong> — {a.class?.name || "Unknown class"}
                 </div>
                 <button onClick={() => handleRemove(a._id)} style={{ ...smallBtn("#fee2e2", "#dc2626"), padding: "4px 8px" }}>Remove</button>
               </div>
