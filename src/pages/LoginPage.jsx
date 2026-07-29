@@ -289,6 +289,9 @@ function ForgotPasswordForm({ onBack }) {
     if (!password || !confirmPassword) { setToast({ msg: "Please fill both password fields.", type: "error" }); return; }
     if (password !== confirmPassword) { setToast({ msg: "Passwords do not match.", type: "error" }); return; }
     if (password.length < 8) { setToast({ msg: "Password must be at least 8 characters.", type: "error" }); return; }
+    if (!/[A-Z]/.test(password)) { setToast({ msg: "Password must contain at least one uppercase letter.", type: "error" }); return; }
+    if (!/[0-9]/.test(password)) { setToast({ msg: "Password must contain at least one number.", type: "error" }); return; }
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) { setToast({ msg: "Password must contain at least one special character.", type: "error" }); return; }
     setLoading(true);
     try {
       await resetPassword(resetToken, password);
@@ -495,6 +498,9 @@ function ResetPasswordForm({ token, onDone }) {
     if (!password || !confirmPassword) { setToast({ msg: "Please fill in both fields.", type: "error" }); return; }
     if (password !== confirmPassword)  { setToast({ msg: "Passwords do not match.", type: "error" }); return; }
     if (password.length < 8)           { setToast({ msg: "Password must be at least 8 characters.", type: "error" }); return; }
+    if (!/[A-Z]/.test(password))       { setToast({ msg: "Password must contain at least one uppercase letter.", type: "error" }); return; }
+    if (!/[0-9]/.test(password))       { setToast({ msg: "Password must contain at least one number.", type: "error" }); return; }
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) { setToast({ msg: "Password must contain at least one special character.", type: "error" }); return; }
 
     resetPassword(token, password)
       .then(() => {
@@ -590,7 +596,7 @@ function ResetPasswordForm({ token, onDone }) {
 // Start: Dnyaneshwari Thorat
 function RegisterForm({ onBack }) {
   const [role, setRole]         = useState("teacher"); // teacher | mentor | fellow
-  const [form, setForm]         = useState({ name: "", email: "", phone: "", address: "", subject: "", photo: "", password: "", confirmPassword: "" });
+  const [form, setForm]         = useState({ name: "", email: "", phone: "", address: "", photo: "", password: "", confirmPassword: "" });
   const [showPass, setShowPass] = useState(false);
   const [toast, setToast]       = useState({ msg: "", type: "" });
   const [step, setStep]         = useState("form"); // form | otp
@@ -610,8 +616,8 @@ function RegisterForm({ onBack }) {
 
   const handleRegisterClick = (e) => {
     e.preventDefault();
-    const { name, email, phone, address, subject, password, confirmPassword } = form;
-    if (!name || !email || !phone || !address || !subject || !password || !confirmPassword) {
+    const { name, email, phone, address, password, confirmPassword } = form;
+if (!name || !email || !phone || !address || !password || !confirmPassword) {
       setToast({ msg: "Please fill all required fields.", type: "error" });
       return;
     }
@@ -637,6 +643,18 @@ function RegisterForm({ onBack }) {
       setToast({ msg: "Password must be at least 8 characters.", type: "error" });
       return;
     }
+    if (!/[A-Z]/.test(password)) {
+      setToast({ msg: "Password must contain at least one uppercase letter.", type: "error" });
+      return;
+    }
+    if (!/[0-9]/.test(password)) {
+      setToast({ msg: "Password must contain at least one number.", type: "error" });
+      return;
+    }
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+      setToast({ msg: "Password must contain at least one special character.", type: "error" });
+      return;
+    }
 
     setVerifying(true);
     sendSignupOtp(email.trim().toLowerCase())
@@ -660,7 +678,7 @@ function RegisterForm({ onBack }) {
       return;
     }
 
-    const { name, email, phone, address, subject, password, photo } = form;
+    const { name, email, phone, address, password } = form;
     setVerifying(true);
 
     verifySignupOtp(email.trim().toLowerCase(), emailOtp)
@@ -672,7 +690,6 @@ function RegisterForm({ onBack }) {
             phone: phone.trim(),
             password,
             qualification: "B.Ed",
-            subject,
             experience: "2 years",
             address,
             photoUrl: photo,
@@ -684,7 +701,6 @@ function RegisterForm({ onBack }) {
             phone: phone.trim(),
             password,
             qualification: "Graduate",
-            specialization: subject,
             experience: "2 years",
             address,
             fellowshipSemester: role === "fellow" ? 1 : undefined,
@@ -768,22 +784,13 @@ function RegisterForm({ onBack }) {
       </div>
 
       <form onSubmit={handleRegisterClick}>
-        <div style={{ display: "flex", gap: 10 }}>
-          <div style={{ flex: 1, ...ci.mb }}>
-            <label style={ci.label}>Full Name</label>
-            <div style={{ position: "relative" }}>
-              <span style={ci.fieldIcon}>👤</span>
-              <input style={{ ...S.input, ...ci.input }} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Dr. Jane Smith" />
-            </div>
-          </div>
-          <div style={{ flex: 1, ...ci.mb }}>
-            <label style={ci.label}>{role === "teacher" ? "Subject" : "Specialization"}</label>
-            <div style={{ position: "relative" }}>
-              <span style={ci.fieldIcon}>📘</span>
-              <input style={{ ...S.input, ...ci.input }} value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} placeholder={role === "teacher" ? "Mathematics" : "Early Childhood"} />
-            </div>
-          </div>
-        </div>
+     <div style={ci.mb}>
+  <label style={ci.label}>Full Name</label>
+  <div style={{ position: "relative" }}>
+    <span style={ci.fieldIcon}>👤</span>
+    <input style={{ ...S.input, ...ci.input }} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Dr. Jane Smith" />
+  </div>
+</div>
         {[
           { key: "email", label: "Email Address *", icon: "📧", type: "email", ph: "teacher@school.edu" },
           { key: "phone", label: "Phone (10-Digit Mobile) *", icon: "📱", type: "tel", ph: "9876543210" },
