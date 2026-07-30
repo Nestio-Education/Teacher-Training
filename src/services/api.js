@@ -989,7 +989,7 @@ export function saveTwilioConfig(twilioData) {
 export function updateAdminLanguage(lang) {
   return request("/api/admin/me/language", {
     method: "PATCH",
-    body: JSON.stringify({ language: lang }),
+    body: JSON.stringify({ lang }),
   });
 }
 
@@ -1386,10 +1386,27 @@ export function getPDCACycles() {
   return request("/api/mentor/tracking/pdca");
 }
 
-export function submitPDCACycle(cycleNumber, plan, doAction, check, act) {
+// UPDATED: PDCA cycles are now linked to a specific mentee.
+// menteeId is required — pass the mentee's _id selected in the PDCA form.
+export function submitPDCACycle(cycleNumber, plan, doAction, check, act, menteeId) {
   return request("/api/mentor/tracking/pdca", {
     method: "POST",
-    body: JSON.stringify({ cycleNumber, plan, do: doAction, check, act })
+    body: JSON.stringify({ cycleNumber, plan, do: doAction, check, act, menteeId })
+  });
+}
+
+// ── Mentor: Pending Fellow Approvals reminder ──
+// Lightweight count used by the polling reminder component so it doesn't need
+// to pull the full fellow list just to check for pending ones.
+export function getPendingApprovalsCount() {
+  return request("/api/mentor/tracking/pending-approvals-count");
+}
+
+// Triggers a backend email to the mentor's own login address when they have
+// pending fellows. Safe to call often — the backend no-ops if none are pending.
+export function notifyPendingApprovals() {
+  return request("/api/mentor/tracking/notify-pending", {
+    method: "POST",
   });
 }
 
