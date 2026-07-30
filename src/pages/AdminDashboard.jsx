@@ -232,17 +232,8 @@ export default function AdminDashboard({ user, onLogout }) {
 
       {/* Main Content */}
       <div style={{ flex:1, padding:"28px 32px", overflowY:"auto", maxHeight:"100vh" }}>
-        {/* Top bar with Admin name and 3-dots menu */}
-        <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:16, position:"relative" }}>
-          <div 
-            onClick={() => setMenuOpen(!menuOpen)}
-            style={{ 
-              display:"flex", alignItems:"center", gap: 10, cursor:"pointer", 
-              padding:"6px 12px", borderRadius:20, background:"#fef3c7", 
-              boxShadow:"0 1px 3px rgba(0,0,0,0.1)", border:"1px solid #fbbf24",
-              transition:"all 0.2s ease"
-        {/* Top bar with User Guide + Logout buttons, top-right corner */}
-        <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginBottom:16 }}>
+        {/* Top bar: User Guide button + Admin 3-dot menu, top-right corner */}
+        <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginBottom:16, position:"relative" }}>
           <button
             onClick={() => setShowGuide(true)}
             title={t("User Guide")}
@@ -269,7 +260,13 @@ export default function AdminDashboard({ user, onLogout }) {
             {t("User Guide")}
           </button>
 
-        
+          <div
+            onClick={() => setMenuOpen(!menuOpen)}
+            style={{
+              display:"flex", alignItems:"center", gap: 10, cursor:"pointer",
+              padding:"6px 12px", borderRadius:20, background:"#fef3c7",
+              boxShadow:"0 1px 3px rgba(0,0,0,0.1)", border:"1px solid #fbbf24",
+              transition:"all 0.2s ease"
             }}
             onMouseEnter={(e)=>e.currentTarget.style.background="#fde68a"}
             onMouseLeave={(e)=>e.currentTarget.style.background="#fef3c7"}
