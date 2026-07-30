@@ -1304,28 +1304,18 @@ export function ImpactCapstoneTab({ user, setToast, onUserUpdate }) {
   );
 }
 
-/* ── Growth Cycle Tab (formerly "Documentation (PDCA)") ──
-   Same underlying concept: Plan → Do → Check → Act reflective cycles.
-   NEW in this version:
-   - Mentor must pick which fellow a cycle is being assigned/logged for.
-   - A "Fellow Progress" panel summarizes each fellow's cycle count + last activity.
-   - History can be filtered by fellow.
-   Component name kept as PDCATab so no other file needs to change its import. */
+/* ── Documentation (PDCA) Tab ── */
 export function PDCATab({ user, setToast, onUserUpdate }) {
-  const mentees = user?.mentorProfile?.assignedTeachers || [];
-
-  const [selectedMenteeId, setSelectedMenteeId] = useState("");
   const [pdcaForm, setPdcaForm] = useState({ plan: "", do: "", check: "", act: "" });
   const [submitting, setSubmitting] = useState(false);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [historyFilter, setHistoryFilter] = useState("all"); // "all" or a mentee _id
 
   const fetchCycles = () => {
     setLoading(true);
     getPDCACycles()
       .then(res => setHistory(res.cycles || []))
-      .catch(err => console.error("Failed to fetch Growth Cycles", err))
+      .catch(err => console.error("Failed to fetch PDCA", err))
       .finally(() => setLoading(false));
   };
 
@@ -1333,62 +1323,22 @@ export function PDCATab({ user, setToast, onUserUpdate }) {
     fetchCycles();
   }, []);
 
-  // Resolve the mentee id a given cycle belongs to, whether menteeId
-  // came back populated ({_id, name, email}) or as a raw id string.
-  const cycleMenteeId = (cycle) => {
-    const m = cycle.menteeId;
-    if (!m) return null;
-    return typeof m === "object" ? (m._id || m.id) : m;
-  };
-
-  const cycleMenteeName = (cycle) => {
-    const m = cycle.menteeId;
-    if (!m) return "Unassigned";
-    if (typeof m === "object" && m.name) return m.name;
-    // fall back to looking the id up in the mentee list currently assigned
-    const found = mentees.find(mm => String(mm._id) === String(m));
-    return found?.name || "Unknown Fellow";
-  };
-
-  // Per-fellow progress summary, built from cycle history.
-  const menteeProgress = mentees.map((m) => {
-    const cyclesForMentee = history.filter(h => String(cycleMenteeId(h)) === String(m._id));
-    const sorted = [...cyclesForMentee].sort((a, b) => new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0));
-    const latest = sorted[0];
-    return {
-      mentee: m,
-      count: cyclesForMentee.length,
-      latest,
-      lastDate: latest ? (latest.createdAt || latest.date) : null,
-    };
-  });
-
-  const filteredHistory = historyFilter === "all"
-    ? history
-    : history.filter(h => String(cycleMenteeId(h)) === String(historyFilter));
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedMenteeId) {
-      setToast?.({ msg: "Please select which fellow this Growth Cycle is for.", type: "error" });
-      return;
-    }
     if(!pdcaForm.plan || !pdcaForm.do || !pdcaForm.check || !pdcaForm.act) {
-      setToast?.({ msg: "Please fill out all Growth Cycle fields.", type: "error" });
+      setToast?.({ msg: "Please fill out all PDCA fields.", type: "error" });
       return;
     }
     setSubmitting(true);
     
     try {
-      // Cycle number is scoped per-fellow so each fellow's own sequence starts at 1.
-      const existingForMentee = history.filter(h => String(cycleMenteeId(h)) === String(selectedMenteeId));
-      const cycleNumber = existingForMentee.length + 1;
-      await submitPDCACycle(cycleNumber, pdcaForm.plan, pdcaForm.do, pdcaForm.check, pdcaForm.act, selectedMenteeId);
-      setToast?.({ msg: "Growth Cycle assigned and recorded successfully!", type: "success" });
+      const cycleNumber = history.length + 1;
+      await submitPDCACycle(cycleNumber, pdcaForm.plan, pdcaForm.do, pdcaForm.check, pdcaForm.act);
+      setToast?.({ msg: "PDCA cycle recorded successfully!", type: "success" });
       setPdcaForm({ plan: "", do: "", check: "", act: "" });
       fetchCycles();
     } catch (err) {
-      setToast?.({ msg: err.message || "Failed to save Growth Cycle", type: "error" });
+      setToast?.({ msg: err.message || "Failed to save PDCA cycle", type: "error" });
     } finally {
       setSubmitting(false);
     }
@@ -1396,33 +1346,12 @@ export function PDCATab({ user, setToast, onUserUpdate }) {
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
-      <h1 style={S.pageTitle}>Growth Cycle</h1>
-      <p style={S.pageSub}>Assign Plan–Do–Check–Act growth cycles to your fellows and track their progress.</p>
+      <h1 style={S.pageTitle}>Documentation (PDCA)</h1>
+      <p style={S.pageSub}>Record and reflect on your Plan-Do-Check-Act cycles.</p>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-        <SectionCard title="🔄 New Growth Cycle">
+        <SectionCard title="🔄 New PDCA Cycle">
           <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: 16 }}>
-              <label style={S.label}>Assign To Fellow *</label>
-              {mentees.length === 0 ? (
-                <div style={{ padding: "10px 12px", background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 8, fontSize: 12, color: "#92400e" }}>
-                  You have no fellows assigned yet. Claim a fellow from Mentee Management first.
-                </div>
-              ) : (
-                <select
-                  style={S.input}
-                  value={selectedMenteeId}
-                  onChange={e => setSelectedMenteeId(e.target.value)}
-                  required
-                >
-                  <option value="">Select a fellow…</option>
-                  {mentees.map(m => (
-                    <option key={m._id} value={m._id}>{m.name || "Unknown Fellow"}</option>
-                  ))}
-                </select>
-              )}
-            </div>
-
             <div style={{ marginBottom: 16 }}>
               <label style={{...S.label, display: "flex", alignItems: "center", gap: 6}}>
                 <span style={{background: "#e0e7ff", color: "#4f46e5", padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 900}}>P</span>
@@ -1455,62 +1384,21 @@ export function PDCATab({ user, setToast, onUserUpdate }) {
               <textarea style={{...S.input, minHeight: 60}} value={pdcaForm.act} onChange={e=>setPdcaForm({...pdcaForm, act: e.target.value})} placeholder="What changes will you make for the next cycle?" required />
             </div>
 
-            <button type="submit" disabled={submitting || mentees.length === 0} style={{...S.primaryBtn, width: "100%", opacity: (submitting || mentees.length === 0) ? 0.7 : 1}}>
-              {submitting ? "Saving..." : "Assign & Save Growth Cycle"}
+            <button type="submit" disabled={submitting} style={{...S.primaryBtn, width: "100%", opacity: submitting ? 0.7 : 1}}>
+              {submitting ? "Saving..." : "Save PDCA Cycle"}
             </button>
           </form>
         </SectionCard>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          {/* Fellow Progress Summary */}
-          <SectionCard title="📊 Fellow Progress">
-            {mentees.length === 0 ? (
-              <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No fellows assigned yet.</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {menteeProgress.map(({ mentee, count, lastDate }) => (
-                  <button
-                    key={mentee._id}
-                    onClick={() => setHistoryFilter(historyFilter === mentee._id ? "all" : mentee._id)}
-                    style={{
-                      display: "flex", justifyContent: "space-between", alignItems: "center",
-                      padding: "12px 14px", borderRadius: 10, textAlign: "left", cursor: "pointer",
-                      border: historyFilter === mentee._id ? "1.5px solid #3b82f6" : "1px solid #e2e8f0",
-                      background: historyFilter === mentee._id ? "#eff6ff" : "#f8fafc",
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>{mentee.name || "Unknown Fellow"}</div>
-                      <div style={{ fontSize: 11, color: "#64748b" }}>
-                        {count} cycle{count !== 1 ? "s" : ""} logged{lastDate ? ` · last on ${new Date(lastDate).toLocaleDateString()}` : ""}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 16, fontWeight: 900, color: count > 0 ? "#10b981" : "#cbd5e1" }}>{count}</div>
-                  </button>
-                ))}
-                {historyFilter !== "all" && (
-                  <button onClick={() => setHistoryFilter("all")} style={{ ...S.exportBtn, alignSelf: "flex-start", marginTop: 4 }}>
-                    Clear filter (show all fellows)
-                  </button>
-                )}
-              </div>
-            )}
-          </SectionCard>
-
-          {/* Growth Cycle History (filterable by fellow) */}
-          <SectionCard title="📚 Growth Cycle History">
+          <SectionCard title="📚 PDCA History">
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {loading ? (
-                <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>Loading...</div>
-              ) : filteredHistory.length === 0 ? (
-                <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>
-                  {historyFilter === "all" ? "No Growth Cycles recorded yet." : "No Growth Cycles recorded for this fellow yet."}
-                </div>
-              ) : filteredHistory.map((item, i) => (
+              {history.length === 0 ? (
+                <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No PDCA cycles recorded yet.</div>
+              ) : history.map((item, i) => (
                 <div key={item._id || i} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: 16 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#3b82f6" }}>🎓 {cycleMenteeName(item)}</div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>{new Date(item.createdAt || item.date).toLocaleDateString("en-US", { month:"short", day:"2-digit", year:"numeric" })}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>{new Date(item.date).toLocaleDateString("en-US", { month:"short", day:"2-digit", year:"numeric" })}</div>
                     <div style={{ fontSize: 10, fontWeight: 800, background: "#d1fae5", color: "#059669", padding: "2px 8px", borderRadius: 10 }}>{item.status || "Completed"}</div>
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", marginBottom: 8 }}>{item.plan.substring(0, 60) + (item.plan.length > 60 ? "..." : "")}</div>
@@ -1520,11 +1408,11 @@ export function PDCATab({ user, setToast, onUserUpdate }) {
             </div>
           </SectionCard>
 
-          <SectionCard title="💡 Growth Cycle Tips">
+          <SectionCard title="💡 PDCA Tips">
             <ul style={{ paddingLeft: 20, margin: 0, color: "#475569", fontSize: 13, lineHeight: 1.6 }}>
               <li style={{marginBottom: 8}}>Keep objectives SMART (Specific, Measurable, Achievable, Relevant, Time-bound).</li>
               <li style={{marginBottom: 8}}>Document data and specific observations in the <strong>Check</strong> phase.</li>
-              <li>Use the <strong>Act</strong> phase to refine your strategy for the next iteration, and revisit the Fellow Progress panel to see who may need a follow-up cycle.</li>
+              <li>Use the <strong>Act</strong> phase to refine your strategy for the next iteration.</li>
             </ul>
           </SectionCard>
         </div>
@@ -1532,3 +1420,4 @@ export function PDCATab({ user, setToast, onUserUpdate }) {
     </div>
   );
 }
+
