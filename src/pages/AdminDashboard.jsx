@@ -33,13 +33,6 @@ import { getAdminTeachers, getCourseAssignments, getCourses, updateTeacherStatus
 //import LiveSessionsTab from "../admin/LiveSessionsTab";
 
 
-
-
-
-
-
-
-
 /* ===========================================
    MAIN ADMIN DASHBOARD
 =========================================== */
@@ -107,7 +100,7 @@ export default function AdminDashboard({ user, onLogout }) {
     { key: "children", label:t("Children & Classes"), icon: "\uD83D\uDC76" },
     { key:"trainers",     label:t("Trainer Management"),icon:"\uD83C\uDF93" },
     { key:"attendance",   label:t("Attendance"),        icon:"\uD83D\uDCC5" },
-   
+
     { key:"reports",      label:t("Reports & Analytics"),icon:"\uD83D\uDCC8" },
     //{ key:"schedules",    label:t("Schedule Management"), icon:"\uD83D\uDCC5" },
     //{ key:"certificates", label:t("Certificates"),        icon:"\uD83C\uDFC6" },
@@ -219,9 +212,9 @@ export default function AdminDashboard({ user, onLogout }) {
           ))}
         </nav>
 
-        <div style={{ 
+        <div style={{
           position: "fixed", bottom: 0, left: 0, width: 250,
-          padding:"12px 16px", borderTop:"1px solid #f1f5f9", 
+          padding:"12px 16px", borderTop:"1px solid #f1f5f9",
           display:"flex", alignItems:"center", gap:10, background:"white", zIndex: 50
         }}>
           <div style={{ width:34, height:34, borderRadius:"50%", background:"linear-gradient(135deg,#f59e0b,#d97706)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:800, color:"white" }}>A</div>
@@ -230,9 +223,9 @@ export default function AdminDashboard({ user, onLogout }) {
             <div style={{ fontSize:10, color:"#9ca3af", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{user?.email}</div>
           </div>
           <button onClick={onLogout} title={t("Sign Out")}
-            style={{ 
-              background:"transparent", border:"none", cursor:"pointer", 
-              fontSize:22, color:"#ef4444", padding:"8px", 
+            style={{
+              background:"transparent", border:"none", cursor:"pointer",
+              fontSize:22, color:"#ef4444", padding:"8px",
               borderRadius: "8px", transition: "all 0.2s ease",
               display: "flex", alignItems: "center", justifyContent: "center"
             }}
@@ -241,36 +234,6 @@ export default function AdminDashboard({ user, onLogout }) {
           >⏻</button>
         </div>
       </div>
-{/* Main Content */}
-<div style={{ flex:1, padding:"28px 32px", overflowY:"auto", maxHeight:"100vh" }}>
-  {/* Top bar with User Guide button + Admin name and 3-dots menu */}
-  <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginBottom:16, position:"relative" }}>
-    
-    <button
-      onClick={() => setShowGuide(true)}
-      title={t("User Guide")}
-      style={{
-        display:"flex",
-        alignItems:"center",
-        gap:6,
-        padding:"8px 16px",
-        borderRadius:10,
-        border:"1px solid #fbbf24",
-        background:"white",
-        color:"#92400e",
-        fontSize:12,
-        fontWeight:700,
-        fontFamily:"inherit",
-        cursor:"pointer",
-        transition:"all 0.18s",
-        boxShadow:"0 1px 3px rgba(0,0,0,0.04)",
-      }}
-      onMouseEnter={(e)=>{ e.currentTarget.style.background="#fffbeb"; }}
-      onMouseLeave={(e)=>{ e.currentTarget.style.background="white"; }}
-    >
-      <span style={{ fontSize:14, lineHeight:1 }}>📖</span>
-      {t("User Guide")}
-    </button>
 
       {/* Main Content */}
       <div style={{ flex:1, padding:"28px 32px", overflowY:"auto", maxHeight:"100vh" }}>
@@ -316,27 +279,45 @@ export default function AdminDashboard({ user, onLogout }) {
             <div style={{ fontSize:14, fontWeight:700, color:"#92400e" }}>Admin</div>
             <div style={{ fontSize: 18, fontWeight: 700, paddingBottom: 6, color:"#92400e" }}>⋮</div>
           </div>
-          <span style={{ color: "#374151", fontWeight: 700 }}>{t("Settings & Roles")}</span>
-        </button>
-        <button
-          onClick={onLogout}
-          style={{ display:"flex", alignItems:"center", gap: 12, padding:"12px 18px", border:"none", background:"white", textAlign:"left", cursor:"pointer", color:"#dc2626", fontSize:14, fontWeight:600, transition: "background 0.2s" }}
-          onMouseEnter={(e)=>e.currentTarget.style.background="#fef2f2"}
-          onMouseLeave={(e)=>e.currentTarget.style.background="white"}
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: "#fee2e2" }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-          </div>
-          <span style={{ color: "#dc2626", fontWeight: 700 }}>{t("Logout")}</span>
-        </button>
+
+          {menuOpen && (
+            <div
+              style={{
+                position:"absolute", top:"110%", right:0, background:"white",
+                borderRadius:12, boxShadow:"0 8px 24px rgba(0,0,0,0.12)",
+                border:"1px solid #f1f5f9", overflow:"hidden", minWidth:200, zIndex:60
+              }}
+            >
+              <button
+                onClick={() => { setMenuOpen(false); setActiveTab("settings"); }}
+                style={{ display:"flex", alignItems:"center", gap: 12, padding:"12px 18px", border:"none", background:"white", textAlign:"left", cursor:"pointer", width:"100%", fontSize:14, fontWeight:600, transition: "background 0.2s" }}
+                onMouseEnter={(e)=>e.currentTarget.style.background="#f8fafc"}
+                onMouseLeave={(e)=>e.currentTarget.style.background="white"}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: "#fef3c7" }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#92400e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                </div>
+                <span style={{ color: "#374151", fontWeight: 700 }}>{t("Settings & Roles")}</span>
+              </button>
+              <button
+                onClick={onLogout}
+                style={{ display:"flex", alignItems:"center", gap: 12, padding:"12px 18px", border:"none", background:"white", textAlign:"left", cursor:"pointer", color:"#dc2626", fontSize:14, fontWeight:600, transition: "background 0.2s" }}
+                onMouseEnter={(e)=>e.currentTarget.style.background="#fef2f2"}
+                onMouseLeave={(e)=>e.currentTarget.style.background="white"}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: "#fee2e2" }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                </div>
+                <span style={{ color: "#dc2626", fontWeight: 700 }}>{t("Logout")}</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {renderContent()}
       </div>
-    )}
-  </div>
 
-  {renderContent()}
-</div>
-
-{showGuide && <AdminUserGuide onClose={() => setShowGuide(false)} />}
+      {showGuide && <AdminUserGuide onClose={() => setShowGuide(false)} />}
     </div>
   );
 }
