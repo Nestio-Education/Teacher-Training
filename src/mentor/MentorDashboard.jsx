@@ -8,6 +8,8 @@ import MentorFellowAttendanceTab from "./MentorFellowAttendanceTab";
 import MentorAttendanceTab from "./MentorAttendanceTab";
 import MentorCurriculumTab from "./MentorCurriculumTab";
 import { getPDCACycles, getCapstoneSubmissions, getMenteeObservations } from "../services/api";
+// ADDED: pending-fellow-approvals background reminder (toast + email nudge)
+import { PendingApprovalsReminder } from "./PendingApprovalsReminder";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
@@ -232,6 +234,9 @@ export default function MentorDashboard({ user, onLogout }) {
   const [currentUser, setCurrentUser] = useState(user);
   const [workingCenter, setWorkingCenter] = useState(null);
   const [toast, setToast] = useState({ msg: "", type: "" });
+  // ADDED: live pending-fellow-approvals count, fed by the reminder poller below.
+  // Used to show a badge on the "Mentee Management" nav item.
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
   
   useEffect(() => {
     getMyCenter().then(res => {
@@ -306,12 +311,13 @@ export default function MentorDashboard({ user, onLogout }) {
   const navItems = [
     { key: "overview", label: "Overview", icon: "📊" },
     { key: "my_attendance", label: "My Attendance", icon: "📍" },
-    { key: "mentees", label: "Mentee Management", icon: "👥" },
+    // CHANGED: badge now reflects live pendingApprovalsCount instead of a static 0
+    { key: "mentees", label: "Mentee Management", icon: "👥", badge: pendingApprovalsCount },
     { key: "fellow_attendance", label: "Fellow Attendance", icon: "📅" },
     { key: "activities", label: "Fellow Activities", icon: "📝" },
     { key: "curriculum", label: "Curriculum Management", icon: "📚" },
     { key: "impact", label: "Impact & Capstone", icon: "🏆" },
-    { key: "documentation", label: "Documentation (PDCA)", icon: "📝" },
+    { key: "documentation", label: "Growth Cycle", icon: "📝" },
     { key: "feedback", label: "Feedback", icon: "💬" },
   ];
 
@@ -336,6 +342,12 @@ export default function MentorDashboard({ user, onLogout }) {
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "#f8fafc", fontFamily: "'Segoe UI','Inter',-apple-system,sans-serif" }}>
       <style>{globalCSS}</style>
       <Toast msg={toast.msg} type={toast.type} onClose={() => setToast({ msg: "", type: "" })} />
+
+      {/* ADDED: mounted once here (not inside a specific tab) so it keeps polling
+          for pending fellow approvals no matter which tab the mentor is viewing.
+          It drives the in-app toast above, the "email nudge" to the mentor's own
+          login email via the backend, and the nav badge count via onPendingCountChange. */}
+      <PendingApprovalsReminder setToast={setToast} onPendingCountChange={setPendingApprovalsCount} />
       
       {/* Sidebar - Matching Teacher Dashboard */}
       <div style={{ width: 240, background: "white", borderRight: "1px solid #f1f5f9", display: "flex", flexDirection: "column", flexShrink: 0, boxShadow: "2px 0 12px rgba(0,0,0,0.04)", position: "relative", height: "100vh" }}>
