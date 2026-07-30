@@ -14,6 +14,7 @@ async function request(path, options = {}) {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...options,
       headers,
+      cache: "no-store" // Prevent aggressive browser disk caching of GET requests
     });
   } catch (networkError) {
     console.error(
@@ -359,8 +360,9 @@ export function changeTeacherPassword(currentPassword, newPassword) {
   });
 }
 
-export function getTeacherProgress() {
-  return request("/api/teacher/progress");
+export function getTeacherProgress(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/api/teacher/progress${qs ? `?${qs}` : ""}`);
 }
 
 export function getTeacherGrades() {
@@ -462,15 +464,51 @@ export function askTeacherChatbot(message) {
 }
 
 // Course Management APIs
-export function getCourses() {
-  return request("/api/courses");
+export function getCourses(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/api/courses${qs ? `?${qs}` : ""}`);
 }
 
 export function getParentModules(params = {}) {
   const qs = new URLSearchParams(params).toString();
   return request(`/api/parent-modules${qs ? `?${qs}` : ""}`);
 }
-// Snehal change
+// Start: Snehal change
+export function createParentModule(payload) {
+  return request("/api/parent-modules", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+export function getParentModuleAssignments(moduleId) {
+  return request(`/api/parent-module-assignments?moduleId=${moduleId}`);
+}
+
+export function assignParentModule({ moduleId, classId, teacherId }) {
+  return request("/api/parent-module-assignments", {
+    method: "POST",
+    body: JSON.stringify({ moduleId, classId, teacherId }),
+  });
+}
+
+export function removeParentModuleAssignment(assignmentId) {
+  return request(`/api/parent-module-assignments/${assignmentId}`, {
+    method: "DELETE",
+  });
+}
+export function updateParentModule(id, payload) {
+  return request(`/api/parent-modules/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+export function deleteParentModule(id) {
+  return request(`/api/parent-modules/${id}`, {
+    method: "DELETE",
+  });
+}
+// End: Snehal change
+// // Snehal change
 export function getParentSessionAssignments(moduleId) {
   return request(`/api/parent-session-assignments?moduleId=${moduleId}`);
 }
@@ -575,8 +613,9 @@ export function getTeacherCourseNotes(courseId) {
 
 
 // Lesson Plan APIs
-export function getLessonPlans() {
-  return request("/api/lesson-plans");
+export function getLessonPlans(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/api/lesson-plans${qs ? `?${qs}` : ""}`);
 }
 
 export function createLessonPlan(lessonData) {

@@ -62,6 +62,8 @@ export default function MentorFellowAttendanceTab({ user, setToast }) {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const fetchAttendance = async () => {
     setLoading(true);
@@ -82,6 +84,7 @@ export default function MentorFellowAttendanceTab({ user, setToast }) {
 
   useEffect(() => {
     fetchAttendance();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filtered = useMemo(() => {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AttendanceBar, BarChart, S, SectionCard, StatCard, StatusBadge } from "../components/Shared";
 import { getCourseAssignments, getTeacherAttendance, getTrainers, getCenters, getClasses, getChildren, getLessonPlans, getAdminLessonAssignments, getActivities, getCourses } from "../services/api";
+import { t } from "../services/i18n";
 
 function downloadCsv(filename, rows) {
   const csv = rows.map((row) => row.map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -183,15 +184,15 @@ export default function ReportsTab({ teachers = [], courses = [], setToast }) {
   const monthlyActivity = useMemo(() => buildMonthlyActivity(allActivities), [allActivities]);
 
   const reportTabs = [
-    { key: "teacherPerformance", label: "Teacher Performance", icon: "👩‍🏫" },
-    { key: "classProgress", label: "Class Progress", icon: "🎒" },
-    { key: "childDevelopment", label: "Child Development", icon: "👶" },
-    { key: "centerSummary", label: "Center Summary", icon: "🏫" },
-    { key: "monthlyActivity", label: "Monthly Activity", icon: "📊" },
-    { key: "enrollment", label: "Enrollment Trend", icon: "📈" },
+    { key: "teacherPerformance", label: t("Teacher Performance"), icon: "👩‍🏫" },
+    { key: "classProgress", label: t("Class Progress"), icon: "🎒" },
+    { key: "childDevelopment", label: t("Child Development"), icon: "👶" },
+    { key: "centerSummary", label: t("Center Summary"), icon: "🏫" },
+    { key: "monthlyActivity", label: t("Monthly Activity"), icon: "📊" },
+    { key: "enrollment", label: t("Enrollment Trend"), icon: "📈" },
     { key: "completion", label: "Course Completion", icon: "✅" },
     { key: "attendance", label: "Attendance", icon: "📅" },
-    { key: "trainer", label: "Trainers", icon: "🎯" },
+    { key: "trainer", label: t("Trainers"), icon: "🎯" },
   ];
 
   const exportTeacherPerformance = () => {
@@ -235,16 +236,16 @@ export default function ReportsTab({ teachers = [], courses = [], setToast }) {
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
-      <h1 style={S.pageTitle}>Reports & Analytics</h1>
-      <p style={S.pageSub}>Comprehensive operational reports — all data exportable as CSV.</p>
+      <h1 style={S.pageTitle}>{t("Reports & Analytics")}</h1>
+      <p style={S.pageSub}>{t("Comprehensive operational reports — all data exportable as CSV.")}</p>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 14, marginBottom: 24 }}>
-        <StatCard icon="👩‍🏫" label="Teachers" val={approvedTeachers.length} color="#f59e0b" bg="#fef3c7" />
-        <StatCard icon="🎒" label="Classes" val={classes.length} color="#3b82f6" bg="#dbeafe" />
-        <StatCard icon="👶" label="Children" val={children.length} color="#10b981" bg="#d1fae5" />
-        <StatCard icon="🏫" label="Centers" val={centers.filter(c => c.status === "active").length} color="#8b5cf6" bg="#ede9fe" />
-        <StatCard icon="📚" label="Courses" val={publishedCourses.length} color="#06b6d4" bg="#cffafe" />
-        <StatCard icon="📝" label="Activities" val={allActivities.length} color="#ef4444" bg="#fee2e2" />
+        <StatCard icon="👩‍🏫" label={t("Teachers")} val={approvedTeachers.length} color="#f59e0b" bg="#fef3c7" />
+        <StatCard icon="🎒" label={t("Classes")} val={classes.length} color="#3b82f6" bg="#dbeafe" />
+        <StatCard icon="👶" label={t("Children")} val={children.length} color="#10b981" bg="#d1fae5" />
+        <StatCard icon="🏫" label={t("Centers")} val={centers.filter(c => c.status === "active").length} color="#8b5cf6" bg="#ede9fe" />
+        <StatCard icon="📚" label={t("Courses")} val={publishedCourses.length} color="#06b6d4" bg="#cffafe" />
+        <StatCard icon="📝" label={t("Activities")} val={allActivities.length} color="#ef4444" bg="#fee2e2" />
       </div>
 
       <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>

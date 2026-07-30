@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Modal, S, SectionCard, StatCard, StatusBadge } from "../components/Shared";
 import { getFeedbacks, updateFeedback } from "../services/api";
+import { t } from "../services/i18n";
 
 export default function FeedbackManagementTab({ setToast }) {
   const [feedbacks, setFeedbacks] = useState([]);
@@ -265,12 +266,12 @@ export default function FeedbackManagementTab({ setToast }) {
 
       {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(155px,1fr))", gap: 14, marginBottom: 20 }}>
-        <StatCard icon="💬" label="Total Reviews" val={feedbacks.length} color="#f59e0b" bg="#fef3c7" />
-        <StatCard icon="⭐" label="Weighted Avg" val={weightedAvg(feedbacks)} color="#10b981" bg="#d1fae5" />
+        <StatCard icon="💬" label={t("Total Reviews")} val={feedbacks.length} color="#f59e0b" bg="#fef3c7" />
+        <StatCard icon="⭐" label={t("Weighted Avg")} val={weightedAvg(feedbacks)} color="#10b981" bg="#d1fae5" />
         <StatCard icon="⏳" label="Pending Approval" val={feedbacks.filter((f) => f.status === "pending").length} color="#f59e0b" bg="#fef3c7" />
         <StatCard icon="✅" label="Approved" val={feedbacks.filter((f) => f.status === "approved").length} color="#10b981" bg="#d1fae5" />
         <StatCard icon="🚫" label="Rejected" val={feedbacks.filter((f) => f.status === "rejected").length} color="#ef4444" bg="#fee2e2" />
-        <StatCard icon="🔒" label="Anonymous" val={feedbacks.filter((f) => f.anonymous).length} color="#6366f1" bg="#ede9fe" />
+        <StatCard icon="🔒" label={t("Anonymous")} val={feedbacks.filter((f) => f.anonymous).length} color="#6366f1" bg="#ede9fe" />
       </div>
 
       {loading ? (
@@ -281,16 +282,16 @@ export default function FeedbackManagementTab({ setToast }) {
         <>
           {/* Tabs */}
           <div style={{ display: "flex", gap: 4, marginBottom: 18, borderBottom: "2px solid #f3f4f6" }}>
-            {tabs.map((t) => (
+            {tabs.map((tabItem) => (
               <button
-                key={t.key}
-                onClick={() => setActiveTab(t.key)}
+                key={tabItem.id}
+                onClick={() => setActiveTab(tabItem.id)}
                 style={{
                   padding: "10px 18px",
                   border: "none",
-                  borderBottom: `2px solid ${activeTab === t.key ? "#f59e0b" : "transparent"}`,
+                  borderBottom: `2px solid ${activeTab === tabItem.id ? "#f59e0b" : "transparent"}`,
                   background: "none",
-                  color: activeTab === t.key ? "#92400e" : "#9ca3af",
+                  color: activeTab === tabItem.id ? "#92400e" : "#9ca3af",
                   fontSize: 12,
                   fontWeight: 700,
                   cursor: "pointer",
@@ -298,7 +299,7 @@ export default function FeedbackManagementTab({ setToast }) {
                   marginBottom: -2,
                 }}
               >
-                {t.label}
+                {t(tabItem.label)}
               </button>
             ))}
           </div>
@@ -592,7 +593,7 @@ export default function FeedbackManagementTab({ setToast }) {
           {activeTab === "trainers" && (
             <div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 16 }}>
-                {trainerStats.map((t, i) => (
+                {trainerStats.map((tr, i) => (
                   <div key={i} style={{ background: "white", borderRadius: 18, padding: "20px", border: "1px solid #f1f5f9", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, paddingBottom: 14, borderBottom: "1px solid #f3f4f6" }}>
                       <div
@@ -610,15 +611,15 @@ export default function FeedbackManagementTab({ setToast }) {
                           flexShrink: 0,
                         }}
                       >
-                        {t.trainer[0]}
+                        {tr.trainer[0]}
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 14, fontWeight: 800, color: "#1c1917" }}>{t.trainer}</div>
-                        <div style={{ fontSize: 11, color: "#9ca3af" }}>{t.total} reviews total</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: "#1c1917" }}>{tr.trainer}</div>
+                        <div style={{ fontSize: 11, color: "#9ca3af" }}>{tr.total} reviews total</div>
                       </div>
                       <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 22, fontWeight: 900, color: "#f59e0b" }}>{t.avg}</div>
-                        <div style={{ display: "flex", gap: 2 }}>{stars(Math.round(Number(t.avg)))}</div>
+                        <div style={{ fontSize: 22, fontWeight: 900, color: "#f59e0b" }}>{tr.avg}</div>
+                        <div style={{ display: "flex", gap: 2 }}>{stars(Math.round(Number(tr.avg)))}</div>
                       </div>
                     </div>
 
@@ -627,36 +628,36 @@ export default function FeedbackManagementTab({ setToast }) {
                         style={{
                           textAlign: "center",
                           padding: "10px 8px",
-                          background: `${t.nps >= 50 ? "#d1fae5" : t.nps >= 0 ? "#fef3c7" : "#fee2e2"}`,
+                          background: `${tr.nps >= 50 ? "#d1fae5" : tr.nps >= 0 ? "#fef3c7" : "#fee2e2"}`,
                           borderRadius: 10,
                         }}
                       >
-                        <div style={{ fontSize: 18, fontWeight: 900, color: t.nps >= 50 ? "#059669" : t.nps >= 0 ? "#d97706" : "#dc2626" }}>
-                          {t.nps}
+                        <div style={{ fontSize: 18, fontWeight: 900, color: tr.nps >= 50 ? "#059669" : tr.nps >= 0 ? "#d97706" : "#dc2626" }}>
+                          {tr.nps}
                         </div>
                         <div style={{ fontSize: 9, fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>NPS Score</div>
                       </div>
                       <div style={{ textAlign: "center", padding: "10px 8px", background: "#d1fae5", borderRadius: 10 }}>
-                        <div style={{ fontSize: 18, fontWeight: 900, color: "#059669" }}>{t.promoters}</div>
+                        <div style={{ fontSize: 18, fontWeight: 900, color: "#059669" }}>{tr.promoters}</div>
                         <div style={{ fontSize: 9, fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>Promoters</div>
                       </div>
                       <div style={{ textAlign: "center", padding: "10px 8px", background: "#fee2e2", borderRadius: 10 }}>
-                        <div style={{ fontSize: 18, fontWeight: 900, color: "#dc2626" }}>{t.detractors}</div>
+                        <div style={{ fontSize: 18, fontWeight: 900, color: "#dc2626" }}>{tr.detractors}</div>
                         <div style={{ fontSize: 9, fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>Detractors</div>
                       </div>
                     </div>
 
                     <div style={{ marginBottom: 14 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#9ca3af", marginBottom: 4 }}>
-                        <span>NPS: {t.nps >= 50 ? "Excellent" : t.nps >= 0 ? "Good" : "Needs Work"}</span>
-                        <span>{t.nps >= 0 ? "+" : ""}{t.nps}</span>
+                        <span>NPS: {tr.nps >= 50 ? "Excellent" : tr.nps >= 0 ? "Good" : "Needs Work"}</span>
+                        <span>{tr.nps >= 0 ? "+" : ""}{tr.nps}</span>
                       </div>
                       <div style={{ height: 6, background: "#f3f4f6", borderRadius: 4, overflow: "hidden" }}>
                         <div
                           style={{
                             height: "100%",
-                            width: `${Math.min(100, Math.max(0, t.nps + 50))}%`,
-                            background: t.nps >= 50 ? "#10b981" : t.nps >= 0 ? "#f59e0b" : "#ef4444",
+                            width: `${Math.min(100, Math.max(0, tr.nps + 50))}%`,
+                            background: tr.nps >= 50 ? "#10b981" : tr.nps >= 0 ? "#f59e0b" : "#ef4444",
                             borderRadius: 4,
                           }}
                         />
@@ -664,7 +665,7 @@ export default function FeedbackManagementTab({ setToast }) {
                     </div>
 
                     <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>By Course</div>
-                    {t.byCourse.map((bc, j) => (
+                    {tr.byCourse.map((bc, j) => (
                       <div
                         key={j}
                         style={{
@@ -692,10 +693,10 @@ export default function FeedbackManagementTab({ setToast }) {
                       🔒 Anonymous reviews included in stats — visible to admin only
                     </div>
 
-                    {t.positives.length > 0 && (
+                    {tr.positives.length > 0 && (
                       <div style={{ marginTop: 10 }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>🌟 Positive Reviews to Share</div>
-                        {t.positives.slice(0, 2).map((p, j) => (
+                        {tr.positives.slice(0, 2).map((p, j) => (
                           <div key={j} style={{ padding: "8px 10px", background: "#ecfdf5", borderRadius: 8, marginBottom: 6, border: "1px solid #6ee7b7" }}>
                             <div style={{ fontSize: 11, color: "#065f46", fontStyle: "italic", marginBottom: 4 }}>
                               "{p.suggestion.substring(0, 70)}..."

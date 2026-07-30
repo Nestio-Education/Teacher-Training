@@ -1,3 +1,4 @@
+import { t } from "../services/i18n";
 import { useEffect, useState } from "react";
 import { Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
 import { createTrainer, deleteTrainer as deleteTrainerApi, getTrainers, updateTrainer as updateTrainerApi, getCourses, getFeedbacks } from "../services/api";
@@ -252,7 +253,7 @@ function TrainerProfileView({ trainer, batches, onBack, onUpdate, setToast }) {
               <div style={{ marginTop: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>📚 Assigned Courses</div>
-                  <button onClick={() => setShowCourses(true)} style={S.tblBtn}>Edit</button>
+                  <button onClick={() => setShowCourses(true)} style={S.tblBtn}>{t("Edit")}</button>
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                   {assignedCourses.map((c, i) => (
@@ -267,7 +268,7 @@ function TrainerProfileView({ trainer, batches, onBack, onUpdate, setToast }) {
             <SectionCard title="📊 Performance Overview">
               <div style={{ marginBottom: 14 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, color: "#6b7280" }}>Avg Rating</span>
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>{t("Avg Rating")}</span>
                   <span style={{ fontSize: 12, fontWeight: 700, color: "#f59e0b" }}>⭐ {trainer.rating} / 5.0</span>
                 </div>
                 <div style={{ height: 8, background: "#f3f4f6", borderRadius: 6, overflow: "hidden" }}>
@@ -293,13 +294,13 @@ function TrainerProfileView({ trainer, batches, onBack, onUpdate, setToast }) {
 
               {/* Recent reviews preview — full list lives in the Feedback tab */}
               <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>Recent Reviews</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>{t("Recent Reviews")}</div>
                 {trainerReviews.length > 3 && (
                   <button onClick={() => setActiveTab("feedback")} style={{ ...S.tblBtn, fontSize: 11 }}>View all ({trainerReviews.length})</button>
                 )}
               </div>
               {trainerReviews.length === 0 ? (
-                <div style={{ fontSize: 12, color: "#9ca3af", textAlign: "center", padding: 12 }}>No reviews yet.</div>
+                <div style={{ fontSize: 12, color: "#9ca3af", textAlign: "center", padding: 12 }}>{t("No reviews yet.")}</div>
               ) : trainerReviews.slice(0, 3).map((r, i) => (
                 <div key={i} style={{ padding: "8px 12px", background: "#f9fafb", borderRadius: 8, marginTop: 8, border: "1px solid #f1f5f9" }}>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -319,7 +320,7 @@ function TrainerProfileView({ trainer, batches, onBack, onUpdate, setToast }) {
             {sessionsTaken.length === 0 ? (
               <div style={{ textAlign: "center", padding: 30, color: "#9ca3af" }}>
                 <div style={{ fontSize: 32, marginBottom: 8 }}>🎯</div>
-                <div>No sessions recorded for this trainer yet.</div>
+                <div>{t("No sessions recorded for this trainer yet.")}</div>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -346,7 +347,7 @@ function TrainerProfileView({ trainer, batches, onBack, onUpdate, setToast }) {
             {upcomingSessions.length === 0 ? (
               <div style={{ textAlign: "center", padding: 30, color: "#9ca3af" }}>
                 <div style={{ fontSize: 32, marginBottom: 8 }}>📆</div>
-                <div>No upcoming sessions scheduled for this trainer.</div>
+                <div>{t("No upcoming sessions scheduled for this trainer.")}</div>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -360,7 +361,7 @@ function TrainerProfileView({ trainer, batches, onBack, onUpdate, setToast }) {
                       <div style={{ fontSize: 13, fontWeight: 800, color: "#1c1917" }}>📘 {s.topic}</div>
                       <div style={{ fontSize: 12, color: "#0369a1", marginTop: 2 }}>🏢 {s.center} &nbsp;·&nbsp; 🕒 {s.time}</div>
                     </div>
-                    <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, color: "#1d4ed8", background: "#dbeafe" }}>Upcoming</span>
+                    <span style={{ padding: "4px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, color: "#1d4ed8", background: "#dbeafe" }}>{t("Upcoming")}</span>
                   </div>
                 ))}
               </div>
@@ -374,7 +375,7 @@ function TrainerProfileView({ trainer, batches, onBack, onUpdate, setToast }) {
             {trainerReviews.length === 0 ? (
               <div style={{ textAlign: "center", padding: 30, color: "#9ca3af" }}>
                 <div style={{ fontSize: 32, marginBottom: 8 }}>⭐</div>
-                <div>No feedback submitted for this trainer yet.</div>
+                <div>{t("No feedback submitted for this trainer yet.")}</div>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -399,7 +400,7 @@ function TrainerProfileView({ trainer, batches, onBack, onUpdate, setToast }) {
             {trainerBatches.length === 0 ? (
               <div style={{ textAlign: "center", padding: 30, color: "#9ca3af" }}>
                 <div style={{ fontSize: 32, marginBottom: 8 }}>📅</div>
-                <div>No batches assigned to this trainer yet.</div>
+                <div>{t("No batches assigned to this trainer yet.")}</div>
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -443,7 +444,7 @@ function TrainerProfileView({ trainer, batches, onBack, onUpdate, setToast }) {
         {/* Assign Courses Modal (nested) */}
         {showCourses && (
           <Modal title={`📚 Assign Courses — ${trainer.name}`} onClose={() => setShowCourses(false)}>
-            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 14 }}>Select courses this trainer can teach.</div>
+            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 14 }}>{t("Select courses this trainer can teach.")}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
               {allCourses.map(c => {
                 const isSelected = assignedCourses.includes(c);
@@ -458,7 +459,7 @@ function TrainerProfileView({ trainer, batches, onBack, onUpdate, setToast }) {
                 );
               })}
             </div>
-            <button onClick={() => { onUpdate({ ...trainer, assignedCourses }); setToast({ msg: "Courses assigned!", type: "success" }); setShowCourses(false); }}
+            <button onClick={() => { onUpdate({ ...trainer, assignedCourses }); setToast({ msg: t("Courses assigned!"), type: "success" }); setShowCourses(false); }}
               style={{ ...S.primaryBtn, width: "100%" }}>
               Save Assignments ({assignedCourses.length} selected)
             </button>
@@ -480,7 +481,7 @@ function AddTrainerModal({ onAdd, onClose, setToast }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.name || !form.subject) {
-      setToast({ msg: "Name and expertise required.", type: "error" });
+      setToast({ msg: t("Name and expertise required."), type: "error" });
       return;
     }
     try {
@@ -498,7 +499,7 @@ function AddTrainerModal({ onAdd, onClose, setToast }) {
           viewOwnBatch: true,
         }
       });
-      setToast({ msg: "Trainer added successfully!", type: "success" });
+      setToast({ msg: t("Trainer added successfully!"), type: "success" });
       onClose();
     } catch (error) {
       setToast({ msg: error.message || "Could not add trainer.", type: "error" });
@@ -531,18 +532,18 @@ function AddTrainerModal({ onAdd, onClose, setToast }) {
           <label style={S.label}>Bio / Description</label>
           <textarea style={{ ...S.input, height: 70, resize: "none" }} value={form.bio}
             onChange={e => setForm({ ...form, bio: e.target.value })}
-            placeholder="Short description of the trainer's background and teaching style..." />
+            placeholder={t("Short description of the trainer's background and teaching style...")} />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12, marginBottom: 20 }}>
           <div>
-            <label style={S.label}>Status</label>
+            <label style={S.label}>{t("Status")}</label>
             <select style={S.input} value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
+              <option value="active">{t("Active")}</option>
+              <option value="inactive">{t("Inactive")}</option>
             </select>
           </div>
         </div>
-        <button type="submit" style={{ ...S.primaryBtn, width: "100%" }}>Add Trainer →</button>
+        <button type="submit" style={{ ...S.primaryBtn, width: "100%" }}>{t("Add Trainer →")}</button>
       </form>
     </Modal>
   );
@@ -599,7 +600,7 @@ export default function TrainerManagementTab({ trainers: initialTrainers = [], s
   const deleteTrainer = async (id) => {
     await deleteTrainerApi(id);
     syncTrainers(trainers.filter(t => (t._id || t.id) !== id));
-    showToast({ msg: "Trainer removed.", type: "error" });
+    showToast({ msg: t("Trainer removed."), type: "error" });
   };
 
   const filtered = trainers.filter(t => {
@@ -609,7 +610,7 @@ export default function TrainerManagementTab({ trainers: initialTrainers = [], s
     return matchSearch && matchStatus;
   });
 
-  if (loading) return <SectionCard title="Trainer Management">Loading trainers...</SectionCard>;
+  if (loading) return <SectionCard title="Trainer Management">{t("Loading trainers...")}</SectionCard>;
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
@@ -629,7 +630,7 @@ export default function TrainerManagementTab({ trainers: initialTrainers = [], s
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
-          <h1 style={S.pageTitle}>Trainer Management</h1>
+          <h1 style={S.pageTitle}>{t("Trainer Management")}</h1>
           <p style={S.pageSub}>
             {trainers.length} total &nbsp;·&nbsp;
             {trainers.filter(t => t.status === "active").length} active &nbsp;·&nbsp;
@@ -641,17 +642,17 @@ export default function TrainerManagementTab({ trainers: initialTrainers = [], s
 
       {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 14, marginBottom: 20 }}>
-        <StatCard icon="🎓" label="Total Trainers"  val={trainers.length}                                     color="#6366f1" bg="#ede9fe" />
-        <StatCard icon="✅" label="Active"           val={trainers.filter(t => t.status === "active").length}  color="#10b981" bg="#d1fae5" />
-        <StatCard icon="📚" label="Courses Covered" val={trainers.reduce((a, t) => a + t.courses, 0)}          color="#f59e0b" bg="#fef3c7" />
-        <StatCard icon="🎥" label="Total Sessions"  val={trainers.reduce((a, t) => a + t.sessions, 0)}         color="#3b82f6" bg="#dbeafe" />
-        <StatCard icon="⭐" label="Avg Rating"      val={(trainers.filter(t=>t.rating>0).reduce((a,t)=>a+t.rating,0)/Math.max(1,trainers.filter(t=>t.rating>0).length)).toFixed(1)} color="#f59e0b" bg="#fef3c7" />
+        <StatCard icon="🎓" label={t("Total Trainers")}  val={trainers.length}                                     color="#6366f1" bg="#ede9fe" />
+        <StatCard icon="✅" label={t("Active")}           val={trainers.filter(t => t.status === "active").length}  color="#10b981" bg="#d1fae5" />
+        <StatCard icon="📚" label={t("Courses Covered")} val={trainers.reduce((a, t) => a + t.courses, 0)}          color="#f59e0b" bg="#fef3c7" />
+        <StatCard icon="🎥" label={t("Total Sessions")}  val={trainers.reduce((a, t) => a + t.sessions, 0)}         color="#3b82f6" bg="#dbeafe" />
+        <StatCard icon="⭐" label={t("Avg Rating")}      val={(trainers.filter(t=>t.rating>0).reduce((a,t)=>a+t.rating,0)/Math.max(1,trainers.filter(t=>t.rating>0).length)).toFixed(1)} color="#f59e0b" bg="#fef3c7" />
       </div>
 
       {/* Filters */}
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ flex: 1, minWidth: 200 }}>
-          <SearchBar value={search} onChange={setSearch} placeholder="Search trainer by name or expertise..." />
+          <SearchBar value={search} onChange={setSearch} placeholder={t("Search trainer by name or expertise...")} />
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {["all", "active", "inactive"].map(f => (
@@ -665,30 +666,30 @@ export default function TrainerManagementTab({ trainers: initialTrainers = [], s
 
       {/* Trainer Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 16 }}>
-        {filtered.map((t, i) => {
-          const trainerBatches = batches.filter(b => b.trainer === t.name || b.coTrainer === t.name);
+        {filtered.map((tr, i) => {
+          const trainerBatches = batches.filter(b => b.trainer === tr.name || b.coTrainer === tr.name);
           return (
-            <div key={i} style={{ background: "white", borderRadius: 18, padding: "20px", border: "1px solid #f1f5f9", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", borderTop: `3px solid ${t.status === "active" ? "#6366f1" : "#e5e7eb"}` }}>
+            <div key={i} style={{ background: "white", borderRadius: 18, padding: "20px", border: "1px solid #f1f5f9", boxShadow: "0 2px 10px rgba(0,0,0,0.05)", borderTop: `3px solid ${tr.status === "active" ? "#6366f1" : "#e5e7eb"}` }}>
               {/* Card Header */}
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
                 <div style={{ width: 52, height: 52, borderRadius: 14, background: "linear-gradient(135deg,#6366f1,#4f46e5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: "white", flexShrink: 0 }}>
-                  {t.name[0]}
+                  {tr.name[0]}
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: "#1c1917" }}>{t.name}</div>
-                  <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{t.subject}</div>
-                  {t.qualification && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 1 }}>{t.qualification}</div>}
+                  <div style={{ fontSize: 14, fontWeight: 800, color: "#1c1917" }}>{tr.name}</div>
+                  <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{tr.subject}</div>
+                  {tr.qualification && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 1 }}>{tr.qualification}</div>}
                 </div>
-                <StatusBadge status={t.status} />
+                <StatusBadge status={tr.status} />
               </div>
 
               {/* Stats Row */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, textAlign: "center", marginBottom: 14 }}>
                 {[
-                  { label: "Courses",  val: t.courses,       icon: "📚" },
+                  { label: "Courses",  val: tr.courses,       icon: "📚" },
                   { label: "Batches",  val: trainerBatches.length, icon: "🗂️" },
-                  { label: "Sessions", val: t.sessions,      icon: "🎥" },
-                  { label: "Rating",   val: t.rating || "—", icon: "⭐" },
+                  { label: "Sessions", val: tr.sessions,      icon: "🎥" },
+                  { label: "Rating",   val: tr.rating || "—", icon: "⭐" },
                 ].map((s, j) => (
                   <div key={j} style={{ background: "#f9fafb", borderRadius: 8, padding: "8px 4px", border: "1px solid #f1f5f9" }}>
                     <div style={{ fontSize: 12 }}>{s.icon}</div>
@@ -699,33 +700,33 @@ export default function TrainerManagementTab({ trainers: initialTrainers = [], s
               </div>
 
               {/* Bio preview */}
-              {t.bio && (
+              {tr.bio && (
                 <p style={{ fontSize: 11, color: "#6b7280", lineHeight: 1.5, marginBottom: 12, borderTop: "1px solid #f3f4f6", paddingTop: 10 }}>
-                  {t.bio.substring(0, 90)}{t.bio.length > 90 ? "..." : ""}
+                  {tr.bio.substring(0, 90)}{tr.bio.length > 90 ? "..." : ""}
                 </p>
               )}
 
               {/* Rating bar */}
-              {t.rating > 0 && (
+              {tr.rating > 0 && (
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3, fontSize: 11 }}>
-                    <span style={{ color: "#9ca3af" }}>Rating</span>
-                    <span style={{ color: "#f59e0b", fontWeight: 700 }}>⭐ {t.rating} / 5.0</span>
+                    <span style={{ color: "#9ca3af" }}>{t("Rating")}</span>
+                    <span style={{ color: "#f59e0b", fontWeight: 700 }}>⭐ {tr.rating} / 5.0</span>
                   </div>
                   <div style={{ height: 5, background: "#f3f4f6", borderRadius: 4, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${(t.rating / 5) * 100}%`, background: "#f59e0b", borderRadius: 4 }} />
+                    <div style={{ height: "100%", width: `${(tr.rating / 5) * 100}%`, background: "#f59e0b", borderRadius: 4 }} />
                   </div>
                 </div>
               )}
 
               {/* Actions */}
               <div style={{ display: "flex", gap: 6, paddingTop: 12, borderTop: "1px solid #f3f4f6" }}>
-                <button onClick={() => setSelected(t)} style={{ ...S.tblBtn, flex: 1, color: "#4f46e5", borderColor: "#c4b5fd" }}>👁 View Profile</button>
-                <button onClick={() => { updateTrainer({ ...t, status: t.status === "active" ? "inactive" : "active" }); showToast({ msg: "Trainer status updated!", type: "success" }); }}
-                  style={{ ...S.tblBtn, color: t.status === "active" ? "#d97706" : "#059669", borderColor: t.status === "active" ? "#fbbf24" : "#6ee7b7" }}>
-                  {t.status === "active" ? "Deactivate" : "Activate"}
+                <button onClick={() => setSelected(tr)} style={{ ...S.tblBtn, flex: 1, color: "#4f46e5", borderColor: "#c4b5fd" }}>👁 View Profile</button>
+                <button onClick={() => { updateTrainer({ ...tr, status: tr.status === "active" ? "inactive" : "active" }); showToast({ msg: t("Trainer status updated!"), type: "success" }); }}
+                  style={{ ...S.tblBtn, color: tr.status === "active" ? "#d97706" : "#059669", borderColor: tr.status === "active" ? "#fbbf24" : "#6ee7b7" }}>
+                  {tr.status === "active" ? "Deactivate" : "Activate"}
                 </button>
-                <button onClick={() => deleteTrainer(t._id || t.id)} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5" }}>🗑️</button>
+                <button onClick={() => deleteTrainer(tr._id || tr.id)} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5" }}>🗑️</button>
               </div>
             </div>
           );
@@ -735,8 +736,8 @@ export default function TrainerManagementTab({ trainers: initialTrainers = [], s
       {filtered.length === 0 && (
         <div style={{ textAlign: "center", padding: "60px 20px", color: "#9ca3af" }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>🎓</div>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>No trainers found</div>
-          <div style={{ fontSize: 12, marginTop: 4 }}>Try adjusting your filters or add a new trainer</div>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>{t("No trainers found")}</div>
+          <div style={{ fontSize: 12, marginTop: 4 }}>{t("Try adjusting your filters or add a new trainer")}</div>
         </div>
       )}
     </div>
