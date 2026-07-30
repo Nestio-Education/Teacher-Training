@@ -1,6 +1,5 @@
 // Start: Snehal change
-import { t, getCurrentLanguageCode, LANG_CHANGE_EVENT } from "../services/i18n";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   createParentModule, updateParentModule, deleteParentModule, getParentModules,
   getParentModuleAssignments, assignParentModule, removeParentModuleAssignment,
@@ -459,20 +458,16 @@ export default function ParentModulesManagementTab({ setToast }) {
   }, []);
   // End: Snehal change
 
-  const loadModules = useCallback(() => {
+  const loadModules = () => {
     setLoading(true);
-    getParentModules({ lang: getCurrentLanguageCode() })
+    getParentModules()
       .then((res) => setModules(res.modules || []))
       .catch((error) => setToast?.({ msg: error.message || "Could not load modules.", type: "error" }))
       .finally(() => setLoading(false));
-  }, [setToast]);
+  };
 
-  useEffect(() => {
-    loadModules();
-    const handleLangChange = () => loadModules();
-    window.addEventListener(LANG_CHANGE_EVENT, handleLangChange);
-    return () => window.removeEventListener(LANG_CHANGE_EVENT, handleLangChange);
-  }, [loadModules]);
+  useEffect(() => { loadModules(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const openAddForm = () => {
     setForm({ moduleNumber: "", title: "", category: "", sessions: [] });
     setShowForm(true);
@@ -546,27 +541,25 @@ export default function ParentModulesManagementTab({ setToast }) {
   return (
     <div style={{ fontFamily: "'Segoe UI','Inter',-apple-system,sans-serif" }}>
       <div style={{ background: "linear-gradient(135deg,#f59e0b,#d97706)", borderRadius: 20, padding: "28px 32px", marginBottom: 24 }}>
-        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "1px", color: "#fef3c7", marginBottom: 6 }}>{t("PARENT CAPACITY BUILDING")}</div>
-        <div style={{ fontSize: 26, fontWeight: 800, color: "white", marginBottom: 4 }}>{t("Modules")}</div>
-        <div style={{ fontSize: 13, color: "#fef3c7" }}>{modules.length} {t("modules")} {t("in the curriculum")}</div>
+        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: "1px", color: "#fef3c7", marginBottom: 6 }}>PARENT CAPACITY BUILDING</div>
+        <div style={{ fontSize: 26, fontWeight: 800, color: "white", marginBottom: 4 }}>Modules</div>
+        <div style={{ fontSize: 13, color: "#fef3c7" }}>{modules.length} module{modules.length !== 1 ? "s" : ""} in the curriculum</div>
       </div>
 
       <div style={{ display: "flex", gap: 16, marginBottom: 20, alignItems: "stretch" }}>
-        <StatCard icon="📚" value={modules.length} label={t("Total Modules")} borderColor="#f59e0b" />
-        <StatCard icon="🗓️" value={modules.reduce((s, m) => s + (m.sessions?.length || 0), 0)} label={t("Total Sessions")} borderColor="#10b981" />
+        <StatCard icon="📚" value={modules.length} label="Total Modules" borderColor="#f59e0b" />
+        <StatCard icon="🗓️" value={modules.reduce((s, m) => s + (m.sessions?.length || 0), 0)} label="Total Sessions" borderColor="#10b981" />
         <div style={{ display: "flex", alignItems: "flex-end" }}>
           <button onClick={showForm ? () => setShowForm(false) : openAddForm}
             style={{ padding: "12px 22px", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "white", fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.08)", whiteSpace: "nowrap" }}>
-            {showForm ? t("✕ Cancel") : t("+ Add Module")}
+            {showForm ? "✕ Cancel" : "+ Add Module"}
           </button>
         </div>
       </div>
 
       {showForm && (
         <div style={{ background: "white", borderRadius: 16, border: "1px solid #f1f5f9", borderTop: "3px solid #f59e0b", boxShadow: "0 1px 3px rgba(0,0,0,0.04)", padding: 24, marginBottom: 24, maxWidth: 720 }}>
-          <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 800, color: "#1c1917" }}>
-            {editingId ? t("Edit Module") : t("Add New Module")}
-          </h3>
+          <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 800, color: "#1c1917" }}>Add New Module</h3>
           <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div>
               <label style={labelStyle}>Module Number</label>
@@ -648,12 +641,14 @@ export default function ParentModulesManagementTab({ setToast }) {
               {mod.objective && <div style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.5, marginBottom: 12 }}>{mod.objective}</div>}
 
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                <button onClick={() => openEditForm(mod)} style={{ flex: 1, ...smallBtn("#e0f2fe", "#0369a1"), padding: "8px" }}>✏️ {t("Edit")}</button>
-                <button onClick={() => handleDelete(mod)} style={{ flex: 1, ...smallBtn("#fee2e2", "#dc2626"), padding: "8px" }}>🗑️ {t("Delete")}</button>
+                {/* Start: Snehal change — View replaces Edit on the card */}
+                <button onClick={() => setViewingModule(mod)} style={{ flex: 1, ...smallBtn("#e0f2fe", "#0369a1"), padding: "8px" }}>👁️ View</button>
+                {/* End: Snehal change */}
+                <button onClick={() => handleDelete(mod)} style={{ flex: 1, ...smallBtn("#fee2e2", "#dc2626"), padding: "8px" }}>🗑️ Delete</button>
               </div>
               <button onClick={() => setAssigningModule(mod)}
                 style={{ width: "100%", marginTop: 8, ...smallBtn("#dcfce7", "#15803d"), padding: "8px" }}>
-                🔗 {t("Assign to Teacher / Class")}
+                🔗 Assign to Teacher / Class
               </button>
             </div>
           ))}
