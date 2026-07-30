@@ -2300,7 +2300,6 @@ export default function TeacherDashboard({ user, onLogout }) {
 
           <div
             onClick={() => setMenuOpen(!menuOpen)}
-            title={t("My Profile")}
             style={{
               display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
               padding: "6px 12px", borderRadius: 20, background: "#fef3c7",
