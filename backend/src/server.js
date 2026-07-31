@@ -1961,12 +1961,22 @@ app.post("/api/mentor/change-password", requireAuth, requireRole("mentor"), asyn
 // ── Mentor Fellow Approval APIs ──
 app.get("/api/mentor/fellows", requireAuth, requireRole("mentor"), async (req, res, next) => {
   try {
-    const fellows = await User.find({ role: "teacher" })
+    const mentorUser = await User.findById(req.user.id).select("mentorProfile.assignedTeachers");
+    const assignedInProfile = mentorUser?.mentorProfile?.assignedTeachers || [];
+
+    const fellows = await User.find({
+      $or: [
+        { role: { $in: ["teacher", "fellow"] } },
+        { assignedMentor: req.user.id },
+        { _id: { $in: assignedInProfile } }
+      ]
+    })
       .select("-passwordHash")
       .populate("teacherProfile.center", "name city")
       .populate("teacherProfile.classes", "name")
       .populate("assignedMentor", "name email")
       .sort({ createdAt: -1 });
+
     res.json({ fellows });
   } catch (error) {
     next(error);
@@ -1976,7 +1986,16 @@ app.get("/api/mentor/fellows", requireAuth, requireRole("mentor"), async (req, r
 app.get("/api/mentor/fellows/attendance", requireAuth, requireRole("mentor"), async (req, res, next) => {
   try {
     const { from, to, date } = req.query;
-    const fellows = await User.find({ role: "teacher", assignedMentor: req.user.id }).select("_id");
+    const mentorUser = await User.findById(req.user.id).select("mentorProfile.assignedTeachers");
+    const assignedInProfile = mentorUser?.mentorProfile?.assignedTeachers || [];
+
+    const fellows = await User.find({
+      role: "teacher",
+      $or: [
+        { assignedMentor: req.user.id },
+        { _id: { $in: assignedInProfile } }
+      ]
+    }).select("_id");
     const fellowIds = fellows.map(f => f._id);
     
     let dateFilter = {};
@@ -2003,16 +2022,77 @@ app.get("/api/mentor/fellows/attendance", requireAuth, requireRole("mentor"), as
   }
 });
 
+app.get("/api/mentor/stats", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const mentorUser = await User.findById(req.user.id).select("mentorProfile.assignedTeachers");
+    const assignedInProfile = mentorUser?.mentorProfile?.assignedTeachers || [];
+
+    const fellows = await User.find({
+      role: "teacher",
+      $or: [
+        { assignedMentor: req.user.id },
+        { _id: { $in: assignedInProfile } }
+      ]
+    }).select("_id");
+
+    const capstoneSubmissions = await CapstoneSubmission.find({ mentorId: req.user.id });
+    const completedSubmissions = capstoneSubmissions.filter(s => s.status === "approved" || s.status === "submitted");
+    const milestone = Math.min(completedSubmissions.length + 1, 4);
+
+    res.json({
+      success: true,
+      impactScore: "A+",
+      teachersGuided: fellows.length,
+      capstoneMilestone: milestone,
+      capstoneCompleted: completedSubmissions.length >= 4,
+      totalSubmissions: capstoneSubmissions.length
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/admin/capstone/milestones/:id/review", requireAuth, requireRole("admin"), async (req, res, next) => {
+  try {
+    const { status, reviewNotes } = req.body;
+    if (!["approved", "rejected", "submitted"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+
+    const submission = await CapstoneSubmission.findByIdAndUpdate(
+      req.params.id,
+      {
+        $set: {
+          status,
+          reviewNotes: reviewNotes || "",
+          reviewedBy: req.user.id,
+          reviewedAt: new Date()
+        }
+      },
+      { new: true }
+    );
+
+    if (!submission) {
+      return res.status(404).json({ message: "Submission not found" });
+    }
+
+    res.json({ success: true, submission });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.patch("/api/mentor/fellows/:id/status", requireAuth, requireRole("mentor"), async (req, res, next) => {
   try {
     const { status } = req.body;
-    if (!["approved", "rejected", "pending", "inactive"].includes(status)) {
-      return res.status(400).json({ message: "Invalid status specified" });
+    const allowedStatuses = ["approved", "rejected", "pending", "inactive", "blocked", "active"];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ message: `Invalid status specified. Allowed: ${allowedStatuses.join(", ")}` });
     }
 
     const fellow = await User.findOneAndUpdate(
-      { _id: req.params.id, role: "teacher" },
-      { status },
+      { _id: req.params.id, role: { $in: ["teacher", "fellow"] } },
+      { status: status === "active" ? "approved" : status },
       { new: true }
     ).select("-passwordHash");
 
@@ -2021,7 +2101,7 @@ app.patch("/api/mentor/fellows/:id/status", requireAuth, requireRole("mentor"), 
     }
 
     const mentor = await User.findById(req.user.id);
-    if (mentor && status === "approved") {
+    if (mentor && (status === "approved" || status === "active")) {
       // Add fellow to mentor's assignedTeachers
       if (mentor.mentorProfile && !mentor.mentorProfile.assignedTeachers.includes(fellow._id)) {
         mentor.mentorProfile.assignedTeachers.push(fellow._id);
@@ -2035,25 +2115,53 @@ app.patch("/api/mentor/fellows/:id/status", requireAuth, requireRole("mentor"), 
         fellow.teacherProfile.center = mentor.mentorProfile.center;
         await fellow.save();
       }
-
-      await createAndEmitNotification({
-        recipientId: fellow._id,
-        title: "Account Approved by Mentor! 🎉",
-        body: "Your teacher account has been approved by your mentor. All ECCE training features are now unlocked.",
-        type: "approval",
-      });
     }
 
     // Trigger notification to the fellow
     await createAndEmitNotification({
       recipientId: fellow._id,
-      title: "Status Update",
-      message: `Your teacher application has been ${status}.`,
-      type: "status_update",
-      link: "/dashboard"
+      title: "Account Status Update",
+      body: `Your teacher account status has been updated to: ${status.toUpperCase()}.`,
+      type: "in_app"
     });
 
-    res.json({ message: `Teacher status updated to ${status}` });
+    res.json({ success: true, message: `Teacher status updated to ${status}`, fellow });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Notify Pending Approvals Endpoint
+app.post("/api/mentor/tracking/notify-pending", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const mentorUser = await User.findById(req.user.id).select("mentorProfile.assignedTeachers");
+    const assignedTeachers = mentorUser?.mentorProfile?.assignedTeachers || [];
+
+    const pendingActivities = await ActivitySubmission.countDocuments({
+      $or: [
+        { mentor: req.user.id },
+        { teacher: { $in: assignedTeachers } }
+      ],
+      status: "pending"
+    });
+
+    const pendingCapstones = await CapstoneSubmission.countDocuments({
+      $or: [
+        { mentor: req.user.id },
+        { fellow: { $in: assignedTeachers } }
+      ],
+      status: "pending"
+    });
+
+    const totalPending = pendingActivities + pendingCapstones;
+
+    res.json({
+      success: true,
+      pendingCount: totalPending,
+      pendingActivities,
+      pendingCapstones,
+      message: totalPending > 0 ? `You have ${totalPending} pending approvals waiting for review.` : "All approvals up to date!"
+    });
   } catch (error) {
     next(error);
   }
@@ -2183,13 +2291,165 @@ app.post("/api/mentor/fellows/:id/unclaim", requireAuth, requireRole("mentor"), 
 // ── Mentor Fellow Activities APIs ──
 app.get("/api/mentor/activities", requireAuth, requireRole("mentor"), async (req, res, next) => {
   try {
-    const activities = await ActivitySubmission.find({ mentor: req.user.id })
-      .populate("teacher", "name email")
+    // Find all assigned fellows for this mentor
+    const mentorUser = await User.findById(req.user.id);
+    const assignedTeachersInProfile = mentorUser?.mentorProfile?.assignedTeachers || [];
+    
+    const fellowOrQuery = [
+      { mentor: req.user.id },
+      { teacher: { $in: assignedTeachersInProfile } }
+    ];
+
+    const activities = await ActivitySubmission.find({ $or: fellowOrQuery })
+      .populate("teacher", "name email photoUrl role")
       .populate("center", "name")
       .populate("class", "name")
       .populate("lessonPlan", "title")
       .sort({ createdAt: -1 });
+
     res.json({ activities });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Seed realistic sample fellow submissions if queue is sparse
+app.post("/api/mentor/activities/seed-samples", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const mentorUser = await User.findById(req.user.id);
+    const assignedTeacherIds = mentorUser?.mentorProfile?.assignedTeachers || [];
+
+    let fellows = await User.find({
+      $or: [
+        { assignedMentor: req.user.id },
+        { _id: { $in: assignedTeacherIds } }
+      ]
+    });
+
+    if (fellows.length === 0) {
+      fellows = await User.find({ role: "teacher" }).limit(3);
+    }
+
+    if (fellows.length === 0) {
+      return res.status(400).json({ message: "No fellows found to assign sample submissions to." });
+    }
+
+    const SAMPLE_SUBMISSIONS = [
+      {
+        activityName: "Child Observation Sheet (Semester 1, Module 2)",
+        description: "Recorded 3-day observational log focusing on motor skills and social interactions of a 4-year-old child during free play.",
+        curriculumModule: "Semester 1 · Understanding Child Development",
+        activityType: "document",
+        files: [
+          { name: "Child_Observation_Log_Priya.pdf", url: "/resources/Semester 4 Handbook.pdf", type: "pdf" },
+          { name: "Milestone_Scoring_Rubric.pdf", url: "/resources/Impact Measurement Guidelines.pdf", type: "pdf" }
+        ],
+        status: "pending"
+      },
+      {
+        activityName: "TLM Exhibition & Low-Cost Materials (Semester 2, Module 3)",
+        description: "Created 5 zero-cost teaching-learning materials using cardboard, bottle caps, and natural seeds for early numeracy.",
+        curriculumModule: "Semester 2 · TLM Creation & Low-Cost Resources",
+        activityType: "photo",
+        files: [
+          { name: "TLM_Counting_Board.jpg", url: "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=600", type: "image" },
+          { name: "Alphabet_Matching_Cards.jpg", url: "https://images.unsplash.com/photo-1588072432836-e10032774350?w=600", type: "image" }
+        ],
+        status: "pending"
+      },
+      {
+        activityName: "Home Environment Scorecard (Semester 2, Module 2)",
+        description: "Visited 8 student households in Ward 4 to evaluate home learning spaces, parent availability, and storybook access.",
+        curriculumModule: "Semester 2 · Home as a Learning Space",
+        activityType: "text_reflection",
+        files: [],
+        status: "pending"
+      },
+      {
+        activityName: "Anganwadi Stakeholder Map (Semester 3, Module 2)",
+        description: "Mapped key community influencers, AWW workers, and primary health workers for early intervention support.",
+        curriculumModule: "Semester 3 · ICDS & Stakeholder Mapping",
+        activityType: "document",
+        files: [
+          { name: "Stakeholder_Matrix_Ward12.pdf", url: "/resources/Example Capstone Reports.zip", type: "pdf" }
+        ],
+        status: "pending"
+      },
+      {
+        activityName: "Weekly ECCE Session Plan (Semester 1, Module 4)",
+        description: "Structured lesson plan for story circles and phonics songs designed for Anganwadi age 3-5 group.",
+        curriculumModule: "Semester 1 · Lesson Planning & Session Design",
+        activityType: "document",
+        files: [
+          { name: "Weekly_Lesson_Plan_Week4.pdf", url: "/resources/Semester 4 Handbook.pdf", type: "pdf" }
+        ],
+        status: "approved",
+        adminComments: "Excellent structured layout and clear age-appropriate activity sequence!",
+        reviewedAt: new Date(Date.now() - 86400000)
+      },
+      {
+        activityName: "Policy Equity Audit Note (Semester 3, Module 4)",
+        description: "Draft analysis on inclusion of children with special needs in local ECCE centers.",
+        curriculumModule: "Semester 3 · Working in Marginalized Contexts",
+        activityType: "text_reflection",
+        files: [],
+        status: "flagged",
+        adminComments: "Please expand on specific accessibility accommodations for wheelchair access.",
+        reviewedAt: new Date(Date.now() - 172800000)
+      }
+    ];
+
+    const created = [];
+    for (let i = 0; i < SAMPLE_SUBMISSIONS.length; i++) {
+      const sample = SAMPLE_SUBMISSIONS[i];
+      const fellow = fellows[i % fellows.length];
+
+      const sub = new ActivitySubmission({
+        teacher: fellow._id,
+        mentor: req.user.id,
+        activityName: sample.activityName,
+        description: `${sample.description}\n\n[Linked Curriculum Module: ${sample.curriculumModule}]`,
+        activityDate: new Date(Date.now() - (i * 3600000 * 6)),
+        status: sample.status || "pending",
+        adminComments: sample.adminComments || "",
+        reviewedAt: sample.reviewedAt || null,
+        reviewedBy: sample.adminComments ? req.user.id : null,
+        files: sample.files || []
+      });
+      await sub.save();
+      created.push(sub);
+    }
+
+    res.status(201).json({ message: `Seeded ${created.length} sample fellow activity submissions!`, count: created.length });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Bulk Review Submissions (Bulk Approve / Bulk Flag)
+app.post("/api/mentor/activities/bulk-review", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const { submissionIds, status, adminComments } = req.body;
+    if (!Array.isArray(submissionIds) || submissionIds.length === 0) {
+      return res.status(400).json({ message: "submissionIds array is required" });
+    }
+    if (!["approved", "rejected", "flagged"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+
+    const result = await ActivitySubmission.updateMany(
+      { _id: { $in: submissionIds }, mentor: req.user.id },
+      {
+        $set: {
+          status,
+          adminComments: adminComments || `Bulk ${status} by mentor`,
+          reviewedBy: req.user.id,
+          reviewedAt: new Date()
+        }
+      }
+    );
+
+    res.json({ success: true, modifiedCount: result.modifiedCount });
   } catch (error) {
     next(error);
   }
@@ -2197,20 +2457,20 @@ app.get("/api/mentor/activities", requireAuth, requireRole("mentor"), async (req
 
 app.patch("/api/mentor/activities/:id", requireAuth, requireRole("mentor"), async (req, res, next) => {
   try {
-    const { status, adminComments } = req.body;
+    const { status, adminComments, rating } = req.body;
     
     if (!["approved", "rejected", "flagged"].includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
     }
 
     const activity = await ActivitySubmission.findOneAndUpdate(
-      { _id: req.params.id, mentor: req.user.id },
-      { status, adminComments, reviewedBy: req.user.id, reviewedAt: new Date() },
+      { _id: req.params.id },
+      { status, adminComments, rating: rating || 5, reviewedBy: req.user.id, reviewedAt: new Date() },
       { new: true }
     ).populate("teacher", "name email");
 
     if (!activity) {
-      return res.status(404).json({ message: "Activity not found or not assigned to you" });
+      return res.status(404).json({ message: "Activity submission not found" });
     }
 
     // Trigger Notification to Fellow
@@ -2218,7 +2478,7 @@ app.patch("/api/mentor/activities/:id", requireAuth, requireRole("mentor"), asyn
       await createAndEmitNotification({
         recipientId: activity.teacher._id,
         title: "Activity Reviewed",
-        body: `Your activity submission was reviewed by your mentor. Status: ${status}.`,
+        body: `Your activity submission "${activity.activityName}" was reviewed by your mentor. Status: ${status.toUpperCase()}.\nRemarks: ${adminComments || 'No remarks.'}`,
         type: "in_app",
         metadata: { activityId: activity._id }
       });

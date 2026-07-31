@@ -32,9 +32,13 @@ const capstoneSubmissionSchema = new mongoose.Schema(
     mentorId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     milestone: { type: Number, required: true },
     fileUrl: { type: String },
+    evidenceLink: { type: String },
     notes: { type: String },
     status: { type: String, enum: ["submitted", "approved", "rejected"], default: "submitted" },
     submittedAt: { type: Date, default: Date.now },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    reviewedAt: { type: Date },
+    reviewNotes: { type: String },
   },
   { timestamps: true }
 );

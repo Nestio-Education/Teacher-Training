@@ -1387,14 +1387,18 @@ export function recordMenteeObservation(menteeId, observation) {
   });
 }
 
+export function getMentorStats() {
+  return request("/api/mentor/stats");
+}
+
 export function getCapstoneSubmissions() {
   return request("/api/mentor/tracking/capstone");
 }
 
-export function submitCapstoneMilestone(milestone, notes, fileUrl) {
-  return request("/api/mentor/tracking/capstone", {
+export function submitCapstoneMilestone(milestone, notes, fileUrl, evidenceLink = "") {
+  return request(`/api/mentor/tracking/capstone/milestones/${milestone}/submit`, {
     method: "POST",
-    body: JSON.stringify({ milestone, notes, fileUrl })
+    body: JSON.stringify({ milestone, notes, fileUrl, evidenceLink })
   });
 }
 
