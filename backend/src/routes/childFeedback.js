@@ -46,4 +46,23 @@ router.post("/", requireAuth, async (req, res, next) => {
   }
 });
 
+// PATCH — Admin marks feedback as reviewed / adds a note
+router.patch("/:id", requireAuth, requireRole("admin"), async (req, res, next) => {
+  try {
+    const { reviewStatus, adminNote } = req.body;
+    const update = {};
+    if (reviewStatus !== undefined) update.reviewStatus = reviewStatus;
+    if (adminNote !== undefined) update.adminNote = adminNote;
+
+    const feedback = await ChildFeedback.findByIdAndUpdate(req.params.id, update, { new: true })
+      .populate("child")
+      .populate("teacher", "name email");
+
+    if (!feedback) return res.status(404).json({ message: "Feedback not found" });
+    res.json({ feedback });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

@@ -1305,3 +1305,10 @@ export function submitChildFeedback(payload) {
     body: JSON.stringify(payload),
   });
 }
+
+export function updateChildFeedbackStatus(id, payload) {
+  return request(`/api/child-feedback/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}

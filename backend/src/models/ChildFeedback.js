@@ -11,6 +11,8 @@ const childFeedbackSchema = new mongoose.Schema(
     recommendation: String,
     rawInput: String,
     status: { type: String, default: "submitted" },
+    reviewStatus: { type: String, enum: ["pending", "reviewed"], default: "pending" },
+    adminNote: { type: String, default: "" },
   },
   { timestamps: true }
 );

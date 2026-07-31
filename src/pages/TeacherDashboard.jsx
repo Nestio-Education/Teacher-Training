@@ -4,6 +4,7 @@ import { t, setLanguage, getLanguageList, getCurrentLanguage, LANG_CHANGE_EVENT 
 // Start: Snehal change
 import { updateTeacherNotificationPreference, getParentModules, getParentSessionAssignments, submitParentSessionFeedback } from "../services/api";
 // End: Snehal change
+
 import AttendanceManager from "./AttendanceManager";
 import TrainingAndClassroomManager from "./TrainingAndClassroomManager";
 import GeotagAttendance from "./GeotagAttendance";
@@ -1847,6 +1848,9 @@ function ParentCapacityBuildingTab({ user, setToast }) {
     </div>
   );
 }
+
+
+
 /* ═══════════════════════════════════════════
    MAIN TEACHER DASHBOARD
 ═══════════════════════════════════════════ */
@@ -2075,6 +2079,7 @@ export default function TeacherDashboard({ user, onLogout }) {
     { key: "certificates",  label: "Certificates",        icon: "🏆" },
     { key: "notifications", label: "Notifications",       icon: "🔔", badge: unreadCount },
     { key: "feedback",      label: "Feedback",             icon: "💬" },
+   
     { key: "profile",       label: "My Profile",          icon: "👤" },
   ];
 
@@ -2131,6 +2136,7 @@ export default function TeacherDashboard({ user, onLogout }) {
       case "certificates":  return <CertificatesTab assignments={courses} certificates={certificates}/>;
       case "notifications": return <NotificationsTab notifications={notifications} onMarkRead={handleMarkNotifRead} onMarkAllRead={handleMarkAllNotifRead}/>;
       case "feedback":      return <TeacherFeedbackTab user={enrichedUser} setToast={setToast}/>;
+      
       case "profile":       return <ProfileTab user={enrichedUser} onWorkingCenterChange={setWorkingCenter} onUserUpdate={setCurrentUser}/>;
       default:              return null;
     }
