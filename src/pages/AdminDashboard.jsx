@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Logo, Toast, globalCSS } from "../components/Shared";
-import { t } from "../services/i18n";
+import { t, getCurrentLanguageCode, LANG_CHANGE_EVENT } from "../services/i18n";
 import OverviewTab from "../admin/OverviewTab";
 import CenterManagementTab from "../admin/CenterManagementTab";
 import TeacherManagementTab from "../admin/TeacherManagementTab";
@@ -17,6 +17,10 @@ import SettingsTab from "../admin/SettingsTab";
 import FeedbackManagementTab from "../admin/FeedbackManagementTab";
 import LessonPlannerTab from "./LessonPlannerTab";
 import ChildFeedbackTab from "../admin/ChildFeedbackTab";
+// Start: Snehal change
+import ParentModulesManagementTab from "../admin/ParentModulesManagementTab";
+// End: Snehal change
+import AdminUserGuide from "./adminuserguide";
 //import ScheduleManagementTab from "../admin/ScheduleManagementTab";
 //import CertificateManagementTab from "../admin/CertificateManagementTab";
 //import AutomationTab from "../admin/AutomationTab";
@@ -31,13 +35,6 @@ import { getAdminTeachers, getCourseAssignments, getCourses, updateTeacherStatus
 //import LiveSessionsTab from "../admin/LiveSessionsTab";
 
 
-
-
-
-
-
-
-
 /* ===========================================
    MAIN ADMIN DASHBOARD
 =========================================== */
@@ -47,6 +44,8 @@ export default function AdminDashboard({ user, onLogout }) {
   const [courses, setCourses] = useState([]);
   const [assignments,setAssignments] = useState([]);
   const [toast, setToast] = useState({msg:"",type:""});
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
 
   const pending = teachers.filter(t=>t.status==="pending");
   const mapCourseAssignmentForReview = (assignment) => {
@@ -90,26 +89,31 @@ export default function AdminDashboard({ user, onLogout }) {
   };
 
   const navItems = [
-    { key:"overview",     label:"Admin Dashboard",          icon:"\uD83D\uDCCA" },
-    { key:"centers",      label:"Center Management", icon:"\uD83C\uDFEB" },
-    { key:"teachers",     label:"Teacher Management",icon:"\uD83D\uDC69\u200D\uD83C\uDFEB", badge:pending.length },
-    { key: "curriculum", label: "Course Management", icon: "\uD83D\uDCDA" },
-    { key: "activities", label: "Activity Monitoring", icon: "\uD83D\uDCF8" },
-    { key: "lessonplans", label: "Lesson Plans", icon: "\uD83D\uDCCB" },
-    { key: "planner", label: "AI Lesson Planner", icon: "\u270F\uFE0F" },
+    { key:"overview",     label:t("Admin Dashboard"),          icon:"\uD83D\uDCCA" },
+    { key:"centers",      label:t("Center Management"), icon:"\uD83C\uDFEB" },
+    { key:"teachers",     label:t("User Management"),icon:"\uD83D\uDC69\u200D\uD83C\uDFEB", badge:pending.length },
+    { key: "curriculum", label:t("Course Management"), icon: "\uD83D\uDCDA" },
+    // Start: Snehal change
+    { key: "parentModules", label:t("Parent Capacity Building"), icon: "\uD83D\uDC6A" },
+    // End: Snehal change
+    { key: "activities", label:t("Activity Monitoring"), icon: "\uD83D\uDCF8" },
+    { key: "lessonplans", label:t("Lesson Plans"), icon: "\uD83D\uDCCB" },
 
-    { key: "children", label: "Children & Classes", icon: "\uD83D\uDC76" },
-    { key:"trainers",     label:"Trainer Management",icon:"\uD83C\uDF93" },
+    { key: "children", label:t("Children & Classes"), icon: "\uD83D\uDC76" },
+    { key:"trainers",     label:t("Trainer Management"),icon:"\uD83C\uDF93" },
+    { key:"attendance",   label:t("Attendance"),        icon:"\uD83D\uDCC5" },
+
+{ key: "children", label: "Children & Classes", icon: "👶" },
+    { key:"trainers",     label:"Trainer Management",icon:"🎓" },
     { key:"assignments",  label:"Assignment Review", icon:"📝", badge:assignments.filter(a=>a.status==="pending").length },
-    { key:"attendance",   label:"Attendance",        icon:"\uD83D\uDCC5" },
-   
-    { key:"reports",      label:"Reports & Analytics",icon:"\uD83D\uDCC8" },
-    { key:"notifications",label:"Notifications",     icon:"\uD83D\uDD14" },
-    { key:"settings",     label:"Settings & Roles",  icon:"\u2699\uFE0F" },
-    //{ key:"schedules",    label:"Schedule Management", icon:"\uD83D\uDCC5" },
-    //{ key:"certificates", label:"Certificates",        icon:"\uD83C\uDFC6" },
-    { key:"feedback",     label:"Feedback",              icon:"\uD83D\uDCAC" },
-    //{ key:"automation",   label:"Automation Center",     icon:"\u2699\uFE0F" },
+    { key:"attendance",   label:"Attendance",        icon:"📅" },
+    { key:"reports",      label:t("Reports & Analytics"),icon:"📈" },
+    { key:"notifications",label:"Notifications",     icon:"🔔" },
+    { key:"settings",     label:"Settings & Roles",  icon:"⚙️" },
+    //{ key:"schedules",    label:t("Schedule Management"), icon:"📅" },
+    //{ key:"certificates", label:t("Certificates"),        icon:"🏆" },
+    { key:"feedback",     label:t("Feedback"),              icon:"💬" },
+    //{ key:"automation",   label:t("Automation Center"),     icon:"⚙️" },
     { key: "childfeedback", label: "Child Feedback", icon: "💬" },
   ];
   const persistTeachers = (updater) => {
@@ -139,15 +143,16 @@ export default function AdminDashboard({ user, onLogout }) {
       case "lessonplans": return <LessonPlanManagementTab setToast={setToast} />;
       case "children": return <ChildrenManagementTab setToast={setToast}/>;
       case "trainers": return <TrainerManagementTab batches={[]} setToast={setToast}/>;
-      case "planner": return <LessonPlannerTab setToast={setToast} user={user} />;
-       case "assignments":  return <AssignmentReviewTab assignments={assignments} setAssignments={setAssignments} setToast={setToast} teachers={teachers} user={user}/>;
       case "attendance":   return <AttendanceTab teachers={teachers} sessions={[]}/>;
       case "reports":      return <ReportsTab teachers={teachers} courses={courses} batches={[]}/>;
       case "notifications":return <NotificationsTab teachers={teachers} setToast={setToast}/>;
-      case "settings":     return <SettingsTab setToast={setToast}/>;
+      case "settings":     return <SettingsTab setToast={setToast} teachers={teachers} />;
       //case "schedules":    return <ScheduleManagementTab setToast={setToast}/>;
      // case "certificates": return <CertificateManagementTab setToast={setToast}/>;
       case "feedback":     return <FeedbackManagementTab setToast={setToast}/>;
+      // Start: Snehal change
+      case "parentModules": return <ParentModulesManagementTab setToast={setToast}/>;
+      // End: Snehal change
       //case "automation":   return <AutomationTab user={user} setToast={setToast}/>;
       case "childfeedback": return <ChildFeedbackTab/>;
       default:             return null;
@@ -158,7 +163,7 @@ export default function AdminDashboard({ user, onLogout }) {
     let isInitialLoad = true;
 
     const fetchDashboardData = () => {
-      Promise.all([getAdminTeachers(), getCourses(), getCourseAssignments()])
+      Promise.all([getAdminTeachers(), getCourses({ lang: getCurrentLanguageCode() }), getCourseAssignments()])
         .then(([teacherRes, courseRes, assignmentRes]) => {
           if (ignore) return;
           setTeachers(teacherRes.teachers || []);
@@ -174,22 +179,26 @@ export default function AdminDashboard({ user, onLogout }) {
         });
     };
 
+
     fetchDashboardData();
     const interval = setInterval(fetchDashboardData, 30000);
+    window.addEventListener(LANG_CHANGE_EVENT, fetchDashboardData);
 
     return () => {
       ignore = true;
       clearInterval(interval);
+      window.removeEventListener(LANG_CHANGE_EVENT, fetchDashboardData);
     };
   }, []);
 
+
   return (
-    <div style={{ display:"flex", minHeight:"100vh", background:"#f8fafc", fontFamily:"'Segoe UI','Inter',-apple-system,sans-serif" }}>
+    <div style={{ display:"flex", height:"100vh", overflow:"hidden", background:"#f8fafc", fontFamily:"'Segoe UI','Inter',-apple-system,sans-serif" }}>
       <style>{globalCSS}</style>
       <Toast msg={toast.msg} type={toast.type} onClose={()=>setToast({msg:"",type:""})}/>
 
       {/* Sidebar */}
-      <div style={{ width:250, background:"white", borderRight:"1px solid #f1f5f9", display:"flex", flexDirection:"column", flexShrink:0, boxShadow:"2px 0 12px rgba(0,0,0,0.04)", position:"sticky", top:0, height:"100vh", overflowY:"auto" }}>
+      <div style={{ width:250, background:"white", borderRight:"1px solid #f1f5f9", display:"flex", flexDirection:"column", flexShrink:0, boxShadow:"2px 0 12px rgba(0,0,0,0.04)", position:"relative", height:"100vh" }}>
         <div style={{ padding:"20px 16px 12px" }}>
           <Logo size={120}/>
           <div style={{ textAlign:"center", padding:"4px 12px", borderRadius:20, fontSize:11, fontWeight:700,
@@ -198,7 +207,7 @@ export default function AdminDashboard({ user, onLogout }) {
           </div>
         </div>
 
-        <nav style={{ padding:"4px 10px", flex:1 }}>
+        <nav style={{ padding:"4px 10px", flex: 1, overflowY: "auto", marginBottom: "80px" }}>
           {navItems.map(item=>(
             <button key={item.key} onClick={()=>setActiveTab(item.key)}
               style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"9px 12px",
@@ -207,30 +216,42 @@ export default function AdminDashboard({ user, onLogout }) {
                 cursor:"pointer", fontFamily:"inherit", textAlign:"left", marginBottom:2,
                 transition:"all 0.18s" }}>
               <span style={{ fontSize:15 }}>{item.icon}</span>
-              <span style={{ flex:1 }}>{t(item.label)}</span>
+              <span style={{ flex:1 }}>{item.label}</span>
               {item.badge>0 && <span style={{ background:"#ef4444", color:"white", borderRadius:20, fontSize:10, fontWeight:800, padding:"1px 7px", minWidth:18, textAlign:"center" }}>{item.badge}</span>}
             </button>
           ))}
         </nav>
 
-        <div style={{ padding:"12px 16px", borderTop:"1px solid #f1f5f9", display:"flex", alignItems:"center", gap:10 }}>
+        <div style={{
+          position: "fixed", bottom: 0, left: 0, width: 250,
+          padding:"12px 16px", borderTop:"1px solid #f1f5f9",
+          display:"flex", alignItems:"center", gap:10, background:"white", zIndex: 50
+        }}>
           <div style={{ width:34, height:34, borderRadius:"50%", background:"linear-gradient(135deg,#f59e0b,#d97706)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, fontWeight:800, color:"white" }}>A</div>
           <div style={{ flex:1, overflow:"hidden" }}>
             <div style={{ fontSize:12, fontWeight:700, color:"#1c1917" }}>Admin</div>
             <div style={{ fontSize:10, color:"#9ca3af", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{user?.email}</div>
           </div>
           <button onClick={onLogout} title={t("Sign Out")}
-            style={{ background:"none", border:"none", cursor:"pointer", fontSize:16, color:"#9ca3af", padding:4 }}>⏻</button>
+            style={{
+              background:"transparent", border:"none", cursor:"pointer",
+              fontSize:22, color:"#ef4444", padding:"8px",
+              borderRadius: "8px", transition: "all 0.2s ease",
+              display: "flex", alignItems: "center", justifyContent: "center"
+            }}
+            onMouseEnter={(e)=>e.currentTarget.style.background="#fee2e2"}
+            onMouseLeave={(e)=>e.currentTarget.style.background="transparent"}
+          >⏻</button>
         </div>
       </div>
 
       {/* Main Content */}
       <div style={{ flex:1, padding:"28px 32px", overflowY:"auto", maxHeight:"100vh" }}>
-        {/* Top bar with logout button, top-right corner */}
-        <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:16 }}>
+        {/* Top bar: User Guide button + Admin 3-dot menu, top-right corner */}
+        <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginBottom:16, position:"relative" }}>
           <button
-            onClick={onLogout}
-            title="Sign Out"
+            onClick={() => setShowGuide(true)}
+            title={t("User Guide")}
             style={{
               display:"flex",
               alignItems:"center",
@@ -238,7 +259,7 @@ export default function AdminDashboard({ user, onLogout }) {
               padding:"8px 16px",
               borderRadius:10,
               border:"1px solid #fbbf24",
-              background:"#fef3c7",
+              background:"white",
               color:"#92400e",
               fontSize:12,
               fontWeight:700,
@@ -247,16 +268,66 @@ export default function AdminDashboard({ user, onLogout }) {
               transition:"all 0.18s",
               boxShadow:"0 1px 3px rgba(0,0,0,0.04)",
             }}
-            onMouseEnter={(e)=>{ e.currentTarget.style.background="#fde68a"; }}
-            onMouseLeave={(e)=>{ e.currentTarget.style.background="#fef3c7"; }}
+            onMouseEnter={(e)=>{ e.currentTarget.style.background="#fffbeb"; }}
+            onMouseLeave={(e)=>{ e.currentTarget.style.background="white"; }}
           >
-            <span style={{ fontSize:14, lineHeight:1 }}>⎋</span>
-            Logout
+            <span style={{ fontSize:14, lineHeight:1 }}>📖</span>
+            {t("User Guide")}
           </button>
+
+          <div
+            onClick={() => setMenuOpen(!menuOpen)}
+            style={{
+              display:"flex", alignItems:"center", gap: 10, cursor:"pointer",
+              padding:"6px 12px", borderRadius:20, background:"#fef3c7",
+              boxShadow:"0 1px 3px rgba(0,0,0,0.1)", border:"1px solid #fbbf24",
+              transition:"all 0.2s ease"
+            }}
+            onMouseEnter={(e)=>e.currentTarget.style.background="#fde68a"}
+            onMouseLeave={(e)=>e.currentTarget.style.background="#fef3c7"}
+          >
+            <div style={{ fontSize:14, fontWeight:700, color:"#92400e" }}>Admin</div>
+            <div style={{ fontSize: 18, fontWeight: 700, paddingBottom: 6, color:"#92400e" }}>⋮</div>
+          </div>
+
+          {menuOpen && (
+            <div
+              style={{
+                position:"absolute", top:"110%", right:0, background:"white",
+                borderRadius:12, boxShadow:"0 8px 24px rgba(0,0,0,0.12)",
+                border:"1px solid #f1f5f9", overflow:"hidden", minWidth:200, zIndex:60
+              }}
+            >
+              <button
+                onClick={() => { setMenuOpen(false); setActiveTab("settings"); }}
+                style={{ display:"flex", alignItems:"center", gap: 12, padding:"12px 18px", border:"none", background:"white", textAlign:"left", cursor:"pointer", width:"100%", fontSize:14, fontWeight:600, transition: "background 0.2s" }}
+                onMouseEnter={(e)=>e.currentTarget.style.background="#f8fafc"}
+                onMouseLeave={(e)=>e.currentTarget.style.background="white"}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: "#fef3c7" }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#92400e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                </div>
+                <span style={{ color: "#374151", fontWeight: 700 }}>{t("Settings & Roles")}</span>
+              </button>
+              <button
+                onClick={onLogout}
+                style={{ display:"flex", alignItems:"center", gap: 12, padding:"12px 18px", border:"none", background:"white", textAlign:"left", cursor:"pointer", color:"#dc2626", fontSize:14, fontWeight:600, transition: "background 0.2s" }}
+                onMouseEnter={(e)=>e.currentTarget.style.background="#fef2f2"}
+                onMouseLeave={(e)=>e.currentTarget.style.background="white"}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 32, borderRadius: 8, background: "#fee2e2" }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                </div>
+                <span style={{ color: "#dc2626", fontWeight: 700 }}>{t("Logout")}</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {renderContent()}
       </div>
+
+      {showGuide && <AdminUserGuide onClose={() => setShowGuide(false)} />}
     </div>
   );
 }

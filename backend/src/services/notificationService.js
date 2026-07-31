@@ -1,7 +1,7 @@
-import { sendEmail, getTwilioConfig, getMessagingConfig } from "../email.js";
+/* global Buffer, process */
+import { sendEmail, getMessagingConfig } from "../email.js";
 import { Notification } from "../models/Notification.js";
 import { User } from "../models/User.js";
-import mongoose from "mongoose";
 
 /**
  * Unified Multi-Channel Notification Service
@@ -81,7 +81,7 @@ const TEMPLATES = {
 function getTemplate(templateKey, lang = "en", replacements = {}) {
   const langCode = { English: "en", Hindi: "hi", Marathi: "mr", Telugu: "te", Kannada: "kn", Tamil: "ta" }[lang] || "en";
   const template = TEMPLATES[templateKey]?.[langCode] || TEMPLATES[templateKey]?.en || { title: templateKey, body: "" };
-  
+
   let { title, body } = template;
   for (const [key, value] of Object.entries(replacements)) {
     title = title.replace(`{{${key}}}`, value);
@@ -212,7 +212,7 @@ async function sendWhatsApp(phone, message) {
         })
       });
       const data = await resp.json();
-      return resp.ok ? { success: true, sid: data.message_uuid } : { success: false, error: data.detail || "Vonage WhatsApp error" };
+      return resp.ok ? { success: true, sid: data.sid } : { success: false, error: `${data.code}: ${data.message}` };
     } catch (err) {
       return { success: false, error: err.message };
     }
@@ -311,7 +311,7 @@ async function sendNotification({ recipientId, templateKey, channel = "in_app", 
   if (shouldSend(CHANNELS.SMS) && recipient.phone) {
     try {
       const smsResult = await sendSms(recipient.phone, `${title}\n\n${body}`);
-      
+
       await Notification.create({
         recipient: recipientId,
         channel: "sms",
@@ -333,7 +333,7 @@ async function sendNotification({ recipientId, templateKey, channel = "in_app", 
   if (shouldSend(CHANNELS.WHATSAPP) && recipient.phone) {
     try {
       const waResult = await sendWhatsApp(recipient.phone, `${title}\n\n${body}`);
-      
+
       await Notification.create({
         recipient: recipientId,
         channel: "whatsapp",
@@ -360,14 +360,14 @@ async function sendNotification({ recipientId, templateKey, channel = "in_app", 
  */
 async function broadcastNotification({ recipientIds, templateKey, channel = "in_app", priority = "normal", replacements = {}, metadata = {} }) {
   const results = [];
-  
+
   // Process in batches of 10
   for (let i = 0; i < recipientIds.length; i += 10) {
     const batch = recipientIds.slice(i, i + 10);
     const batchResults = await Promise.allSettled(
       batch.map(id => sendNotification({ recipientId: id, templateKey, channel, priority, replacements, metadata }))
     );
-    results.push(...batchResults.map((r, idx) => 
+    results.push(...batchResults.map((r, idx) =>
       r.status === "fulfilled" ? { recipientId: batch[idx], ...r.value } : { recipientId: batch[idx], success: false, error: r.reason?.message }
     ));
   }

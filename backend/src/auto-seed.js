@@ -10,6 +10,8 @@ import { LessonPlanAssignment } from "./models/LessonPlanAssignment.js";
 import { Trainer } from "./models/Trainer.js";
 import { Batch } from "./models/Batch.js";
 import { AttendanceAlert } from "./models/AttendanceAlert.js";
+import { CurriculumUnit } from "./models/CurriculumUnit.js";
+
 
 export async function autoSeed() {
   console.log("Seeding database with initial portal data...");
@@ -335,6 +337,68 @@ export async function autoSeed() {
     if (!existingAlert) {
       await AttendanceAlert.create(alertData);
     }
+  }
+
+  const curriculumCount = await CurriculumUnit.countDocuments();
+  if (curriculumCount === 0) {
+    const demoUnits = [
+      {
+        title: "Foundations of Early Literacy",
+        subject: "Language & Literacy",
+        grade: "Pre-K – Class 1",
+        status: "active",
+        progress: 72,
+        topics: [
+          { title: "Phonemic Awareness", status: "completed", duration: "2 weeks" },
+          { title: "Letter Recognition (A–M)", status: "completed", duration: "2 weeks" },
+          { title: "Letter Recognition (N–Z)", status: "in_progress", duration: "2 weeks" },
+          { title: "Sight Words — Level 1", status: "pending", duration: "3 weeks" },
+        ],
+        resources: 8,
+      },
+      {
+        title: "Numeracy & Number Sense",
+        subject: "Mathematics",
+        grade: "Class 1 – Class 2",
+        status: "active",
+        progress: 45,
+        topics: [
+          { title: "Counting 1–50", status: "completed", duration: "1 week" },
+          { title: "Addition Basics", status: "in_progress", duration: "2 weeks" },
+          { title: "Subtraction Basics", status: "pending", duration: "2 weeks" },
+          { title: "Shapes & Patterns", status: "pending", duration: "1 week" },
+        ],
+        resources: 12,
+      },
+      {
+        title: "Environmental Awareness",
+        subject: "EVS",
+        grade: "Class 2 – Class 3",
+        status: "draft",
+        progress: 10,
+        topics: [
+          { title: "My Neighborhood", status: "in_progress", duration: "1 week" },
+          { title: "Plants & Animals Around Us", status: "pending", duration: "2 weeks" },
+          { title: "Weather & Seasons", status: "pending", duration: "1 week" },
+        ],
+        resources: 4,
+      },
+      {
+        title: "Creative Expression",
+        subject: "Art & Craft",
+        grade: "Pre-K – Class 3",
+        status: "completed",
+        progress: 100,
+        topics: [
+          { title: "Color Theory Basics", status: "completed", duration: "1 week" },
+          { title: "Paper Craft", status: "completed", duration: "1 week" },
+          { title: "Storytelling Through Drawing", status: "completed", duration: "1 week" },
+        ],
+        resources: 6,
+      },
+    ];
+    await CurriculumUnit.insertMany(demoUnits);
+    console.log("Seeded default curriculum units.");
   }
 
   console.log("Automatic database seeding complete.");

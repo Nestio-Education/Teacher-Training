@@ -1,3 +1,4 @@
+import { t, getCurrentLanguageCode } from "../services/i18n";
 import { useState, useEffect } from "react";
 import { Modal, S, SearchBar, StatCard, StatusBadge, Toast } from "../components/Shared";
 import { 
@@ -126,7 +127,7 @@ const mapPlanFromApi = (p, assignments = []) => {
   return {
     id: pid,
     title: p.title,
-    description: p.instructions || "",
+    description: p.objectives || p.instructions || "",
     centerId: firstAssn.center?._id || firstAssn.center || p.center || "",
     classId: firstAssn.class?._id || firstAssn.class || p.class || "",
     courseId: p.course?._id || p.course || "",
@@ -184,23 +185,23 @@ function ReportReviewActions({ reportId, onReview, setToast }) {
 
   return (
     <div style={{ marginTop: 12, padding: "12px 14px", background: "#f9fafb", borderRadius: 10, border: "1px solid #f3f4f6" }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>Admin Review</div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>{t("Admin Review")}</div>
       <textarea
         value={feedback}
         onChange={(e) => setFeedback(e.target.value)}
-        placeholder="Write feedback for the teacher..."
+        placeholder={t("Write feedback for the teacher...")}
         rows={3}
         style={{ ...S.input, resize: "none", marginBottom: 10, fontSize: 12 }}
       />
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button onClick={handleApprove} disabled={loading} style={{ ...S.btnGreen, flex: 1 }}>
-          {loading ? "..." : "✓ Approve"}
+          {loading ? "..." : t("✓ Approve")}
         </button>
         <button onClick={handleRequestRevision} disabled={loading} style={{ ...S.btnOrange, flex: 1 }}>
-          {loading ? "..." : "↻ Revision"}
+          {loading ? "..." : t("↻ Revision")}
         </button>
         <button onClick={handleReject} disabled={loading} style={{ ...S.btnRed, flex: 1 }}>
-          {loading ? "..." : "✕ Reject"}
+          {loading ? "..." : t("✕ Reject")}
         </button>
       </div>
     </div>
@@ -228,7 +229,7 @@ function PlanFormModal({ plan, centers = [], classes = [], courses = [], onSave,
   };
 
   return (
-    <Modal title={isEdit ? "✏️ Edit Lesson Plan" : "📋 Create & Allocate Lesson Plan"} onClose={onClose}>
+    <Modal title={isEdit ? "✏️ " + t("Edit Lesson Plan") : "📋 " + t("Create & Allocate Lesson Plan")} onClose={onClose}>
       <form onSubmit={handleSubmit}>
         <label style={S.label}>Lesson Title *</label>
         <input style={{ ...S.input, marginBottom: 12 }} value={form.title}
@@ -262,8 +263,8 @@ function PlanFormModal({ plan, centers = [], classes = [], courses = [], onSave,
           <div>
             <label style={S.label}>Schedule Type</label>
             <select style={S.input} value={form.scheduleType} onChange={e => setForm({ ...form, scheduleType: e.target.value })}>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
+              <option value="daily">{t("Daily")}</option>
+              <option value="weekly">{t("Weekly")}</option>
             </select>
           </div>
           <div>
@@ -295,7 +296,7 @@ function PlanFormModal({ plan, centers = [], classes = [], courses = [], onSave,
         </div>
 
         <button type="submit" style={{ ...S.primaryBtn, width: "100%" }}>
-          {isEdit ? "Update Lesson Plan →" : "Allocate Lesson Plan →"}
+          {isEdit ? t("Update Lesson Plan →") : t("Allocate Lesson Plan →")}
         </button>
       </form>
     </Modal>
@@ -636,7 +637,7 @@ export default function LessonPlanManagementTab({ setToast }) {
   const loadData = () => {
     setLoading(true);
     Promise.all([
-      getLessonPlans(),
+      getLessonPlans({ lang: getCurrentLanguageCode() }),
       getCenters(),
       getClasses(),
       getCourses(),
@@ -831,17 +832,17 @@ export default function LessonPlanManagementTab({ setToast }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
           <h1 style={S.pageTitle}>Lesson Plans & Allocation</h1>
-          <p style={S.pageSub}>{activePlansCount} active base plans · {completedTeacherEntries} completions delivered</p>
+          <p style={S.pageSub}>{activePlansCount} {t("active base plans")} · {completedTeacherEntries} {t("completions delivered")}</p>
         </div>
-        <button onClick={openAdd} style={S.primaryBtn}>+ Create Base Plan</button>
-        <button onClick={() => setAutoModal(true)} style={{ ...S.primaryBtn, background: "#7c3aed", marginLeft: 8 }}>🤖 Auto-Generate</button>
+        <button onClick={openAdd} style={S.primaryBtn}>{t("+ Create Base Plan")}</button>
+        <button onClick={() => setAutoModal(true)} style={{ ...S.primaryBtn, background: "#7c3aed", marginLeft: 8 }}>🤖 {t("Auto-Generate")}</button>
       </div>
 
       {/* Sub-tabs */}
       <div style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: "2px solid #f3f4f6" }}>
         {[
-          { key: "plans", label: "Base Plans" },
-          { key: "reports", label: `Completion Reports (${pendingReports} pending)` },
+          { key: "plans", label: t("Base Plans") },
+          { key: "reports", label: `${t("Completion Reports")} (${pendingReports} ${t("pending")})` },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -866,11 +867,11 @@ export default function LessonPlanManagementTab({ setToast }) {
 
       {/* KPI Display */}
       <div style={{ display: "flex", gap: 14, marginBottom: 20, flexWrap: "wrap" }}>
-        <StatCard icon="📋" label="Base Plans" val={activePlansCount} color="#f59e0b" bg="#fef3c7" />
-        <StatCard icon="⏳" label="Teacher Pending" val={pendingTeacherEntries} color="#3b82f6" bg="#dbeafe" />
-        <StatCard icon="✅" label="Delivered Done" val={completedTeacherEntries} color="#10b981" bg="#d1fae5" />
-        {activeTab === "reports" && <StatCard icon="📝" label="Pending Reports" val={pendingReports} color="#8b5cf6" bg="#ede9fe" />}
-        {activeTab === "reports" && <StatCard icon="✅" label="Reviewed Reports" val={reviewedReports} color="#10b981" bg="#d1fae5" />}
+        <StatCard icon="📋" label={t("Base Plans")} val={activePlansCount} color="#f59e0b" bg="#fef3c7" />
+        <StatCard icon="⏳" label={t("Teacher Pending")} val={pendingTeacherEntries} color="#3b82f6" bg="#dbeafe" />
+        <StatCard icon="✅" label={t("Delivered Done")} val={completedTeacherEntries} color="#10b981" bg="#d1fae5" />
+        {activeTab === "reports" && <StatCard icon="📝" label={t("Pending Reports")} val={pendingReports} color="#8b5cf6" bg="#ede9fe" />}
+        {activeTab === "reports" && <StatCard icon="✅" label={t("Reviewed Reports")} val={reviewedReports} color="#10b981" bg="#d1fae5" />}
       </div>
 
       {activeTab === "plans" && (
@@ -878,7 +879,7 @@ export default function LessonPlanManagementTab({ setToast }) {
       {/* Filter Toolbar */}
       <div style={{ background: "white", borderRadius: 14, padding: "14px 18px", border: "1px solid #f1f5f9", marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ flex: 1, minWidth: 200 }}>
-          <SearchBar value={search} onChange={setSearch} placeholder="Search plans by title or objectives..." />
+          <SearchBar value={search} onChange={setSearch} placeholder={t("Search plans by title or objectives...")} />
         </div>
         <select style={{ ...S.input, width: 200, marginBottom: 0 }} value={filterCenter} onChange={e => setFilterCenter(e.target.value)}>
           <option value="all">All Centers</option>
@@ -889,7 +890,7 @@ export default function LessonPlanManagementTab({ setToast }) {
           {classes.map(c => <option key={c._id || c.id} value={c._id || c.id}>{c.name}</option>)}
         </select>
         <select style={{ ...S.input, width: 140, marginBottom: 0 }} value={filterSchedule} onChange={e => setFilterSchedule(e.target.value)}>
-          <option value="all">All Schedules</option>
+          <option value="all">{t("All Schedules")}</option>
           <option value="daily">Daily Only</option>
           <option value="weekly">Weekly Only</option>
         </select>
@@ -920,7 +921,7 @@ export default function LessonPlanManagementTab({ setToast }) {
               {/* Progress bar */}
               <div style={{ marginBottom: 14 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3, fontSize: 11 }}>
-                  <span style={{ color: "#6b7280" }}>Teacher Delivery Rate</span>
+                  <span style={{ color: "#6b7280" }}>{t("Teacher Delivery Rate")}</span>
                   <span style={{ fontWeight: 700, color: completePct >= 75 ? "#10b981" : "#f59e0b" }}>{completePct}% ({doneAlloc}/{totalAlloc})</span>
                 </div>
                 <div style={{ height: 6, background: "#f3f4f6", borderRadius: 4, overflow: "hidden" }}>
@@ -931,10 +932,10 @@ export default function LessonPlanManagementTab({ setToast }) {
               {/* Actions */}
               <div style={{ display: "flex", gap: 6, paddingTop: 12, borderTop: "1px solid #f3f4f6" }}>
                 <button onClick={() => setDetailPlan(p)} style={{ ...S.tblBtn, flex: 1.2, color: "#2563eb", borderColor: "#bfdbfe" }}>
-                  👁 Review Progress
+                  👁 {t("Review Progress")}
                 </button>
                 <button onClick={() => openEdit(p)} style={{ ...S.tblBtn, flex: 0.8 }}>
-                  ✏️ Edit
+                  ✏️ {t("Edit")}
                 </button>
                 <button onClick={() => handleDeactivate(p.id)} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5" }}>
                   🗑️
@@ -948,8 +949,8 @@ export default function LessonPlanManagementTab({ setToast }) {
       {filtered.length === 0 && (
         <div style={{ textAlign: "center", padding: "60px 20px", color: "#9ca3af" }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>No lesson plans found</div>
-          <div style={{ fontSize: 12, marginTop: 4 }}>Create a new base plan or check filters.</div>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>{t("No lesson plans found")}</div>
+          <div style={{ fontSize: 12, marginTop: 4 }}>{t("Create a new base plan or check filters.")}</div>
         </div>
       )}
         </>
@@ -960,12 +961,12 @@ export default function LessonPlanManagementTab({ setToast }) {
           {reports.length === 0 ? (
             <div style={{ textAlign: "center", padding: "60px 20px", color: "#9ca3af" }}>
               <div style={{ fontSize: 48, marginBottom: 12 }}>📝</div>
-              <div style={{ fontSize: 14, fontWeight: 700 }}>No completion reports yet</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>Reports will appear here when teachers submit lesson completions.</div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>{t("No completion reports yet")}</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>{t("Reports will appear here when teachers submit lesson completions.")}</div>
             </div>
           ) : reports.map(r => {
-            const teacherName = r.teacher?.name || "Unknown Teacher";
-            const planTitle = r.assignment?.lessonPlan?.title || "Unknown Plan";
+            const teacherName = r.teacher?.name || t("Unknown Teacher");
+            const planTitle = r.assignment?.lessonPlan?.title || t("Unknown Plan");
             const centerName = r.assignment?.center?.name || "—";
             const className = r.assignment?.class?.name || "—";
             const isPending = r.status === "pending";
@@ -975,10 +976,10 @@ export default function LessonPlanManagementTab({ setToast }) {
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 800, color: "#0f172a", marginBottom: 4 }}>{planTitle}</div>
                     <div style={{ fontSize: 12, color: "#6b7280", display: "flex", gap: 12, flexWrap: "wrap" }}>
-                      <span>Teacher: {teacherName}</span>
-                      <span>Center: {centerName}</span>
-                      <span>Class: {className}</span>
-                      <span>Submitted: {r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-IN", { dateStyle: "medium" }) : "—"}</span>
+                      <span>{t("Teacher:")} {teacherName}</span>
+                      <span>{t("Center:")} {centerName}</span>
+                      <span>{t("Class:")} {className}</span>
+                      <span>{t("Submitted:")} {r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-IN", { dateStyle: "medium" }) : "—"}</span>
                     </div>
                   </div>
                   <StatusBadge status={r.status} />

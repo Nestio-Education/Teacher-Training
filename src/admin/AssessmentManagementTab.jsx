@@ -1,4 +1,5 @@
- import { useState } from "react";
+ import { t } from "../services/i18n";
+import { useState } from "react";
 import { Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
 // Question bank is now empty — questions can be added via the form below
 const MOCK_QUESTION_BANK = [];

@@ -15,6 +15,7 @@ const contentSchema = new mongoose.Schema(
     notes: String,
     order: { type: Number, default: 1 },
     isRequired: { type: Boolean, default: true },
+    translations: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
   { _id: true, timestamps: true }
 );
@@ -58,6 +59,7 @@ const moduleSchema = new mongoose.Schema(
     assessments: assessmentSchema,
     studyMaterials: studyMaterialSchema,
     contents: [contentSchema],
+    translations: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
   { _id: true }
 );
@@ -85,6 +87,7 @@ const courseSchema = new mongoose.Schema(
     status: { type: String, enum: ["draft", "published", "archived"], default: "draft", index: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     modules: [moduleSchema],
+    translations: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
   { timestamps: true }
 );

@@ -126,7 +126,7 @@ export default function OverviewTab() {
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60vh", gap: 16 }}>
         <div style={{ width: 48, height: 48, borderRadius: "50%", border: "4px solid #fef3c7", borderTopColor: "#f59e0b", animation: "spin 0.8s linear infinite" }} />
-        <div style={{ fontSize: 14, fontWeight: 600, color: "#d97706" }}>Loading dashboard data...</div>
+        <div style={{ fontSize: 14, fontWeight: 600, color: "#d97706" }}>{t("Loading dashboard data...")}</div>
       </div>
     );
   }
@@ -134,8 +134,8 @@ export default function OverviewTab() {
   if (error) {
     return (
       <div style={{ textAlign: "center", padding: "60px 20px" }}>
-        <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#dc2626" }}>Failed to load dashboard</div>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>{t("⚠️")}</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#dc2626" }}>{t("Failed to load dashboard")}</div>
         <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 4 }}>{error}</div>
       </div>
     );
@@ -152,7 +152,7 @@ export default function OverviewTab() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#fffbeb", letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 8 }}>
-                SpacECE Admin Panel
+                {t("SpacECE Admin Panel")}
               </div>
               <h1 style={{ fontSize: 26, fontWeight: 900, margin: "0 0 6px", letterSpacing: "-0.5px" }}>
                 {t(greeting)}, Admin! 👋
@@ -165,12 +165,12 @@ export default function OverviewTab() {
               {pendingTeachers.length > 0 && (
                 <div style={{ background: "rgba(239,68,68,0.25)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 12, padding: "10px 16px", textAlign: "center" }}>
                   <div style={{ fontSize: 22, fontWeight: 900, color: "#fee2e2" }}>{pendingTeachers.length}</div>
-                  <div style={{ fontSize: 10, color: "#fee2e2", fontWeight: 700 }}>Pending Approval</div>
+                  <div style={{ fontSize: 10, color: "#fee2e2", fontWeight: 700 }}>{t("Pending Approval")}</div>
                 </div>
               )}
               <div style={{ background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 12, padding: "10px 16px", textAlign: "center" }}>
                 <div style={{ fontSize: 22, fontWeight: 900, color: "white" }}>{approvedTeachers.length}</div>
-                <div style={{ fontSize: 10, color: "white", fontWeight: 700 }}>Active Teachers</div>
+                <div style={{ fontSize: 10, color: "white", fontWeight: 700 }}>{t("Active Teachers")}</div>
               </div>
             </div>
           </div>
@@ -178,11 +178,11 @@ export default function OverviewTab() {
           {/* Quick Stats Strip */}
           <div style={{ display: "flex", gap: 20, marginTop: 20, paddingTop: 20, borderTop: "1px solid rgba(255,255,255,0.1)", flexWrap: "wrap" }}>
             {[
-              { label: "Centers",          val: stats?.totalCenters    ?? centers.length, icon: "🏫" },
-              { label: "Children",         val: stats?.totalChildren   ?? 0,              icon: "👶" },
-              { label: "Course Completion",val: `${stats?.courseCompletionPercent ?? 0}%`, icon: "📚" },
-              { label: "Present Today",    val: stats?.teacherAttendanceToday ?? 0,       icon: "✅" },
-              { label: "Pending Activities",val: stats?.pendingActivities ?? 0,           icon: "📋" },
+              { label: t("Centers"),          val: stats?.totalCenters    ?? centers.length, icon: "🏫" },
+              { label: t("Children"),         val: stats?.totalChildren   ?? 0,              icon: "👶" },
+              { label: t("Course Completion"),val: `${stats?.courseCompletionPercent ?? 0}%`, icon: "📚" },
+              { label: t("Present Today"),    val: stats?.teacherAttendanceToday ?? 0,       icon: "✅" },
+              { label: t("Pending Activities"),val: stats?.pendingActivities ?? 0,           icon: "📋" },
             ].map((item, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ fontSize: 16 }}>{item.icon}</span>
@@ -200,12 +200,12 @@ export default function OverviewTab() {
       {/* ── KPI Cards Row ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(175px,1fr))", gap: 16, marginBottom: 24 }}>
         {[
-          { icon: "🏫", label: "Total Centers",     val: stats?.totalCenters ?? centers.length, color: "#f59e0b", bg: "#fef3c7", sub: `${centers.filter(c=>c.status==="active").length} active` },
-          { icon: "👩‍🏫", label: "Total Teachers",   val: stats?.totalTeachers ?? teachers.length, color: "#10b981", bg: "#d1fae5", sub: `+${addedThisMonth} this month` },
-          { icon: "⏳", label: "Pending Approvals", val: pendingTeachers.length, color: "#ef4444", bg: "#fee2e2", sub: pendingTeachers.length > 0 ? "Need attention" : "All clear ✓" },
-          { icon: "👶", label: "Total Children",    val: stats?.totalChildren ?? 0, color: "#3b82f6", bg: "#dbeafe", sub: "Active enrollments" },
-          { icon: "📚", label: "Course Completion", val: `${stats?.courseCompletionPercent ?? 0}%`, color: "#06b6d4", bg: "#cffafe", sub: "Assigned vs done" },
-          { icon: "📋", label: "Pending Activities",val: stats?.pendingActivities ?? 0, color: "#8b5cf6", bg: "#ede9fe", sub: "Awaiting review" },
+          { icon: "🏫", label: t("Total Centers"),     val: stats?.totalCenters ?? centers.length, color: "#f59e0b", bg: "#fef3c7", sub: `${centers.filter(c=>c.status==="active").length} ${t("active")}` },
+          { icon: "👩‍🏫", label: t("Total Teachers"),   val: stats?.totalTeachers ?? teachers.length, color: "#10b981", bg: "#d1fae5", sub: `+${addedThisMonth} ${t("this month")}` },
+          { icon: "⏳", label: t("Pending Approvals"), val: pendingTeachers.length, color: "#ef4444", bg: "#fee2e2", sub: pendingTeachers.length > 0 ? t("Need attention") : t("All clear ✓") },
+          { icon: "👶", label: t("Total Children"),    val: stats?.totalChildren ?? 0, color: "#3b82f6", bg: "#dbeafe", sub: t("Active Enrollments") },
+          { icon: "📚", label: t("Course Completion"), val: `${stats?.courseCompletionPercent ?? 0}%`, color: "#06b6d4", bg: "#cffafe", sub: t("Assigned vs done") },
+          { icon: "📋", label: t("Pending Activities"),val: stats?.pendingActivities ?? 0, color: "#8b5cf6", bg: "#ede9fe", sub: t("Awaiting review") },
         ].map((s, i) => (
           <div key={i} style={{ background: "white", borderRadius: 16, padding: "18px 20px", border: "1px solid #f1f5f9", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", borderTop: `3px solid ${s.color}` }}>
             <div style={{ width: 42, height: 42, borderRadius: 11, background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, marginBottom: 12 }}>{s.icon}</div>
@@ -219,18 +219,18 @@ export default function OverviewTab() {
       {/* ── Main Content Grid ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 20, marginBottom: 20 }}>
         {/* Teacher Registration Chart */}
-        <SectionCard title="📊 Teacher Registrations — Last 6 Months">
+        <SectionCard title={`📊 ${t("Teacher Registrations — Last 6 Months")}`}>
           {teachers.length === 0 ? (
-            <div style={{ color: "#9ca3af", fontSize: 13, padding: "20px 0", textAlign: "center" }}>No teacher records yet.</div>
+            <div style={{ color: "#9ca3af", fontSize: 13, padding: "20px 0", textAlign: "center" }}>{t("No teacher records yet.")}</div>
           ) : (
             <>
               <BarChart data={monthlyReg} color="#f59e0b" height={150} />
               <div style={{ display: "flex", gap: 12, marginTop: 16, paddingTop: 14, borderTop: "1px solid #f3f4f6" }}>
                 {[
-                  { label: "Total",    val: teachers.length,          color: "#374151" },
-                  { label: "Approved", val: approvedTeachers.length,  color: "#10b981" },
-                  { label: "Pending",  val: pendingTeachers.length,   color: "#f59e0b" },
-                  { label: "Rejected", val: rejectedTeachers.length,  color: "#ef4444" },
+                  { label: t("Total"),    val: teachers.length,          color: "#374151" },
+                  { label: t("Approved"), val: approvedTeachers.length,  color: "#10b981" },
+                  { label: t("Pending"),  val: pendingTeachers.length,   color: "#f59e0b" },
+                  { label: t("Rejected"), val: rejectedTeachers.length,  color: "#ef4444" },
                 ].map((s, i) => (
                   <div key={i} style={{ flex: 1, textAlign: "center", padding: "8px", background: "#f9fafb", borderRadius: 8 }}>
                     <div style={{ fontSize: 18, fontWeight: 900, color: s.color }}>{s.val}</div>
@@ -243,13 +243,13 @@ export default function OverviewTab() {
         </SectionCard>
 
         {/* Operational Summary */}
-        <SectionCard title="⚡ Platform Summary">
+        <SectionCard title={`⚡ ${t("Platform Summary")}`}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {[
-              { label: "Teacher Attendance Today",  val: stats?.teacherAttendanceToday ?? 0, max: Math.max(stats?.totalTeachers ?? 1, 1),  color: "#10b981" },
-              { label: "Course Completion Rate",    val: stats?.completedCourses  ?? 0,       max: Math.max(stats?.assignedCourses  ?? 1, 1), color: "#3b82f6" },
-              { label: "Pending Lessons",           val: stats?.pendingLessons    ?? 0,       max: Math.max(stats?.assignedCourses  ?? 1, stats?.pendingLessons ?? 1), color: "#f59e0b" },
-              { label: "Activity Reviews Needed",   val: stats?.pendingActivities ?? 0,       max: Math.max(stats?.pendingActivities ?? 1, 10),                        color: "#8b5cf6" },
+              { label: t("Teacher Attendance Today"),  val: stats?.teacherAttendanceToday ?? 0, max: Math.max(stats?.totalTeachers ?? 1, 1),  color: "#10b981" },
+              { label: t("Course Completion Rate"),    val: stats?.completedCourses  ?? 0,       max: Math.max(stats?.assignedCourses  ?? 1, 1), color: "#3b82f6" },
+              { label: t("Pending Lessons"),           val: stats?.pendingLessons    ?? 0,       max: Math.max(stats?.assignedCourses  ?? 1, stats?.pendingLessons ?? 1), color: "#f59e0b" },
+              { label: t("Activity Reviews Needed"),   val: stats?.pendingActivities ?? 0,       max: Math.max(stats?.pendingActivities ?? 1, 10),                        color: "#8b5cf6" },
             ].map((item, i) => (
               <div key={i} style={{ display: "flex", alignItems: "center", gap: 14 }}>
                 <DonutChart value={item.val} max={item.max} color={item.color} />
@@ -266,9 +266,9 @@ export default function OverviewTab() {
       {/* ── Bottom Row ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20 }}>
         {/* Top Teachers Leaderboard */}
-        <SectionCard title="🏆 Top Performing Teachers">
+        <SectionCard title={`🏆 ${t("Top Performing Teachers")}`}>
           {topTeachers.length === 0 ? (
-            <div style={{ color: "#9ca3af", fontSize: 13, textAlign: "center", padding: "20px 0" }}>No approved teachers yet.</div>
+            <div style={{ color: "#9ca3af", fontSize: 13, textAlign: "center", padding: "20px 0" }}>{t("No approved teachers yet.")}</div>
           ) : topTeachers.map((t, i) => {
             const score = Math.round((t.teacherProfile?.performanceRating || 0) * 20);
             const medals = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"];
@@ -296,17 +296,17 @@ export default function OverviewTab() {
         </SectionCard>
 
         {/* Centers at a Glance */}
-        <SectionCard title="🏫 Centers at a Glance">
+        <SectionCard title={`🏫 ${t("Centers at a Glance")}`}>
           {centers.length === 0 ? (
-            <div style={{ color: "#9ca3af", fontSize: 13, textAlign: "center", padding: "20px 0" }}>No centers created yet.</div>
+            <div style={{ color: "#9ca3af", fontSize: 13, textAlign: "center", padding: "20px 0" }}>{t("No centers created yet.")}</div>
           ) : centers.slice(0, 5).map((c, i) => (
             <div key={c._id || i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: "1px solid #f3f4f6" }}>
               <div style={{ width: 34, height: 34, borderRadius: 10,
                 background: c.status === "active" ? "linear-gradient(135deg,#fef3c7,#fbbf24)" : "#f3f4f6",
-                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>🏫</div>
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{t("🏫")}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#1c1917", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
-                <div style={{ fontSize: 10, color: "#9ca3af" }}>{c.city || "—"} · {c.teachers?.length || 0} teachers</div>
+                <div style={{ fontSize: 10, color: "#9ca3af" }}>{c.city || "—"} · {c.teachers?.length || 0} {t("teachers")}</div>
               </div>
               <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 700,
                 background: c.status === "active" ? "#d1fae5" : "#f3f4f6",

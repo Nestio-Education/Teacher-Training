@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { S, SectionCard, Toast } from "../components/Shared";
-import { uploadFile, submitFeedback, getFeedbacks, updateMentorMe, changeMentorPassword, recordMenteeObservation, submitCapstoneMilestone, submitPDCACycle } from "../services/api";
+import { S, SectionCard, Toast, StatCard, StatusBadge, SearchBar, Modal } from "../components/Shared";
+import { uploadFile, submitFeedback, getFeedbacks, updateMentorMe, changeMentorPassword, recordMenteeObservation, getMenteeObservations, submitCapstoneMilestone, getCapstoneSubmissions, submitPDCACycle, getPDCACycles, getMentorFellows, updateFellowStatus, getMentorMe, updateMenteeTracking, claimFellow, unclaimFellow, deleteMentorFellow } from "../services/api";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
@@ -183,6 +183,42 @@ export function MentorProfileTab({ user, onWorkingCenterChange, onUserUpdate }) 
     <div style={{ animation: "fadeIn 0.3s ease", maxWidth: 900 }}>
       <Toast msg={message} type={messageType} onClose={() => setMessage("")} />
       
+      {/* ── Welcome Banner ── */}
+      <div style={{ background: "linear-gradient(135deg,#1e3a8a,#3b82f6)", borderRadius: 20, padding: "24px 28px", marginBottom: 24, color: "white", display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative", overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: -30, right: -30, width: 160, height: 160, borderRadius: "50%", background: "rgba(255,255,255,0.08)" }} />
+        <div style={{ position: "relative", zIndex: 1 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 6px", letterSpacing: "-0.3px" }}>Welcome back, Mentor {user.name?.split(" ")[0] || ""}! 🚀</h1>
+          <p style={{ margin: 0, fontSize: 13, color: "rgba(255,255,255,0.9)", maxWidth: 500 }}>
+            Here is your mentor overview. You are currently mentoring {user.mentorProfile?.assignedTeachers?.length || 0} fellow(s) and guiding their ECCE journey.
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 16, position: "relative", zIndex: 1 }}>
+          <div style={{ background: "rgba(255,255,255,0.15)", padding: "10px 16px", borderRadius: 12, textAlign: "center", border: "1px solid rgba(255,255,255,0.2)" }}>
+            <div style={{ fontSize: 20, fontWeight: 800 }}>{user.mentorProfile?.assignedTeachers?.length || 0}</div>
+            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.5px", opacity: 0.9 }}>Active Mentees</div>
+          </div>
+          <div style={{ background: "rgba(255,255,255,0.15)", padding: "10px 16px", borderRadius: 12, textAlign: "center", border: "1px solid rgba(255,255,255,0.2)" }}>
+            <div style={{ fontSize: 20, fontWeight: 800 }}>{user.mentorProfile?.center?.name ? "1" : "0"}</div>
+            <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.5px", opacity: 0.9 }}>Assigned Center</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Active Mentees Quick List ── */}
+      {user.mentorProfile?.assignedTeachers?.length > 0 && (
+        <div style={{ marginBottom: 24, padding: "16px", background: "#f8fafc", borderRadius: 16, border: "1px solid #e2e8f0" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#334155", marginBottom: 12 }}>🎓 Your Mentees:</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            {user.mentorProfile.assignedTeachers.map((mentee, i) => (
+              <div key={mentee._id || i} style={{ background: "white", padding: "6px 12px", borderRadius: 20, fontSize: 13, fontWeight: 600, color: "#1e40af", border: "1px solid #bfdbfe", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 1px 2px rgba(0,0,0,0.02)" }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#10b981" }}></div>
+                {mentee.name || "Unknown Fellow"}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 24 }}>
         <div>
           <h1 style={S.pageTitle}>My Profile</h1>
@@ -553,9 +589,35 @@ export function MentorFeedbackTab({ user, setToast }) {
 /* ── Mentee Management Tab ── */
 export function MenteeManagementTab({ user, setToast, onUserUpdate }) {
   const mentees = user?.mentorProfile?.assignedTeachers || [];
+  const [subTab, setSubTab] = useState("my_mentees"); // "my_mentees" | "approvals"
   const [selectedMentee, setSelectedMentee] = useState(null);
   const [observationModal, setObservationModal] = useState(false);
   const [observationText, setObservationText] = useState("");
+  
+  // Pending / All fellows state for approvals subtab
+  const [allFellows, setAllFellows] = useState([]);
+  const [loadingFellows, setLoadingFellows] = useState(false);
+  const [actioningId, setActioningId] = useState(null);
+  
+  // Search and filters for approvals
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all"); // default to all to show approved fellows as well
+  const [selectedFellow, setSelectedFellow] = useState(null); // for detail modal
+
+  const fetchFellows = () => {
+    setLoadingFellows(true);
+    getMentorFellows()
+      .then(res => {
+        setAllFellows(res?.fellows || []);
+      })
+      .catch(() => setToast?.({ msg: "Failed to load fellows.", type: "error" }))
+      .finally(() => setLoadingFellows(false));
+  };
+
+  useEffect(() => {
+    fetchFellows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subTab]);
 
   const handleRecordObservation = (mentee) => {
     setSelectedMentee(mentee);
@@ -569,8 +631,7 @@ export function MenteeManagementTab({ user, setToast, onUserUpdate }) {
     }
     
     try {
-      const res = await recordMenteeObservation(selectedMentee._id, observationText);
-      if (res.user) onUserUpdate(res.user);
+      await recordMenteeObservation(selectedMentee._id, observationText);
       setToast?.({ msg: "Observation recorded successfully!", type: "success" });
       setObservationModal(false);
       setObservationText("");
@@ -579,52 +640,518 @@ export function MenteeManagementTab({ user, setToast, onUserUpdate }) {
     }
   };
 
+  const handleStatusChange = async (fellowId, newStatus) => {
+    setActioningId(fellowId);
+    try {
+      await updateFellowStatus(fellowId, newStatus);
+      setToast?.({ msg: `Fellow account ${newStatus} successfully!`, type: "success" });
+      
+      // Refresh list
+      fetchFellows();
+
+      // Refresh mentor profile to sync assignedTeachers
+      getMentorMe().then(res => {
+        if (res.mentor) onUserUpdate(res.mentor);
+      });
+    } catch (err) {
+      setToast?.({ msg: err.message || "Failed to update fellow status", type: "error" });
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const isClaimed = (fellowId) => {
+    return mentees.some(m => {
+      const id = typeof m === 'object' && m !== null ? (m._id || m.id) : m;
+      return id?.toString() === fellowId?.toString();
+    });
+  };
+
+  const handleClaimFellow = async (fellowId) => {
+    setActioningId(fellowId);
+    
+    // Optimistic UI Update
+    const claimedFellow = allFellows.find(f => (f._id || f.id) === fellowId);
+    if (claimedFellow && !isClaimed(fellowId)) {
+      onUserUpdate({
+        ...user,
+        mentorProfile: {
+          ...user.mentorProfile,
+          assignedTeachers: [...mentees, claimedFellow]
+        }
+      });
+      // Optimistically update fellow status in allFellows list
+      setAllFellows(prev => prev.map(f => (f._id || f.id) === fellowId ? { ...f, status: "approved" } : f));
+    }
+
+    try {
+      await claimFellow(fellowId);
+      setToast?.({ msg: "Fellow successfully claimed and added to your mentees!", type: "success" });
+      
+      // Refresh list
+      fetchFellows();
+
+      // Refresh mentor profile to sync assignedTeachers
+      getMentorMe().then(res => {
+        if (res.mentor) onUserUpdate(res.mentor);
+      });
+    } catch (err) {
+      setToast?.({ msg: err.message || "Failed to claim fellow", type: "error" });
+      // Revert optimistic update on failure by re-fetching
+      getMentorMe().then(res => {
+        if (res.mentor) onUserUpdate(res.mentor);
+      });
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const handleUnclaimFellow = async (fellowId) => {
+    setActioningId(fellowId);
+
+    // Optimistic UI Update
+    if (isClaimed(fellowId)) {
+      onUserUpdate({
+        ...user,
+        mentorProfile: {
+          ...user.mentorProfile,
+          assignedTeachers: mentees.filter(m => (m._id || m.id || m).toString() !== fellowId.toString())
+        }
+      });
+      // Optimistically update fellow status in allFellows list
+      setAllFellows(prev => prev.map(f => (f._id || f.id) === fellowId ? { ...f, status: "pending" } : f));
+    }
+
+    try {
+      await unclaimFellow(fellowId);
+      setToast?.({ msg: "Fellow successfully unclaimed and removed from your mentees.", type: "success" });
+      
+      // Refresh list
+      fetchFellows();
+
+      // Refresh mentor profile to sync assignedTeachers
+      getMentorMe().then(res => {
+        if (res.mentor) onUserUpdate(res.mentor);
+      });
+    } catch (err) {
+      setToast?.({ msg: err.message || "Failed to unclaim fellow", type: "error" });
+      // Revert optimistic update on failure by re-fetching
+      getMentorMe().then(res => {
+        if (res.mentor) onUserUpdate(res.mentor);
+      });
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const handleDeleteFellow = async (fellowId) => {
+    if (!window.confirm("Are you sure you want to permanently delete this fellow's account? This action cannot be undone.")) return;
+    
+    setActioningId(fellowId);
+    
+    // Optimistic UI Update
+    setAllFellows(prev => prev.filter(f => (f._id || f.id) !== fellowId));
+    onUserUpdate({
+      ...user,
+      mentorProfile: {
+        ...user.mentorProfile,
+        assignedTeachers: mentees.filter(m => (m._id || m.id || m).toString() !== fellowId.toString())
+      }
+    });
+
+    try {
+      await deleteMentorFellow(fellowId);
+      setToast?.({ msg: "Fellow account successfully deleted.", type: "success" });
+      
+      // Refresh list
+      fetchFellows();
+      getMentorMe().then(res => {
+        if (res.mentor) onUserUpdate(res.mentor);
+      });
+    } catch (err) {
+      setToast?.({ msg: err.message || "Failed to delete fellow", type: "error" });
+      // Revert optimistic update
+      fetchFellows();
+      getMentorMe().then(res => {
+        if (res.mentor) onUserUpdate(res.mentor);
+      });
+    } finally {
+      setActioningId(null);
+    }
+  };
+// end dnyaneshwari thorat
+
+  // Filter fellows based on search and statusFilter
+  const filteredFellows = allFellows.filter(f => {
+    const matchesSearch = f.name?.toLowerCase().includes(search.toLowerCase()) || 
+                          f.email?.toLowerCase().includes(search.toLowerCase()) ||
+                          f.phone?.includes(search) ||
+                          f.teacherProfile?.subject?.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = statusFilter === "all" ? true : f.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const pendingCount = allFellows.filter(f => f.status === "pending").length;
+  const approvedCount = allFellows.filter(f => f.status === "approved").length;
+  const rejectedCount = allFellows.filter(f => f.status === "rejected" || f.status === "blocked").length;
+
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
       <h1 style={S.pageTitle}>Mentee Management</h1>
-      <p style={S.pageSub}>Observe, guide, and track progress for your assigned teachers.</p>
+      <p style={S.pageSub}>Observe, guide, and track progress for your assigned teachers and fellows.</p>
 
-      {mentees.length === 0 ? (
-        <div style={{ background: "white", padding: 40, borderRadius: 16, textAlign: "center", border: "1px dashed #cbd5e1" }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>👥</div>
-          <h3 style={{ margin: "0 0 8px", color: "#1e293b" }}>No Mentees Assigned</h3>
-          <p style={{ color: "#64748b", margin: 0 }}>You currently do not have any teachers assigned to you. Admin will assign mentees soon.</p>
-        </div>
+      {/* Sub-tab navigation */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 24, borderBottom: "1px solid #e2e8f0", paddingBottom: 10 }}>
+        <button 
+          onClick={() => setSubTab("my_mentees")}
+          style={{
+            padding: "8px 16px", borderRadius: 8, border: "none", fontWeight: 700, fontSize: 13,
+            background: subTab === "my_mentees" ? "#eff6ff" : "transparent",
+            color: subTab === "my_mentees" ? "#1e40af" : "#64748b",
+            cursor: "pointer", transition: "all 0.2s"
+          }}
+        >
+          👥 My Mentees ({mentees.length})
+        </button>
+        <button 
+          onClick={() => setSubTab("approvals")}
+          style={{
+            padding: "8px 16px", borderRadius: 8, border: "none", fontWeight: 700, fontSize: 13,
+            background: subTab === "approvals" ? "#fef3c7" : "transparent",
+            color: subTab === "approvals" ? "#92400e" : "#64748b",
+            cursor: "pointer", transition: "all 0.2s"
+          }}
+        >
+          ⏳ Fellow Approvals {pendingCount > 0 && <span style={{ marginLeft: 6, background: "#ef4444", color: "white", borderRadius: "50%", padding: "2px 6px", fontSize: 9 }}>{pendingCount}</span>}
+        </button>
+      </div>
+
+      {subTab === "my_mentees" ? (
+        mentees.length === 0 ? (
+          <div style={{ background: "white", padding: 40, borderRadius: 16, textAlign: "center", border: "1px dashed #cbd5e1" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>👥</div>
+            <h3 style={{ margin: "0 0 8px", color: "#1e293b" }}>No Mentees Assigned</h3>
+            <p style={{ color: "#64748b", margin: 0 }}>You currently do not have any teachers or fellows assigned to you. Admin will assign mentees soon.</p>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* start dnyaneshwari thorat */}
+            {mentees.map((mentee, i) => (
+              <div key={mentee._id || i} style={{ background: "white", padding: 20, borderRadius: 16, border: "1px solid #e2e8f0", boxShadow: "0 2px 10px rgba(0,0,0,0.02)", display: "flex", flexWrap: "wrap", gap: 24, alignItems: "center" }}>
+                
+                {/* 1. Identity & Progress */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: "1 1 250px" }}>
+                  <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                    <div style={{ width: 50, height: 50, borderRadius: "50%", background: "#fef3c7", border: "2px solid #fde68a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>
+                      {mentee.role === "fellow" ? "🎓" : "👩‍🏫"}
+                    </div>
+                    <div>
+                      <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#0f172a" }}>{mentee.name || "Unknown Fellow"}</h3>
+                      <div style={{ fontSize: 12, color: "#64748b" }}>
+                        {mentee.role === "fellow" ? "Fellow" : "General Teacher"} • {mentee.teacherProfile?.subject || "ECCE"}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#475569", marginTop: 4, display: "flex", gap: 12 }}>
+                        {mentee.email && <span>✉️ {mentee.email}</span>}
+                        {mentee.phone && <span>📞 {mentee.phone}</span>}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div style={{ background: "#f8fafc", padding: 12, borderRadius: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                      <span style={{ color: "#475569", fontWeight: 600 }}>Course Progress</span>
+                      <span style={{ color: "#3b82f6", fontWeight: 800 }}>{(Math.random() * 40 + 60).toFixed(0)}%</span>
+                    </div>
+                    <div style={{ height: 6, background: "#e2e8f0", borderRadius: 3, overflow: "hidden" }}>
+                      <div style={{ width: "75%", height: "100%", background: "#3b82f6", borderRadius: 3 }}></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Checklist */}
+                <div style={{ background: "#f1f5f9", padding: 16, borderRadius: 10, display: "flex", flexDirection: "column", gap: 10, flex: "2 1 350px" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", borderBottom: "1px solid #cbd5e1", paddingBottom: 6 }}>📋 Mentor Tracking Checklist</div>
+                  
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>1. Community Profiling</span>
+                    <select 
+                      value={mentee.teacherProfile?.communityProfilingStatus || "pending"} 
+                      onChange={async (e) => {
+                        const newVal = e.target.value;
+                        // Optimistic UI Update
+                        const updatedMentees = mentees.map(m => 
+                          (m._id || m.id) === mentee._id 
+                            ? { ...m, teacherProfile: { ...m.teacherProfile, communityProfilingStatus: newVal } } 
+                            : m
+                        );
+                        onUserUpdate({ ...user, mentorProfile: { ...user.mentorProfile, assignedTeachers: updatedMentees } });
+                        
+                        try {
+                          await updateMenteeTracking(mentee._id, { communityProfilingStatus: newVal });
+                          setToast?.({ msg: "Community Profiling status updated!", type: "success" });
+                          getMentorMe().then(res => { if (res.mentor) onUserUpdate(res.mentor); });
+                        } catch (err) {
+                          setToast?.({ msg: err.message || "Failed to update tracking", type: "error" });
+                          getMentorMe().then(res => { if (res.mentor) onUserUpdate(res.mentor); });
+                        }
+                      }}
+                      style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 11, background: "white", color: "#1e293b", fontWeight: 600 }}
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>2. Community Immersion</span>
+                    <select 
+                      value={mentee.teacherProfile?.communityImmersionStatus || "pending"} 
+                      onChange={async (e) => {
+                        const newVal = e.target.value;
+                        // Optimistic UI Update
+                        const updatedMentees = mentees.map(m => 
+                          (m._id || m.id) === mentee._id 
+                            ? { ...m, teacherProfile: { ...m.teacherProfile, communityImmersionStatus: newVal } } 
+                            : m
+                        );
+                        onUserUpdate({ ...user, mentorProfile: { ...user.mentorProfile, assignedTeachers: updatedMentees } });
+
+                        try {
+                          await updateMenteeTracking(mentee._id, { communityImmersionStatus: newVal });
+                          setToast?.({ msg: "Community Immersion status updated!", type: "success" });
+                          getMentorMe().then(res => { if (res.mentor) onUserUpdate(res.mentor); });
+                        } catch (err) {
+                          setToast?.({ msg: err.message || "Failed to update tracking", type: "error" });
+                          getMentorMe().then(res => { if (res.mentor) onUserUpdate(res.mentor); });
+                        }
+                      }}
+                      style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 11, background: "white", color: "#1e293b", fontWeight: 600 }}
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>3. Daily Curriculum Implementation</span>
+                    <select 
+                      value={mentee.teacherProfile?.curriculumImplementationStatus || "pending"} 
+                      onChange={async (e) => {
+                        const newVal = e.target.value;
+                        // Optimistic UI Update
+                        const updatedMentees = mentees.map(m => 
+                          (m._id || m.id) === mentee._id 
+                            ? { ...m, teacherProfile: { ...m.teacherProfile, curriculumImplementationStatus: newVal } } 
+                            : m
+                        );
+                        onUserUpdate({ ...user, mentorProfile: { ...user.mentorProfile, assignedTeachers: updatedMentees } });
+
+                        try {
+                          await updateMenteeTracking(mentee._id, { curriculumImplementationStatus: newVal });
+                          setToast?.({ msg: "Daily Curriculum status updated!", type: "success" });
+                          getMentorMe().then(res => { if (res.mentor) onUserUpdate(res.mentor); });
+                        } catch (err) {
+                          setToast?.({ msg: err.message || "Failed to update tracking", type: "error" });
+                          getMentorMe().then(res => { if (res.mentor) onUserUpdate(res.mentor); });
+                        }
+                      }}
+                      style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 11, background: "white", color: "#1e293b", fontWeight: 600 }}
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* 3. Actions */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: "1 1 150px" }}>
+                  <button onClick={() => handleRecordObservation(mentee)} style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", padding: "10px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }}>
+                    📝 Record Observation
+                  </button>
+                  <button onClick={() => setToast?.({ msg: "Message feature coming soon!", type: "info" })} style={{ background: "#eff6ff", color: "#1e40af", border: "1px solid #bfdbfe", padding: "10px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "all 0.2s" }}>
+                    💬 Message
+                  </button>
+                </div>
+              </div>
+            ))}
+            {/* end dnyaneshwari thorat */}
+          </div>
+        )
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 20 }}>
-          {mentees.map((mentee, i) => (
-            <div key={mentee._id || i} style={{ background: "white", padding: 20, borderRadius: 16, border: "1px solid #e2e8f0", boxShadow: "0 2px 10px rgba(0,0,0,0.02)" }}>
-              <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 16 }}>
-                <div style={{ width: 50, height: 50, borderRadius: "50%", background: "#fef3c7", border: "2px solid #fde68a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>
-                  👩‍🏫
-                </div>
-                <div style={{ flex: 1 }}>
-                  <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#0f172a" }}>{mentee.name}</h3>
-                  <div style={{ fontSize: 12, color: "#64748b" }}>{mentee.teacherProfile?.subject || "General Teacher"}</div>
-                </div>
-              </div>
-
-              <div style={{ background: "#f8fafc", padding: 12, borderRadius: 10, marginBottom: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
-                  <span style={{ color: "#475569", fontWeight: 600 }}>Course Progress</span>
-                  <span style={{ color: "#3b82f6", fontWeight: 800 }}>{(Math.random() * 40 + 60).toFixed(0)}%</span>
-                </div>
-                <div style={{ height: 6, background: "#e2e8f0", borderRadius: 3, overflow: "hidden" }}>
-                  <div style={{ width: "75%", height: "100%", background: "#3b82f6", borderRadius: 3 }}></div>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", gap: 10 }}>
-                <button onClick={() => handleRecordObservation(mentee)} style={{ flex: 1, background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                  📝 Record Observation
-                </button>
-                <button onClick={() => setToast?.({ msg: "Message feature coming soon!", type: "info" })} style={{ flex: 1, background: "#eff6ff", color: "#1e40af", border: "1px solid #bfdbfe", padding: "8px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                  💬 Message
-                </button>
-              </div>
+        /* Fellow Approvals View (Styled exactly like Admin's Teacher Management) */
+        <div>
+          {/* Header Banner */}
+          <div style={{ background: "linear-gradient(135deg,#f59e0b 0%,#d97706 60%,#b45309 100%)", borderRadius: 20, padding: "24px 28px", marginBottom: 24, color: "white", position: "relative", overflow: "hidden" }}>
+            <div style={{ position: "absolute", top: -30, right: -30, width: 160, height: 160, borderRadius: "50%", background: "rgba(255,255,255,0.12)" }} />
+            <div style={{ position: "relative", zIndex: 1 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#fffbeb", letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 6 }}>Fellow Management</div>
+              <h1 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 4px" }}>Fellow Approvals</h1>
+              <p style={{ fontSize: 12, margin: 0, color: "rgba(255,255,255,0.85)" }}>
+                {approvedCount} approved · {pendingCount} pending · {allFellows.length} total
+              </p>
             </div>
-          ))}
+          </div>
+
+          {/* KPI Stat Cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 14, marginBottom: 20 }}>
+            <StatCard icon="🎓" label="Total Registered" val={allFellows.length} color="#3b82f6" bg="#dbeafe" />
+            <StatCard icon="✅" label="Approved" val={approvedCount} color="#10b981" bg="#d1fae5" />
+            <StatCard icon="⏳" label="Pending Approval" val={pendingCount} color="#f59e0b" bg="#fef3c7" />
+            <StatCard icon="🚫" label="Rejected" val={rejectedCount} color="#ef4444" bg="#fee2e2" />
+          </div>
+
+          {/* Filters */}
+          <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <SearchBar value={search} onChange={setSearch} placeholder="Search by name, email, phone or specialization..." />
+            </div>
+            <select style={{ ...S.input, width: 140, padding: "8px 12px", marginBottom: 0 }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+              <option value="all">All Statuses</option>
+              <option value="approved">Approved</option>
+              <option value="pending">Pending</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+
+          {/* Approvals Table */}
+          {loadingFellows ? (
+            <div style={{ display: "flex", justifyContent: "center", padding: 40, color: "#64748b" }}>🔄 Loading approvals...</div>
+          ) : (
+            <div style={{ background: "white", borderRadius: 16, border: "1px solid #f1f5f9", boxShadow: "0 2px 10px rgba(0,0,0,0.03)", overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc", borderBottom: "1px solid #f1f5f9" }}>
+                    {["Fellow", "Phone", "Qualification", "Specialization", "Joined", "Status", "Actions"].map(h => (
+                      <th key={h} style={{ padding: "12px 14px", fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredFellows.map((fellow, i) => (
+                    <tr key={fellow._id} style={{ borderBottom: "1px solid #f9fafb", background: i % 2 === 0 ? "white" : "#fafafa" }}>
+                      <td style={{ padding: "12px 14px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ width: 38, height: 38, borderRadius: "50%", background: "#ede9fe", border: "1.5px solid #ddd6fe", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: "#7c3aed" }}>
+                            {fellow.name?.[0]?.toUpperCase() || "?"}
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "#1c1917" }}>{fellow.name || "Unknown Fellow"}</div>
+                            <div style={{ fontSize: 11, color: "#9ca3af" }}>{fellow.email}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ padding: "12px 14px", fontSize: 12, color: "#374151" }}>{fellow.phone || "—"}</td>
+                      <td style={{ padding: "12px 14px", fontSize: 12, color: "#374151" }}>{fellow.teacherProfile?.qualification || "Graduate"}</td>
+                      <td style={{ padding: "12px 14px", fontSize: 12, color: "#374151" }}>{fellow.teacherProfile?.subject || "ECCE"}</td>
+                      <td style={{ padding: "12px 14px", fontSize: 12, color: "#9ca3af" }}>
+                        {fellow.createdAt ? new Date(fellow.createdAt).toLocaleDateString("en-IN") : "—"}
+                      </td>
+                      <td style={{ padding: "12px 14px" }}>
+                        {/* start dnyaneshwari thorat */}
+                        {isClaimed(fellow._id) ? (
+                          <span style={{ background: "#cffafe", color: "#0891b2", padding: "4px 8px", borderRadius: 12, fontSize: 11, fontWeight: 700, display: "inline-block", border: "1px solid #67e8f9" }}>Claimed</span>
+                        ) : (
+                          <StatusBadge status={fellow.status} />
+                        )}
+                        {/* end dnyaneshwari thorat */}
+                      </td>
+                      <td style={{ padding: "12px 14px" }}>
+                        <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                          <button onClick={() => setSelectedFellow(fellow)} style={{ ...S.tblBtn, color: "#3b82f6", borderColor: "#93c5fd" }}>👁 View</button>
+                          
+                          {/* start dnyaneshwari thorat */}
+                          {!isClaimed(fellow._id) ? (
+                            <button
+                              disabled={actioningId === fellow._id}
+                              onClick={() => handleClaimFellow(fellow._id)}
+                              style={{ ...S.tblBtn, color: "#8b5cf6", borderColor: "#c084fc", fontWeight: 800 }}
+                            >
+                              ➕ Claim Fellow
+                            </button>
+                          ) : (
+                            <button
+                              disabled={actioningId === fellow._id}
+                              onClick={() => handleUnclaimFellow(fellow._id)}
+                              style={{ ...S.tblBtn, color: "#10b981", borderColor: "#34d399", background: "#ecfdf5", fontWeight: 800 }}
+                            >
+                              ✅ Claimed (Reset)
+                            </button>
+                          )}
+                          <button
+                            disabled={actioningId === fellow._id}
+                            onClick={() => handleDeleteFellow(fellow._id)}
+                            style={{ ...S.tblBtn, color: "#ef4444", borderColor: "#fca5a5", fontWeight: 800 }}
+                            title="Permanently delete fellow account"
+                          >
+                            🗑 Delete
+                          </button>
+                          {/* end dnyaneshwari thorat */}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {filteredFellows.length === 0 && (
+                <div style={{ textAlign: "center", padding: "50px", color: "#9ca3af" }}>
+                  <div style={{ fontSize: 40, marginBottom: 10 }}>🔍</div>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>No fellows found</div>
+                  <div style={{ fontSize: 12, marginTop: 4 }}>Try adjusting your filters</div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
+      )}
+
+      {/* Fellow Details Modal */}
+      {selectedFellow && (
+        <Modal title="🎓 Fellow Profile Details" onClose={() => setSelectedFellow(null)}>
+          <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 20 }}>
+            <div style={{ width: 60, height: 60, borderRadius: "50%", background: "#ede9fe", border: "2px solid #ddd6fe", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32 }}>
+              🎓
+            </div>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 18, color: "#0f172a" }}>{selectedFellow.name}</h2>
+              <p style={{ margin: 0, color: "#64748b", fontSize: 13 }}>{selectedFellow.email}</p>
+            </div>
+          </div>
+          
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, fontSize: 13, marginBottom: 20 }}>
+            <div><strong>Phone:</strong> {selectedFellow.phone || "—"}</div>
+            <div><strong>Status:</strong> <StatusBadge status={selectedFellow.status} /></div>
+            <div><strong>Qualification:</strong> {selectedFellow.teacherProfile?.qualification || "Graduate"}</div>
+            <div><strong>Specialization:</strong> {selectedFellow.teacherProfile?.subject || "ECCE"}</div>
+            <div><strong>Experience:</strong> {selectedFellow.teacherProfile?.experience || "2 years"}</div>
+            <div><strong>Address:</strong> {selectedFellow.teacherProfile?.address || "N/A"}</div>
+            <div><strong>Joined Date:</strong> {selectedFellow.createdAt ? new Date(selectedFellow.createdAt).toLocaleString("en-IN") : "—"}</div>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+            {selectedFellow.status === "pending" && (
+              <>
+                <button 
+                  disabled={actioningId === selectedFellow._id}
+                  onClick={() => { handleStatusChange(selectedFellow._id, "approved"); setSelectedFellow(null); }}
+                  style={{ ...S.btnGreen, padding: "8px 16px" }}
+                >
+                  ✓ Approve
+                </button>
+                <button 
+                  disabled={actioningId === selectedFellow._id}
+                  onClick={() => { handleStatusChange(selectedFellow._id, "rejected"); setSelectedFellow(null); }}
+                  style={{ ...S.btnRed, padding: "8px 16px" }}
+                >
+                  ✕ Reject
+                </button>
+              </>
+            )}
+            <button onClick={() => setSelectedFellow(null)} style={{ ...S.exportBtn, background: "#f1f5f9" }}>Close</button>
+          </div>
+        </Modal>
       )}
 
       {/* Observation Modal */}
@@ -658,6 +1185,20 @@ export function MenteeManagementTab({ user, setToast, onUserUpdate }) {
 export function ImpactCapstoneTab({ user, setToast, onUserUpdate }) {
   const [capstoneText, setCapstoneText] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submissions, setSubmissions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchSubmissions = () => {
+    setLoading(true);
+    getCapstoneSubmissions()
+      .then(res => setSubmissions(res.submissions || []))
+      .catch(err => console.error("Failed to fetch Capstone", err))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchSubmissions();
+  }, []);
 
   const MILESTONES = [
     { id: 1, title: "Problem Identification", desc: "Identify a core challenge in the community." },
@@ -666,7 +1207,7 @@ export function ImpactCapstoneTab({ user, setToast, onUserUpdate }) {
     { id: 4, title: "Evaluation", desc: "Analyze impact and finalize the report." }
   ];
 
-  const milestone = user?.mentorProfile?.capstoneMilestone || 1;
+  const milestone = Math.min(submissions.length + 1, 4);
 
   const handleSubmit = async () => {
     if(!capstoneText.trim()) {
@@ -676,10 +1217,10 @@ export function ImpactCapstoneTab({ user, setToast, onUserUpdate }) {
     setSubmitting(true);
     
     try {
-      const res = await submitCapstoneMilestone(capstoneText, "");
-      if (res.user) onUserUpdate(res.user);
+      await submitCapstoneMilestone(milestone, capstoneText, "");
       setToast?.({ msg: "Capstone milestone submitted successfully!", type: "success" });
       setCapstoneText("");
+      fetchSubmissions();
     } catch (err) {
       setToast?.({ msg: err.message || "Failed to submit milestone", type: "error" });
     } finally {
@@ -763,27 +1304,91 @@ export function ImpactCapstoneTab({ user, setToast, onUserUpdate }) {
   );
 }
 
-/* ── Documentation (PDCA) Tab ── */
+/* ── Growth Cycle Tab (formerly "Documentation (PDCA)") ──
+   Same underlying concept: Plan → Do → Check → Act reflective cycles.
+   NEW in this version:
+   - Mentor must pick which fellow a cycle is being assigned/logged for.
+   - A "Fellow Progress" panel summarizes each fellow's cycle count + last activity.
+   - History can be filtered by fellow.
+   Component name kept as PDCATab so no other file needs to change its import. */
 export function PDCATab({ user, setToast, onUserUpdate }) {
+  const mentees = user?.mentorProfile?.assignedTeachers || [];
+
+  const [selectedMenteeId, setSelectedMenteeId] = useState("");
   const [pdcaForm, setPdcaForm] = useState({ plan: "", do: "", check: "", act: "" });
   const [submitting, setSubmitting] = useState(false);
-  const history = user?.mentorProfile?.pdcaCycles || [];
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [historyFilter, setHistoryFilter] = useState("all"); // "all" or a mentee _id
+
+  const fetchCycles = () => {
+    setLoading(true);
+    getPDCACycles()
+      .then(res => setHistory(res.cycles || []))
+      .catch(err => console.error("Failed to fetch Growth Cycles", err))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchCycles();
+  }, []);
+
+  // Resolve the mentee id a given cycle belongs to, whether menteeId
+  // came back populated ({_id, name, email}) or as a raw id string.
+  const cycleMenteeId = (cycle) => {
+    const m = cycle.menteeId;
+    if (!m) return null;
+    return typeof m === "object" ? (m._id || m.id) : m;
+  };
+
+  const cycleMenteeName = (cycle) => {
+    const m = cycle.menteeId;
+    if (!m) return "Unassigned";
+    if (typeof m === "object" && m.name) return m.name;
+    // fall back to looking the id up in the mentee list currently assigned
+    const found = mentees.find(mm => String(mm._id) === String(m));
+    return found?.name || "Unknown Fellow";
+  };
+
+  // Per-fellow progress summary, built from cycle history.
+  const menteeProgress = mentees.map((m) => {
+    const cyclesForMentee = history.filter(h => String(cycleMenteeId(h)) === String(m._id));
+    const sorted = [...cyclesForMentee].sort((a, b) => new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0));
+    const latest = sorted[0];
+    return {
+      mentee: m,
+      count: cyclesForMentee.length,
+      latest,
+      lastDate: latest ? (latest.createdAt || latest.date) : null,
+    };
+  });
+
+  const filteredHistory = historyFilter === "all"
+    ? history
+    : history.filter(h => String(cycleMenteeId(h)) === String(historyFilter));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!selectedMenteeId) {
+      setToast?.({ msg: "Please select which fellow this Growth Cycle is for.", type: "error" });
+      return;
+    }
     if(!pdcaForm.plan || !pdcaForm.do || !pdcaForm.check || !pdcaForm.act) {
-      setToast?.({ msg: "Please fill out all PDCA fields.", type: "error" });
+      setToast?.({ msg: "Please fill out all Growth Cycle fields.", type: "error" });
       return;
     }
     setSubmitting(true);
     
     try {
-      const res = await submitPDCACycle(pdcaForm.plan, pdcaForm.do, pdcaForm.check, pdcaForm.act);
-      if (res.user) onUserUpdate(res.user);
-      setToast?.({ msg: "PDCA cycle recorded successfully!", type: "success" });
+      // Cycle number is scoped per-fellow so each fellow's own sequence starts at 1.
+      const existingForMentee = history.filter(h => String(cycleMenteeId(h)) === String(selectedMenteeId));
+      const cycleNumber = existingForMentee.length + 1;
+      await submitPDCACycle(cycleNumber, pdcaForm.plan, pdcaForm.do, pdcaForm.check, pdcaForm.act, selectedMenteeId);
+      setToast?.({ msg: "Growth Cycle assigned and recorded successfully!", type: "success" });
       setPdcaForm({ plan: "", do: "", check: "", act: "" });
+      fetchCycles();
     } catch (err) {
-      setToast?.({ msg: err.message || "Failed to save PDCA cycle", type: "error" });
+      setToast?.({ msg: err.message || "Failed to save Growth Cycle", type: "error" });
     } finally {
       setSubmitting(false);
     }
@@ -791,12 +1396,33 @@ export function PDCATab({ user, setToast, onUserUpdate }) {
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
-      <h1 style={S.pageTitle}>Documentation (PDCA)</h1>
-      <p style={S.pageSub}>Record and reflect on your Plan-Do-Check-Act cycles.</p>
+      <h1 style={S.pageTitle}>Growth Cycle</h1>
+      <p style={S.pageSub}>Assign Plan–Do–Check–Act growth cycles to your fellows and track their progress.</p>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-        <SectionCard title="🔄 New PDCA Cycle">
+        <SectionCard title="🔄 New Growth Cycle">
           <form onSubmit={handleSubmit}>
+            <div style={{ marginBottom: 16 }}>
+              <label style={S.label}>Assign To Fellow *</label>
+              {mentees.length === 0 ? (
+                <div style={{ padding: "10px 12px", background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 8, fontSize: 12, color: "#92400e" }}>
+                  You have no fellows assigned yet. Claim a fellow from Mentee Management first.
+                </div>
+              ) : (
+                <select
+                  style={S.input}
+                  value={selectedMenteeId}
+                  onChange={e => setSelectedMenteeId(e.target.value)}
+                  required
+                >
+                  <option value="">Select a fellow…</option>
+                  {mentees.map(m => (
+                    <option key={m._id} value={m._id}>{m.name || "Unknown Fellow"}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+
             <div style={{ marginBottom: 16 }}>
               <label style={{...S.label, display: "flex", alignItems: "center", gap: 6}}>
                 <span style={{background: "#e0e7ff", color: "#4f46e5", padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 900}}>P</span>
@@ -829,21 +1455,62 @@ export function PDCATab({ user, setToast, onUserUpdate }) {
               <textarea style={{...S.input, minHeight: 60}} value={pdcaForm.act} onChange={e=>setPdcaForm({...pdcaForm, act: e.target.value})} placeholder="What changes will you make for the next cycle?" required />
             </div>
 
-            <button type="submit" disabled={submitting} style={{...S.primaryBtn, width: "100%", opacity: submitting ? 0.7 : 1}}>
-              {submitting ? "Saving..." : "Save PDCA Cycle"}
+            <button type="submit" disabled={submitting || mentees.length === 0} style={{...S.primaryBtn, width: "100%", opacity: (submitting || mentees.length === 0) ? 0.7 : 1}}>
+              {submitting ? "Saving..." : "Assign & Save Growth Cycle"}
             </button>
           </form>
         </SectionCard>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          <SectionCard title="📚 PDCA History">
+          {/* Fellow Progress Summary */}
+          <SectionCard title="📊 Fellow Progress">
+            {mentees.length === 0 ? (
+              <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No fellows assigned yet.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {menteeProgress.map(({ mentee, count, lastDate }) => (
+                  <button
+                    key={mentee._id}
+                    onClick={() => setHistoryFilter(historyFilter === mentee._id ? "all" : mentee._id)}
+                    style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      padding: "12px 14px", borderRadius: 10, textAlign: "left", cursor: "pointer",
+                      border: historyFilter === mentee._id ? "1.5px solid #3b82f6" : "1px solid #e2e8f0",
+                      background: historyFilter === mentee._id ? "#eff6ff" : "#f8fafc",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>{mentee.name || "Unknown Fellow"}</div>
+                      <div style={{ fontSize: 11, color: "#64748b" }}>
+                        {count} cycle{count !== 1 ? "s" : ""} logged{lastDate ? ` · last on ${new Date(lastDate).toLocaleDateString()}` : ""}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 900, color: count > 0 ? "#10b981" : "#cbd5e1" }}>{count}</div>
+                  </button>
+                ))}
+                {historyFilter !== "all" && (
+                  <button onClick={() => setHistoryFilter("all")} style={{ ...S.exportBtn, alignSelf: "flex-start", marginTop: 4 }}>
+                    Clear filter (show all fellows)
+                  </button>
+                )}
+              </div>
+            )}
+          </SectionCard>
+
+          {/* Growth Cycle History (filterable by fellow) */}
+          <SectionCard title="📚 Growth Cycle History">
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {history.length === 0 ? (
-                <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No PDCA cycles recorded yet.</div>
-              ) : history.map((item, i) => (
+              {loading ? (
+                <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>Loading...</div>
+              ) : filteredHistory.length === 0 ? (
+                <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>
+                  {historyFilter === "all" ? "No Growth Cycles recorded yet." : "No Growth Cycles recorded for this fellow yet."}
+                </div>
+              ) : filteredHistory.map((item, i) => (
                 <div key={item._id || i} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: 16 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>{new Date(item.date).toLocaleDateString("en-US", { month:"short", day:"2-digit", year:"numeric" })}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#3b82f6" }}>🎓 {cycleMenteeName(item)}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>{new Date(item.createdAt || item.date).toLocaleDateString("en-US", { month:"short", day:"2-digit", year:"numeric" })}</div>
                     <div style={{ fontSize: 10, fontWeight: 800, background: "#d1fae5", color: "#059669", padding: "2px 8px", borderRadius: 10 }}>{item.status || "Completed"}</div>
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", marginBottom: 8 }}>{item.plan.substring(0, 60) + (item.plan.length > 60 ? "..." : "")}</div>
@@ -853,11 +1520,11 @@ export function PDCATab({ user, setToast, onUserUpdate }) {
             </div>
           </SectionCard>
 
-          <SectionCard title="💡 PDCA Tips">
+          <SectionCard title="💡 Growth Cycle Tips">
             <ul style={{ paddingLeft: 20, margin: 0, color: "#475569", fontSize: 13, lineHeight: 1.6 }}>
               <li style={{marginBottom: 8}}>Keep objectives SMART (Specific, Measurable, Achievable, Relevant, Time-bound).</li>
               <li style={{marginBottom: 8}}>Document data and specific observations in the <strong>Check</strong> phase.</li>
-              <li>Use the <strong>Act</strong> phase to refine your strategy for the next iteration.</li>
+              <li>Use the <strong>Act</strong> phase to refine your strategy for the next iteration, and revisit the Fellow Progress panel to see who may need a follow-up cycle.</li>
             </ul>
           </SectionCard>
         </div>
@@ -865,4 +1532,3 @@ export function PDCATab({ user, setToast, onUserUpdate }) {
     </div>
   );
 }
-

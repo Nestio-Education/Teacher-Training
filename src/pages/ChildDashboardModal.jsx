@@ -1,6 +1,9 @@
 // Prajwal start
 import { useState, useEffect } from "react";
 import { SectionCard, S, Badge, StatusBadge } from "../components/Shared";
+// Start: Dnyaneshwari Thorat
+import { getChildAssessments, saveChildAssessment } from "../services/api";
+// End: Dnyaneshwari Thorat
 
 /* ─────────────────────────────────────────
    Child Dashboard — Module 1
@@ -643,19 +646,24 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
   const [assessmentDate, setAssessmentDate] = useState("");
   const [savedMsg, setSavedMsg] = useState("");
   const [showValidation, setShowValidation] = useState(false);
+  // Start: Dnyaneshwari Thorat
+  const [loading, setLoading] = useState(false);
 
-  const storageKey = `assessment_${child?.id}`;
-
-  // Load any previously saved assessments for this child (stand-in for a real API call)
+  // Load any previously saved assessments for this child from the backend database
   useEffect(() => {
     if (!child) return;
-    try {
-      const raw = localStorage.getItem(storageKey);
-      console.log("ChildAssessmentTab load raw localStorage:", raw);
-      setSavedAssessments(raw ? JSON.parse(raw) : {});
-    } catch {
-      setSavedAssessments({});
-    }
+    setLoading(true);
+    getChildAssessments(child.id)
+      .then((data) => {
+        setSavedAssessments(data || {});
+      })
+      .catch((err) => {
+        console.error("Error loading child assessments:", err);
+        setSavedAssessments({});
+      })
+      .finally(() => {
+        setLoading(false);
+      });
     setStage("Baseline");
   }, [child]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -666,8 +674,8 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
     setOverallStatus(rec?.overallStatus || "");
     setOtherStatusText(rec?.otherStatusText || "");
     setRecommendation(rec?.recommendation || "");
-    setNextAssessmentDate(rec?.nextAssessmentDate || "");
-    setAssessmentDate(rec?.assessmentDate || "");
+    setNextAssessmentDate(rec?.nextAssessmentDate ? new Date(rec.nextAssessmentDate).toISOString().split("T")[0] : "");
+    setAssessmentDate(rec?.assessmentDate ? new Date(rec.assessmentDate).toISOString().split("T")[0] : "");
   }, [stage, savedAssessments]);
 
   const totalItems = SECTIONS.reduce((sum, s) => sum + s.items.length, 0);
@@ -697,29 +705,39 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
     setShowValidation(false);
     const sectionScores = computeSectionScores(answers);
     const record = {
+      stage,
       answers,
       overallStatus,
       otherStatusText,
       recommendation,
-      nextAssessmentDate,
-      assessmentDate,
+      nextAssessmentDate: nextAssessmentDate || null,
+      assessmentDate: assessmentDate || null,
       sectionScores,
-      savedAt: Date.now(),
     };
-    const updated = { ...savedAssessments, [stage]: record };
-    console.log("ChildAssessmentTab saving updated assessments record:", record);
-    setSavedAssessments(updated);
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-    } catch {}
-    // Notify parent to refresh suggestions
-    if (onAssessmentSaved) {
-      onAssessmentSaved();
-    }
-    // TODO(backend): POST record to /children/:id/assessments once the endpoint exists
-    setSavedMsg(`${stage} assessment saved!`);
-    setTimeout(() => setSavedMsg(""), 3000);
+
+    setLoading(true);
+    saveChildAssessment(child.id, record)
+      .then((res) => {
+        if (res && res.success && res.assessment) {
+          const updated = { ...savedAssessments, [stage]: res.assessment };
+          setSavedAssessments(updated);
+          setSavedMsg(`${stage} assessment saved!`);
+          if (onAssessmentSaved) {
+            onAssessmentSaved();
+          }
+          setTimeout(() => setSavedMsg(""), 3000);
+        }
+      })
+      .catch((err) => {
+        console.error("Error saving child assessment:", err);
+        setSavedMsg("Failed to save assessment");
+        setTimeout(() => setSavedMsg(""), 3000);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   };
+  // End: Dnyaneshwari Thorat
 
   const currentSectionScores = savedAssessments[stage]?.sectionScores || computeSectionScores({});
 
@@ -738,6 +756,14 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
       {savedAssessments[s] && <span style={{ marginLeft: 6 }}>✓</span>}
     </button>
   );
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "250px", fontSize: 14, color: "#d97706", fontWeight: 700 }}>
+        🔄 Loading assessment data...
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -1043,34 +1069,49 @@ const SECTION_ICONS = {
 function ActivitySuggestionsTab({ child }) {
   const [expandedSections, setExpandedSections] = useState({});
   const [completedActivities, setCompletedActivities] = useState({});
+  // Start: Dnyaneshwari Thorat
+  const [savedAssessments, setSavedAssessments] = useState({});
+  const [loading, setLoading] = useState(false);
 
-  const storageKey = `assessment_${child?.id}`;
+  useEffect(() => {
+    if (!child) return;
+    setLoading(true);
+    getChildAssessments(child.id)
+      .then((data) => {
+        setSavedAssessments(data || {});
+      })
+      .catch((err) => {
+        console.error("Error loading child assessments for suggestions:", err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [child]);
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "250px", fontSize: 14, color: "#d97706", fontWeight: 700 }}>
+        🔄 Loading suggestions...
+      </div>
+    );
+  }
+
   let chartScores = null;
   let answers = {};
   let latestStage = "";
 
-  try {
-    const raw = localStorage.getItem(storageKey);
-    console.log("ActivitySuggestionsTab storageKey:", storageKey);
-    console.log("ActivitySuggestionsTab raw localStorage content:", raw);
-    if (raw) {
-      const savedAssessments = JSON.parse(raw);
-      for (const stage of ["Endline", "Midline", "Baseline"]) {
-        if (savedAssessments[stage] && savedAssessments[stage].answers && Object.keys(savedAssessments[stage].answers).length > 0) {
-          const rec = savedAssessments[stage];
-          answers = rec.answers || {};
-          chartScores = rec.sectionScores || computeSectionScores(answers);
-          latestStage = stage;
-          console.log(`ActivitySuggestionsTab picked stage: ${stage}, answers:`, answers, "chartScores:", chartScores);
-          break;
-        }
-      }
+  for (const stage of ["Endline", "Midline", "Baseline"]) {
+    if (savedAssessments[stage] && savedAssessments[stage].answers && Object.keys(savedAssessments[stage].answers).length > 0) {
+      const rec = savedAssessments[stage];
+      answers = rec.answers || {};
+      chartScores = rec.sectionScores || computeSectionScores(answers);
+      latestStage = stage;
+      break;
     }
-  } catch (err) {
-    console.error("ActivitySuggestionsTab error reading localStorage:", err);
   }
 
   const hasChartData = chartScores && chartScores.some((s) => s.score > 0);
+  // End: Dnyaneshwari Thorat
 
   // ── No data state ──
   if (!hasChartData) {

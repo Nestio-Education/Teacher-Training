@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { Modal, S, SectionCard, StatCard, StatusBadge } from "../components/Shared";
-import { getAdminDashboard, getAdminTeachers, getTrainers, getCourses, getAdminUsers, getPortalSettings, updatePortalSettings, testSmtpEmail, updateAdminLanguage } from "../services/api";
-import { setLanguage, getCurrentLanguage } from "../services/i18n";
+import { getAdminDashboard, getAdminTeachers, getTrainers, getCourses, getAdminUsers, getPortalSettings, updatePortalSettings, testSmtpEmail, updateAdminLanguage, testWhatsAppNotification } from "../services/api";
+import { t, setLanguage, getCurrentLanguage, getLanguageList } from "../services/i18n";
+import NotificationsTab from "./NotificationsTab";
 
 const safeBool = (val, defaultVal = false) => {
   if (typeof val === "boolean") return val;
@@ -15,7 +16,7 @@ const safeNum = (val, defaultVal = 0) => {
   return Number.isFinite(n) ? n : defaultVal;
 };
 
-export default function SettingsTab({ setToast }) {
+export default function SettingsTab({ setToast, teachers }) {
   const [activeSection, setActiveSection] = useState("portal");
   const [settings, setSettings] = useState({
     portalName: "SpacECE Teacher Training Portal",
@@ -53,6 +54,8 @@ export default function SettingsTab({ setToast }) {
   const [testEmailTo, setTestEmailTo] = useState("");
   const [testEmailSending, setTestEmailSending] = useState(false);
   const [testEmailResult, setTestEmailResult] = useState(null);
+  const [testWhatsAppTo, setTestWhatsAppTo] = useState("");
+  const [testWhatsAppSending, setTestWhatsAppSending] = useState(false);
   const [roleUsers, setRoleUsers] = useState([]);
   const [showUserModal, setShowUserModal] = useState(false);
   const [selectedRole, setSelectedRole] = useState("");
@@ -277,6 +280,29 @@ export default function SettingsTab({ setToast }) {
     }
   }, [testEmailTo, setToast]);
 
+  const handleTestWhatsApp = useCallback(async () => {
+    if (!testWhatsAppTo.trim()) {
+      setToast?.({ msg: "Please enter a phone number to test.", type: "error" });
+      return;
+    }
+    if (!twilioConfig.twilioSid || !twilioConfig.twilioToken || !twilioConfig.twilioFrom) {
+      setToast?.({ msg: "Please ensure Twilio credentials are provided first.", type: "warning" });
+    }
+    setTestWhatsAppSending(true);
+    try {
+      const data = await testWhatsAppNotification(testWhatsAppTo.trim());
+      if (data.success) {
+        setToast?.({ msg: `✅ Test WhatsApp sent! SID: ${data.sid || data.messageId || 'Success'}`, type: "success" });
+      } else {
+        setToast?.({ msg: data.message || "Test WhatsApp failed.", type: "error" });
+      }
+    } catch (error) {
+      setToast?.({ msg: error.message || "Failed to send test WhatsApp.", type: "error" });
+    } finally {
+      setTestWhatsAppSending(false);
+    }
+  }, [testWhatsAppTo, twilioConfig, setToast]);
+
   const roleCards = [
     {
       role: "Super Admin",
@@ -309,12 +335,13 @@ export default function SettingsTab({ setToast }) {
   ];
 
   const sections = [
-    { key: "portal", label: "⚙️ Portal" },
-    { key: "email", label: "📧 Email" },
-    { key: "messaging", label: "📱 SMS & WhatsApp" },
-    { key: "security", label: "🔒 Security" },
-    { key: "grading", label: "📊 Grading" },
-    { key: "roles", label: "🛡️ Roles" },
+    { key: "portal", label: "⚙️ " + t("Portal") },
+    { key: "email", label: "📧 " + t("Email") },
+    { key: "messaging", label: "📱 " + t("SMS & WhatsApp") },
+    { key: "security", label: "🔒 " + t("Security") },
+    { key: "grading", label: "📊 " + t("Grading") },
+    { key: "roles", label: "🛡️ " + t("Roles") },
+    { key: "notifications", label: "🔔 " + t("Notifications") },
   ];
 
   const openUserModal = (roleLabel) => {
@@ -396,22 +423,32 @@ export default function SettingsTab({ setToast }) {
           {/* Portal Settings */}
           {activeSection === "portal" && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-              <SectionCard title="⚙️ General Settings">
+              <SectionCard title={"⚙️ " + t("General Settings")}>
                 <div style={{ marginBottom: 12 }}>
-                  <label style={S.label}>Portal Name</label>
+                  <label style={S.label}>{t("Portal Name")}</label>
                   <input style={S.input} value={settings.portalName} onChange={(e) => { setSettings((p) => ({ ...p, portalName: e.target.value })); markDirty(); }} />
                 </div>
                 <div style={{ marginBottom: 12 }}>
-                  <label style={S.label}>Admin Panel Language</label>
-                  <select style={S.input} value={settings.adminLanguage} onChange={(e) => {
+                  <label style={S.label}>{t("Admin Panel Language")}</label>
+                  <select style={S.input} value={getCurrentLanguage()} onChange={(e) => {
                     const newLang = e.target.value;
                     setSettings((p) => ({ ...p, adminLanguage: newLang }));
                     setLanguage(newLang);
                     markDirty();
                   }}>
-                    <option value="English">English</option>
-                    <option value="Hindi">हिन्दी (Hindi)</option>
-                    <option value="Marathi">मराठी (Marathi)</option>
+                    {getLanguageList().map(lang => {
+                      const displayNames = {
+                        English: "English",
+                        Hindi: "हिन्दी (Hindi)",
+                        Marathi: "मराठी (Marathi)",
+                        Gujarati: "ગુજરાતી (Gujarati)",
+                        Kannada: "ಕನ್ನಡ (Kannada)",
+                        Telugu: "తెలుగు (Telugu)",
+                        Tamil: "தமிழ் (Tamil)",
+                        Malayalam: "മലയാളം (Malayalam)"
+                      };
+                      return <option key={lang} value={lang}>{displayNames[lang] || lang}</option>;
+                    })}
                   </select>
                   <div style={{ fontSize: 11, color: "#6b7280", marginTop: 4 }}>This language applies to your admin panel only. Teachers control their own language in My Profile.</div>
                 </div>
@@ -636,6 +673,37 @@ export default function SettingsTab({ setToast }) {
                 {twilioConfig.messagingProvider === "vonage" && "Configure Vonage API Key/Secret. SMS will be delivered internationally."}
                 {twilioConfig.messagingProvider === "fast2sms" && "Configure Fast2SMS API key. High delivery rates for Indian mobile numbers."}
               </div>
+
+              {/* ─── Test WhatsApp ─── */}
+              <div style={{ borderTop: "1px solid #f3f4f6", paddingTop: 18, marginTop: 20 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#1c1917", marginBottom: 4 }}>🧪 Test WhatsApp Delivery</div>
+                <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 12, lineHeight: 1.5 }}>
+                  Enter a phone number (E.164 or 10-digit) to test the WhatsApp configuration. Ensure settings are saved if you just changed them.
+                </div>
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <div style={{ flex: 1 }}>
+                    <input
+                      type="text"
+                      style={{ ...S.input, marginBottom: 0 }}
+                      placeholder="Enter phone number (e.g. 9876543210)"
+                      value={testWhatsAppTo}
+                      onChange={(e) => setTestWhatsAppTo(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    onClick={handleTestWhatsApp}
+                    disabled={testWhatsAppSending}
+                    style={{
+                      ...S.primaryBtn,
+                      whiteSpace: "nowrap",
+                      opacity: testWhatsAppSending ? 0.7 : 1,
+                      minWidth: 160,
+                    }}
+                  >
+                    {testWhatsAppSending ? "Sending..." : "📱 Send Test WhatsApp"}
+                  </button>
+                </div>
+              </div>
             </SectionCard>
           )}
 
@@ -758,6 +826,13 @@ export default function SettingsTab({ setToast }) {
                 ))}
               </div>
             </SectionCard>
+          )}
+
+          {/* Notifications */}
+          {activeSection === "notifications" && (
+            <div style={{ marginTop: 20 }}>
+              <NotificationsTab teachers={teachers || []} setToast={setToast} />
+            </div>
           )}
 
           {dirty && (

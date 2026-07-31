@@ -1,3 +1,4 @@
+import { t } from "../services/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { StatCard, SectionCard } from "../components/Shared";
 import { getTeacherAttendance, sendAdminNotification } from "../services/api";
@@ -168,32 +169,32 @@ export default function AttendanceTab({ teachers = [] }) {
     <div style={{ animation: "fadeIn 0.3s ease" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
         <div>
-          <h1 style={S.pageTitle}>Teacher Attendance</h1>
-          <p style={S.pageSub}>Live attendance records with trend analysis and absent-teacher flagging.</p>
+          <h1 style={S.pageTitle}>{t("Teacher Attendance")}</h1>
+          <p style={S.pageSub}>{t("Live attendance records with trend analysis and absent-teacher flagging.")}</p>
         </div>
         <button onClick={() => exportCsv("teacher-attendance.csv", [
           ["Teacher", "Email", "Date", "Status", "Source", "Note"],
           ...filteredRecords.map(r => [r.teacher?.name || "", r.teacher?.email || "", r.attendanceDate ? new Date(r.attendanceDate).toLocaleDateString("en-IN") : "", r.status, r.source || "", r.note || ""])
-        ])} style={S.exportBtn}>📥 Export CSV</button>
+        ])} style={S.exportBtn}>{t("📥 Export CSV")}</button>
       </div>
 
       {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14, marginBottom: 20 }}>
-        <StatCard icon="📊" label="Total Records" val={summary.total} color="#6366f1" bg="#e0e7ff" />
-        <StatCard icon="✅" label="Present" val={summary.present} color="#10b981" bg="#d1fae5" />
-        <StatCard icon="⏰" label="Late" val={summary.late} color="#f59e0b" bg="#fef3c7" />
-        <StatCard icon="❌" label="Absent" val={summary.absent} color="#ef4444" bg="#fee2e2" />
-        <StatCard icon="🚨" label="Flagged Teachers" val={flaggedTeachers.length} color="#dc2626" bg="#fee2e2" />
+        <StatCard icon="📊" label={t("Total Records")} val={summary.total} color="#6366f1" bg="#e0e7ff" />
+        <StatCard icon="✅" label={t("Present")} val={summary.present} color="#10b981" bg="#d1fae5" />
+        <StatCard icon="⏰" label={t("Late")} val={summary.late} color="#f59e0b" bg="#fef3c7" />
+        <StatCard icon="❌" label={t("Absent")} val={summary.absent} color="#ef4444" bg="#fee2e2" />
+        <StatCard icon="🚨" label={t("Flagged Teachers")} val={flaggedTeachers.length} color="#dc2626" bg="#fee2e2" />
       </div>
 
       {/* Trend Charts */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
         <div style={{ background: "white", borderRadius: 16, border: "1px solid #e5e7eb", padding: 20 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 12 }}>📈 Daily Attendance (Last 7 Days)</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 12 }}>{t("📈 Daily Attendance (Last 7 Days)")}</div>
           <MiniBarChart data={dailyTrend} color="#3b82f6" height={120} />
         </div>
         <div style={{ background: "white", borderRadius: 16, border: "1px solid #e5e7eb", padding: 20 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 12 }}>📊 Weekly Trend (Last 4 Weeks)</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 12 }}>{t("📊 Weekly Trend (Last 4 Weeks)")}</div>
           <MiniBarChart data={weeklyTrend.map(w => ({ label: w.label, val: w.pct }))} color="#10b981" height={120} />
           <div style={{ display: "flex", gap: 12, marginTop: 8, justifyContent: "center" }}>
             {weeklyTrend.map((w, i) => (
@@ -209,10 +210,10 @@ export default function AttendanceTab({ teachers = [] }) {
       {flaggedTeachers.length > 0 && (
         <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 14, padding: 18, marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 20 }}>🚨</span>
-            <span style={{ fontSize: 14, fontWeight: 800, color: "#991b1b" }}>Absent Teachers Flagged ({flaggedTeachers.length})</span>
+            <span style={{ fontSize: 20 }}>{t("🚨")}</span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: "#991b1b" }}>{t("Absent Teachers Flagged")} ({flaggedTeachers.length})</span>
           </div>
-          <div style={{ fontSize: 12, color: "#b91c1c", marginBottom: 12 }}>Teachers with &lt;50% attendance or 3+ consecutive absences need attention.</div>
+          <div style={{ fontSize: 12, color: "#b91c1c", marginBottom: 12 }}>{t("Teachers with &lt;50% attendance or 3+ consecutive absences need attention.")}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {flaggedTeachers.map(item => (
               <div key={item.teacher._id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "white", borderRadius: 10, padding: "10px 14px", border: "1px solid #fecaca" }}>
@@ -222,11 +223,11 @@ export default function AttendanceTab({ teachers = [] }) {
                   </div>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#1c1917" }}>{item.teacher.name}</div>
-                    <div style={{ fontSize: 11, color: "#6b7280" }}>{item.count} records · {item.pct}% attendance · {item.absentCount} absences</div>
+                    <div style={{ fontSize: 11, color: "#6b7280" }}>{item.count} {t("records")} · {item.pct}% {t("attendance")} · {item.absentCount} {t("absences")}</div>
                   </div>
                 </div>
                 <span style={{ padding: "4px 10px", borderRadius: 12, fontSize: 11, fontWeight: 700, background: "#fee2e2", color: "#991b1b" }}>
-                  {item.count === 0 ? "No Records" : item.pct < 50 ? "Low Attendance" : "Consecutive Absent"}
+                  {item.count === 0 ? t("No Records") : item.pct < 50 ? t("Low Attendance") : t("Consecutive Absent")}
                 </span>
               </div>
             ))}
@@ -239,8 +240,8 @@ export default function AttendanceTab({ teachers = [] }) {
         <div style={{ padding: "16px 20px", borderBottom: "1px solid #f3f4f6", background: "#fafafa" }}>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
             <div style={{ flex: 1, minWidth: 200, position: "relative" }}>
-              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: "#9ca3af" }}>🔍</span>
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search teacher or email..."
+              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: "#9ca3af" }}>{t("🔍")}</span>
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("Search teacher or email...")}
                 style={{ ...S.input, paddingLeft: 36, marginBottom: 0, background: "white" }} />
             </div>
             <input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}
@@ -253,17 +254,17 @@ export default function AttendanceTab({ teachers = [] }) {
             </select>
             {(statusFilter !== "all" || dateFilter || search) && (
               <button onClick={() => { setSearch(""); setStatusFilter("all"); setDateFilter(""); }}
-                style={{ ...S.tblBtn, color: "#ef4444", borderColor: "#fca5a5", padding: "6px 10px" }}>✕ Clear</button>
+                style={{ ...S.tblBtn, color: "#ef4444", borderColor: "#fca5a5", padding: "6px 10px" }}>{t("✕ Clear")}</button>
             )}
           </div>
         </div>
 
         {loading ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#9ca3af" }}>Loading attendance records...</div>
+          <div style={{ padding: 40, textAlign: "center", color: "#9ca3af" }}>{t("Loading attendance records...")}</div>
         ) : filteredRecords.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center", color: "#9ca3af" }}>
-            <div style={{ fontSize: 40, marginBottom: 8 }}>📭</div>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>No attendance records found</div>
+            <div style={{ fontSize: 40, marginBottom: 8 }}>{t("📭")}</div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>{t("No attendance records found")}</div>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
@@ -290,7 +291,7 @@ export default function AttendanceTab({ teachers = [] }) {
                       <div style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{record.teacher?.name || "Unknown"}</div>
                       <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>
                         📅 {recordDate ? recordDate.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : "—"}
-                        · {record.source === "geo" ? "📍 Geo" : "📝 Manual"}
+                        · {record.source === "geo" ? `📍 ${t("Geo")}` : `📝 ${t("Manual")}`}
                       </div>
                     </div>
                   </div>
@@ -307,9 +308,9 @@ export default function AttendanceTab({ teachers = [] }) {
 
       {/* Teacher Attendance Rankings */}
       <div style={{ background: "white", borderRadius: 16, border: "1px solid #e5e7eb", padding: 20, marginTop: 20 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: "#111827", marginBottom: 12 }}>👩‍🏫 Teacher Attendance Rankings</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "#111827", marginBottom: 12 }}>{t("👩‍🏫 Teacher Attendance Rankings")}</div>
         {attendanceByTeacher.length === 0 ? (
-          <div style={{ color: "#9ca3af", fontSize: 13 }}>No approved teachers found</div>
+          <div style={{ color: "#9ca3af", fontSize: 13 }}>{t("No approved teachers found")}</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 400, overflowY: "auto" }}>
             {attendanceByTeacher.map((item, idx) => {

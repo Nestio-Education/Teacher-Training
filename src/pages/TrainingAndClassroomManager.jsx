@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Modal, S, StatCard, StatusBadge, Toast, SearchBar } from "../components/Shared";
+import { Modal, S, StatCard, StatusBadge, Toast, SearchBar, SectionCard } from "../components/Shared";
 import { getTeacherLessonPlans, submitLessonCompletion, uploadFile, getActivityBank, uploadActivityBank, getActivitySubmissions, submitActivityCompletion, deleteActivity, createActivityBank } from "../services/api";
 
 const formatDate = (value) => {
@@ -400,11 +400,40 @@ function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
   const [description, setDescription] = useState("");
   const [photos, setPhotos] = useState([]);
   const [docFiles, setDocFiles] = useState([]);
+  const [roughNotes, setRoughNotes] = useState("");
+  const [isDrafting, setIsDrafting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   const userCenter = user?.teacherProfile?.center?._id || user?.teacherProfile?.center?.id || user?.teacherProfile?.center || "";
   const userClass = (user?.teacherProfile?.classes || [])[0]?._id || (user?.teacherProfile?.classes || [])[0]?.id || (user?.teacherProfile?.classes || [])[0] || "";
+
+  const handleDraftWithAI = async () => {
+    if (!roughNotes.trim()) return;
+    setIsDrafting(true);
+    setError("");
+    try {
+      const response = await fetch("http://localhost:5000/api/teacher/reports/draft-ai", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("spaceece_auth_token")}`
+        },
+        body: JSON.stringify({ roughNotes })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setDescription(data.text || data.topic);
+        setRoughNotes("");
+      } else {
+        setError(data.detail || data.message || "Failed to generate AI draft.");
+      }
+    } catch (err) {
+      setError("Error connecting to server. Make sure the backend is running.");
+    } finally {
+      setIsDrafting(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -472,6 +501,31 @@ function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
 
         <div style={{ padding: "10px 14px", background: "#fffbeb", borderRadius: 10, border: "1px solid #fde68a", marginBottom: 16, fontSize: 12, color: "#92400e", lineHeight: 1.5 }}>
           ⚠️ Please provide proof of completion. Upload activity photos, documents, and a written description of what was accomplished.
+        </div>
+
+        {/* AI Drafting Assistant Notepad */}
+        <div style={{ marginBottom: 16, padding: 12, background: "#fffbeb", border: "1px dashed #fbbf24", borderRadius: 10 }}>
+          <label style={{ ...S.label, color: "#92400e", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span>AI Drafting Assistant ✨</span>
+            <button 
+              type="button"
+              onClick={handleDraftWithAI} 
+              disabled={isDrafting || !roughNotes.trim()}
+              style={{ 
+                border: "none", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 800, cursor: "pointer",
+                background: roughNotes.trim() ? "#d97706" : "#cbd5e1",
+                color: "white", transition: "all 0.2s"
+              }}
+            >
+              {isDrafting ? "Structuring..." : "Draft with AI ✨"}
+            </button>
+          </label>
+          <textarea
+            style={{ ...S.input, height: 50, resize: "none", background: "white", border: "1px solid #fcd34d", marginTop: 6 }}
+            value={roughNotes}
+            onChange={(e) => setRoughNotes(e.target.value)}
+            placeholder="Type rough, messy notes here (e.g. 'Raj subtracted correctly with blocks. Priya was sharing pencil.')"
+          />
         </div>
 
         <label style={S.label}>Activity Description / Summary *</label>
@@ -704,8 +758,237 @@ function CompleteLessonModal({ assignment, onSubmit, onClose }) {
   );
 }
 
+/* ── Formats raw markdown report text into styled bullet lists ── */
+function formatReportText(text) {
+  if (!text) return null;
+
+  // Split by specific bold headings (**Heading**:)
+  const sections = text.split(/\*\*(Activity Summary|Student Observations|Next Steps & Action Plan)\*\*:/g);
+  
+  if (sections.length < 2) {
+    return <p style={{ fontSize: "12.5px", color: "#374151", whiteSpace: "pre-line", margin: 0, lineHeight: "1.5" }}>{text}</p>;
+  }
+
+  const elements = [];
+  for (let i = 1; i < sections.length; i += 2) {
+    const heading = sections[i];
+    const content = sections[i + 1] || "";
+    
+    // Split by newlines, dashes, or asterisks followed by spaces
+    const bullets = content
+      .split(/(?:\r?\n)?\s*[-*]\s+/)
+      .map(b => b.trim())
+      .filter(Boolean);
+
+    elements.push(
+      <div key={heading} style={{ marginBottom: 12 }}>
+        <h6 style={{ fontSize: "11px", fontWeight: "800", color: "#b45309", textTransform: "uppercase", letterSpacing: "0.5px", margin: "0 0 6px", display: "flex", alignItems: "center", gap: "6px" }}>
+          <span>
+            {heading === "Activity Summary" && "📋"}
+            {heading === "Student Observations" && "🔍"}
+            {heading === "Next Steps & Action Plan" && "🚀"}
+          </span>
+          <span>{heading}</span>
+        </h6>
+        {bullets.length > 0 ? (
+          <ul style={{ margin: 0, paddingLeft: "16px", listStyleType: "disc" }}>
+            {bullets.map((bullet, idx) => (
+              <li key={idx} style={{ fontSize: "12px", color: "#374151", lineHeight: "1.5", marginBottom: 4 }}>
+                {bullet}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p style={{ fontSize: "12.5px", color: "#374151", margin: 0, whiteSpace: "pre-line", lineHeight: "1.5" }}>{content.trim()}</p>
+        )}
+      </div>
+    );
+  }
+
+  return <div>{elements}</div>;
+}
+
 /* ── Main Component ── */
 export default function TrainingAndClassroomManager({ user }) {
+  const [activeSubTab, setActiveSubTab] = useState("courses");
+  const [reports, setReports] = useState([]);
+  const [reportTopic, setReportTopic] = useState("");
+  const [reportText, setReportText] = useState("");
+  const [tabRoughNotes, setTabRoughNotes] = useState("");
+  const [isTabDrafting, setIsTabDrafting] = useState(false);
+  const [reportError, setReportError] = useState("");
+
+  const [activeRecordingField, setActiveRecordingField] = useState(null); // 'roughNotes' | 'topic' | 'text' | null
+  const [speechLanguage, setSpeechLanguage] = useState("en-IN");
+  const recognitionRef = useRef(null);
+  const activeFieldRef = useRef(null);
+  const nextFieldRef = useRef(null);
+
+  // Keep activeFieldRef in sync with activeRecordingField
+  useEffect(() => {
+    activeFieldRef.current = activeRecordingField;
+  }, [activeRecordingField]);
+
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const rec = new SpeechRecognition();
+      rec.continuous = true;
+      rec.interimResults = false;
+      rec.lang = speechLanguage;
+
+      rec.onresult = (event) => {
+        let finalTranscript = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          }
+        }
+
+        if (finalTranscript) {
+          const field = activeFieldRef.current;
+          if (field === "roughNotes") {
+            setTabRoughNotes((prev) => {
+              const cleaned = prev.trim();
+              return cleaned ? cleaned + " " + finalTranscript.trim() : finalTranscript.trim();
+            });
+          } else if (field === "topic") {
+            setReportTopic((prev) => {
+              const cleaned = prev.trim();
+              return cleaned ? cleaned + " " + finalTranscript.trim() : finalTranscript.trim();
+            });
+          } else if (field === "text") {
+            setReportText((prev) => {
+              const cleaned = prev.trim();
+              return cleaned ? cleaned + " " + finalTranscript.trim() : finalTranscript.trim();
+            });
+          }
+        }
+      };
+
+      rec.onerror = (event) => {
+        console.error("Speech recognition error:", event.error);
+        if (event.error === "not-allowed") {
+          setReportError("Microphone permission denied. Please allow microphone access in your browser settings.");
+        } else {
+          setReportError(`Speech recognition error: ${event.error}`);
+        }
+        setActiveRecordingField(null);
+      };
+
+      rec.onend = () => {
+        const nextField = nextFieldRef.current;
+        if (nextField) {
+          nextFieldRef.current = null;
+          setActiveRecordingField(nextField);
+          try {
+            rec.lang = speechLanguage;
+            rec.start();
+          } catch (err) {
+            console.error("Speech recognition restart error:", err);
+            setActiveRecordingField(null);
+          }
+        } else {
+          setActiveRecordingField(null);
+        }
+      };
+
+      recognitionRef.current = rec;
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+    };
+  }, [speechLanguage]);
+
+  const handleToggleSpeech = (field) => {
+    if (!recognitionRef.current) {
+      setReportError("Speech recognition is not supported in this browser. Please try Google Chrome.");
+      return;
+    }
+
+    if (activeRecordingField === field) {
+      recognitionRef.current.stop();
+    } else {
+      setReportError("");
+      if (activeRecordingField) {
+        nextFieldRef.current = field;
+        recognitionRef.current.stop();
+      } else {
+        setActiveRecordingField(field);
+        try {
+          recognitionRef.current.lang = speechLanguage;
+          recognitionRef.current.start();
+        } catch (err) {
+          console.error("Speech recognition start error:", err);
+          setActiveRecordingField(null);
+        }
+      }
+    }
+  };
+
+  const renderMicButton = (field) => {
+    const isSupported = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+    const isRecording = activeRecordingField === field;
+
+    if (!isSupported) {
+      return (
+        <button
+          type="button"
+          title="Speech-to-text not supported in this browser"
+          style={{
+            position: "absolute",
+            right: "12px",
+            top: field === "topic" ? "50%" : "12px",
+            transform: field === "topic" ? "translateY(-50%)" : "none",
+            background: "none",
+            border: "none",
+            cursor: "not-allowed",
+            opacity: 0.3,
+            fontSize: "15px",
+            padding: 4,
+            zIndex: 5
+          }}
+          disabled
+        >
+          🔇
+        </button>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={() => handleToggleSpeech(field)}
+        title={isRecording ? "Listening... Click to stop" : "Click to speak / write with voice"}
+        className={isRecording ? "mic-pulsing" : ""}
+        style={{
+          position: "absolute",
+          right: "12px",
+          top: field === "topic" ? "50%" : "12px",
+          transform: field === "topic" ? "translateY(-50%)" : "none",
+          background: isRecording ? "#ef4444" : "none",
+          color: isRecording ? "white" : "#64748b",
+          border: "none",
+          borderRadius: "50%",
+          cursor: "pointer",
+          fontSize: "15px",
+          width: "28px",
+          height: "28px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "all 0.2s ease",
+          zIndex: 5
+        }}
+      >
+        {isRecording ? "🔴" : "🎙️"}
+      </button>
+    );
+  };
+
   const [activityCards, setActivityCards] = useState([]);
   const [lessonAssignments, setLessonAssignments] = useState([]);
   const [submissions, setSubmissions] = useState([]);
@@ -719,6 +1002,8 @@ export default function TrainingAndClassroomManager({ user }) {
   const [showActivityModal, setShowActivityModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [toast, setToast] = useState({ msg: "", type: "" });
+
+  const storageKeyPrefix = `spaceece_teacher_${user?.email || 'default'}`;
 
   const loadData = async () => {
     setLoading(true);
@@ -749,7 +1034,60 @@ export default function TrainingAndClassroomManager({ user }) {
 
   useEffect(() => {
     loadData();
-  }, []);
+    const savedReps = localStorage.getItem(`${storageKeyPrefix}_reports`);
+    if (savedReps) {
+      setReports(JSON.parse(savedReps));
+    } else {
+      setReports([{ id: 1, date: "05/06/2026", topic: "Sensory Learning Integration", text: "Children adapted beautifully to sensory bins. High engagement noted with basic phonics." }]);
+    }
+  }, [storageKeyPrefix]);
+
+  const handleAddReport = (e) => {
+    e.preventDefault();
+    if (!reportTopic.trim() || !reportText.trim()) return;
+    const updatedReps = [
+      {
+        id: Date.now(),
+        date: new Date().toLocaleDateString("en-IN"),
+        topic: reportTopic.trim(),
+        text: reportText.trim()
+      },
+      ...reports
+    ];
+    setReports(updatedReps);
+    localStorage.setItem(`${storageKeyPrefix}_reports`, JSON.stringify(updatedReps));
+    setReportTopic("");
+    setReportText("");
+    setToast({ msg: "Teaching notes and report saved successfully!", type: "success" });
+  };
+
+  const handleDraftWithAIForTab = async () => {
+    if (!tabRoughNotes.trim()) return;
+    setIsTabDrafting(true);
+    setReportError("");
+    try {
+      const response = await fetch("http://localhost:5000/api/teacher/reports/draft-ai", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("spaceece_auth_token")}`
+        },
+        body: JSON.stringify({ roughNotes: tabRoughNotes })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setReportTopic(data.topic);
+        setReportText(data.text);
+        setTabRoughNotes("");
+      } else {
+        setReportError(data.detail || data.message || "Failed to generate AI draft.");
+      }
+    } catch (err) {
+      setReportError(err.message || "Error connecting to server. Make sure the backend is running.");
+    } finally {
+      setIsTabDrafting(false);
+    }
+  };
 
   // Check if a specific activity has been submitted as completed
   const isActivityCompleted = (activity) => {
@@ -915,8 +1253,8 @@ export default function TrainingAndClassroomManager({ user }) {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
         <div>
-          <h1 style={S.pageTitle}>Training & Lessons</h1>
-          <p style={S.pageSub}>Lesson plans and activity schedules</p>
+          <h1 style={S.pageTitle}>Training & Classroom Portal</h1>
+          <p style={S.pageSub}>Access assigned courses, monitor training pathways, upload activities, and submit teaching notes.</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={() => setShowCreateModal(true)} style={{ ...S.primaryBtn, padding: "10px 16px", background: "white", color: "#3b82f6", border: "1.5px solid #3b82f6" }}>
@@ -928,120 +1266,266 @@ export default function TrainingAndClassroomManager({ user }) {
         </div>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 16, marginBottom: 20 }}>
-        <StatCard icon="📋" label="Total Cards" val={allItems.length} color="#3b82f6" bg="#dbeafe" />
-        <StatCard icon="⏳" label="Pending" val={pendingCount} color="#f59e0b" bg="#fef3c7" />
-        <StatCard icon="✅" label="Completed" val={completedCount} color="#10b981" bg="#d1fae5" />
+      {/* Sub-Tab Navigation Bar */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, borderBottom: "1px solid #e2e8f0", paddingBottom: "8px" }}>
+        {[
+          { key: "courses", label: "📚 Courses & Lesson Plans", icon: "🎓" },
+          { key: "reports", label: "📝 Notes & Teaching Reports", icon: "📋" }
+        ].map(sub => (
+          <button
+            key={sub.key}
+            onClick={() => setActiveSubTab(sub.key)}
+            style={{
+              background: activeSubTab === sub.key ? "#f59e0b" : "transparent",
+              color: activeSubTab === sub.key ? "white" : "#64748b",
+              border: "none",
+              borderRadius: "8px",
+              padding: "8px 16px",
+              fontSize: "12.5px",
+              fontWeight: "700",
+              cursor: "pointer",
+              transition: "all 0.2s"
+            }}
+          >
+            {sub.label}
+          </button>
+        ))}
       </div>
 
-      {/* Filters + Search */}
-      <div style={{ background: "white", borderRadius: 14, padding: "14px 18px", border: "1px solid #f1f5f9", marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-        <div style={{ flex: 1, minWidth: 200 }}>
-          <SearchBar value={search} onChange={setSearch} placeholder="Search lessons & activities..." />
-        </div>
-        {filterBtn("all", "All")}
-        {filterBtn("pending", "Pending")}
-        {filterBtn("completed", "Completed")}
-      </div>
+      {activeSubTab === "courses" && (
+        <>
+          {/* Stats */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 16, marginBottom: 20 }}>
+            <StatCard icon="📋" label="Total Cards" val={allItems.length} color="#3b82f6" bg="#dbeafe" />
+            <StatCard icon="⏳" label="Pending" val={pendingCount} color="#f59e0b" bg="#fef3c7" />
+            <StatCard icon="✅" label="Completed" val={completedCount} color="#10b981" bg="#d1fae5" />
+          </div>
 
-      {/* Cards */}
-      {filtered.length === 0 ? (
-        <div style={{ padding: 40, textAlign: "center", background: "white", borderRadius: 16, border: "1px dashed #cbd5e1", color: "#94a3b8" }}>
-          {allItems.length === 0
-            ? "No lesson plans or activities yet. Click 'Submit Activity' to upload an Excel file."
-            : "No items match your current filter."
-          }
-        </div>
-      ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(320px,1fr))", gap: 16 }}>
-          {filtered.map((item) => {
-            const isDone = item.status === "completed" || item.status === "reviewed" || item.status === "approved";
-            return (
-              <div
-                key={item.id}
-                style={{
-                  background: "white",
-                  borderRadius: 16,
-                  padding: "18px 20px",
-                  border: "1px solid #f1f5f9",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-                  borderLeft: `4px solid ${isDone ? "#10b981" : "#f59e0b"}`,
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: "#1c1917", flex: 1 }}>{item.title}</div>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    {item.dayNumber && (
-                      <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 9, fontWeight: 700, background: "#fef3c7", color: "#92400e" }}>
-                        Day {item.dayNumber}
-                      </span>
-                    )}
-                    {item.type === "activity" && (
-                      <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 9, fontWeight: 700, background: "#dbeafe", color: "#1d4ed8" }}>
-                        {item.level || "Activity"}
-                      </span>
-                    )}
-                    <StatusBadge status={isDone ? "completed" : "pending"} />
-                  </div>
-                </div>
-                <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
-                  📅 {formatDate(item.date)}
-                  {item.className && <span> · 🎒 {item.className}</span>}
-                  {item.duration && <span> · ⏱️ {item.duration}</span>}
-                </div>
-                {(item.milestone || item.developmentalDomain) && (
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
-                    {item.milestone && (
-                      <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 600, background: "#faf5ff", color: "#7c3aed", border: "1px solid #e9d5ff" }}>
-                        🏅 {item.milestone}
-                      </span>
-                    )}
-                    {item.developmentalDomain && (
-                      <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 600, background: "#f0fdf4", color: "#166534", border: "1px solid #bbf7d0" }}>
-                        🧠 {item.developmentalDomain}
-                      </span>
-                    )}
-                  </div>
-                )}
-                <p style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.5, marginBottom: 14, margin: 0, marginTop: 6 }}>
-                  {(item.description || "No description provided.").slice(0, 120)}
-                  {(item.description || "").length > 120 ? "..." : ""}
-                </p>
-                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                  <button
-                    onClick={() => {
-                      if (item.type === "activity") setDetailActivity(item.raw);
-                      else setDetailAssignment(item.raw);
+          {/* Filters + Search */}
+          <div style={{ background: "white", borderRadius: 14, padding: "14px 18px", border: "1px solid #f1f5f9", marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <SearchBar value={search} onChange={setSearch} placeholder="Search lessons & activities..." />
+            </div>
+            {filterBtn("all", "All")}
+            {filterBtn("pending", "Pending")}
+            {filterBtn("completed", "Completed")}
+          </div>
+
+          {/* Cards */}
+          {filtered.length === 0 ? (
+            <div style={{ padding: 40, textAlign: "center", background: "white", borderRadius: 16, border: "1px dashed #cbd5e1", color: "#94a3b8" }}>
+              {allItems.length === 0
+                ? "No lesson plans or activities yet. Click 'Submit Activity' to upload an Excel file."
+                : "No items match your current filter."
+              }
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(320px,1fr))", gap: 16 }}>
+              {filtered.map((item) => {
+                const isDone = item.status === "completed" || item.status === "reviewed" || item.status === "approved";
+                return (
+                  <div
+                    key={item.id}
+                    style={{
+                      background: "white",
+                      borderRadius: 16,
+                      padding: "18px 20px",
+                      border: "1px solid #f1f5f9",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                      borderLeft: `4px solid ${isDone ? "#10b981" : "#f59e0b"}`,
                     }}
-                    style={{ ...S.tblBtn, flex: 1 }}
                   >
-                    👁 View Details
-                  </button>
-                  {!isDone && (
-                    <button
-                      onClick={() => {
-                        if (item.type === "activity") setCompleteActivity(item.raw);
-                        else setCompleteLessonAssignment(item.raw);
-                      }}
-                      style={{ ...S.primaryBtn, flex: 1, padding: "8px 12px", fontSize: 12 }}
-                    >
-                      ✅ Mark Complete
-                    </button>
-                  )}
-                  {item.type === "activity" && (
-                    <button
-                      onClick={() => handleDeleteActivity(item.raw)}
-                      style={{ ...S.tblBtn, color: "#ef4444", borderColor: "#fca5a5", padding: "8px 10px", fontSize: 12, flex: "none" }}
-                      title="Delete activity"
-                    >
-                      🗑
-                    </button>
-                  )}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: "#1c1917", flex: 1 }}>{item.title}</div>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        {item.dayNumber && (
+                          <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 9, fontWeight: 700, background: "#fef3c7", color: "#92400e" }}>
+                            Day {item.dayNumber}
+                          </span>
+                        )}
+                        {item.type === "activity" && (
+                          <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 9, fontWeight: 700, background: "#dbeafe", color: "#1d4ed8" }}>
+                            {item.level || "Activity"}
+                          </span>
+                        )}
+                        <StatusBadge status={isDone ? "completed" : "pending"} />
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
+                      📅 {formatDate(item.date)}
+                      {item.className && <span> · 🎒 {item.className}</span>}
+                      {item.duration && <span> · ⏱️ {item.duration}</span>}
+                    </div>
+                    {(item.milestone || item.developmentalDomain) && (
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+                        {item.milestone && (
+                          <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 600, background: "#faf5ff", color: "#7c3aed", border: "1px solid #e9d5ff" }}>
+                            🏅 {item.milestone}
+                          </span>
+                        )}
+                        {item.developmentalDomain && (
+                          <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 600, background: "#f0fdf4", color: "#166534", border: "1px solid #bbf7d0" }}>
+                            🧠 {item.developmentalDomain}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    <p style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.5, marginBottom: 14, margin: 0, marginTop: 6 }}>
+                      {(item.description || "No description provided.").slice(0, 120)}
+                      {(item.description || "").length > 120 ? "..." : ""}
+                    </p>
+                    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                      <button
+                        onClick={() => {
+                          if (item.type === "activity") setDetailActivity(item.raw);
+                          else setDetailAssignment(item.raw);
+                        }}
+                        style={{ ...S.tblBtn, flex: 1 }}
+                      >
+                        👁 View Details
+                      </button>
+                      {!isDone && (
+                        <button
+                          onClick={() => {
+                            if (item.type === "activity") setCompleteActivity(item.raw);
+                            else setCompleteLessonAssignment(item.raw);
+                          }}
+                          style={{ ...S.primaryBtn, flex: 1, padding: "8px 12px", fontSize: 12 }}
+                        >
+                          ✅ Mark Complete
+                        </button>
+                      )}
+                      {item.type === "activity" && (
+                        <button
+                          onClick={() => handleDeleteActivity(item.raw)}
+                          style={{ ...S.tblBtn, color: "#ef4444", borderColor: "#fca5a5", padding: "8px 10px", fontSize: 12, flex: "none" }}
+                          title="Delete activity"
+                        >
+                          🗑
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {activeSubTab === "reports" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1.3fr", gap: 20 }}>
+          <SectionCard title="✍️ Draft Teaching Note / Progress Report">
+            {reportError && (
+              <div style={{ padding: "8px 12px", background: "#fef2f2", color: "#991b1b", borderRadius: 8, fontSize: 12, marginBottom: 12 }}>
+                {reportError}
+              </div>
+            )}
+            
+            {/* AI Drafting Assistant Notepad */}
+            <div style={{ marginBottom: 16, padding: 12, background: "#fffbeb", border: "1px dashed #fbbf24", borderRadius: 10 }}>
+              <label style={{ ...S.label, color: "#92400e", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span>AI Drafting Assistant ✨</span>
+                  <select
+                    value={speechLanguage}
+                    onChange={(e) => setSpeechLanguage(e.target.value)}
+                    style={{
+                      background: "white",
+                      border: "1.5px solid #fbbf24",
+                      borderRadius: 6,
+                      fontSize: 10,
+                      fontWeight: 600,
+                      color: "#92400e",
+                      padding: "2px 4px",
+                      cursor: "pointer",
+                      outline: "none"
+                    }}
+                    title="Voice Typing Language"
+                  >
+                    <option value="en-IN">🇮🇳 English (India)</option>
+                    <option value="hi-IN">🇮🇳 Hindi (हिंदी)</option>
+                    <option value="mr-IN">🇮🇳 Marathi (मराठी)</option>
+                    <option value="kn-IN">🇮🇳 Kannada (ಕನ್ನಡ)</option>
+                    <option value="te-IN">🇮🇳 Telugu (తెలుగు)</option>
+                    <option value="ta-IN">🇮🇳 Tamil (தமிழ்)</option>
+                  </select>
+                </span>
+                <button 
+                  type="button"
+                  onClick={handleDraftWithAIForTab} 
+                  disabled={isTabDrafting || !tabRoughNotes.trim()}
+                  style={{ 
+                    border: "none", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 800, cursor: "pointer",
+                    background: tabRoughNotes.trim() ? "#d97706" : "#cbd5e1",
+                    color: "white", transition: "all 0.2s"
+                  }}
+                >
+                  {isTabDrafting ? "Structuring..." : "Draft with AI ✨"}
+                </button>
+              </label>
+              <div style={{ position: "relative", marginTop: 6 }}>
+                <textarea
+                  rows={5}
+                  style={{ ...S.input, height: "auto", minHeight: "110px", resize: "vertical", background: "white", border: "1px solid #fcd34d", paddingRight: "44px" }}
+                  value={tabRoughNotes}
+                  onChange={(e) => setTabRoughNotes(e.target.value)}
+                  placeholder={activeRecordingField === "roughNotes" ? "Listening... Speak now." : "Type rough, messy observations here (e.g. 'Raj subtracted correctly with blocks. Priya was sharing pencil.')"}
+                />
+                {renderMicButton("roughNotes")}
+              </div>
+            </div>
+
+            <form onSubmit={handleAddReport}>
+              <div style={{ marginBottom: 12 }}>
+                <label style={S.label}>Report Core Subject / Focus Topic</label>
+                <div style={{ position: "relative" }}>
+                  <input 
+                    required 
+                    value={reportTopic} 
+                    onChange={e => setReportTopic(e.target.value)} 
+                    style={{ ...S.input, paddingRight: "44px" }} 
+                    placeholder={activeRecordingField === "topic" ? "Listening... Speak now." : "e.g., Weekly Class Performance Log"} 
+                  />
+                  {renderMicButton("topic")}
                 </div>
               </div>
-            );
-          })}
+              <div style={{ marginBottom: 16 }}>
+                <label style={S.label}>Observation Summary Details</label>
+                <div style={{ position: "relative" }}>
+                  <textarea 
+                    required 
+                    value={reportText} 
+                    onChange={e => setReportText(e.target.value)} 
+                    style={{ ...S.input, height: "110px", resize: "none", paddingRight: "44px" }} 
+                    placeholder={activeRecordingField === "text" ? "Listening... Speak now." : "Type detailed class notes or performance reports here..."} 
+                  />
+                  {renderMicButton("text")}
+                </div>
+              </div>
+              <button type="submit" style={{ ...S.primaryBtn, width: "100%" }}>Save Report Entry</button>
+            </form>
+          </SectionCard>
+
+          <SectionCard title="🗃️ Historic Saved Notebook Logs">
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {reports.length === 0 ? (
+                <div style={{ padding: 30, textAlign: "center", border: "1px dashed #cbd5e1", borderRadius: 12, color: "#94a3b8", fontSize: 12 }}>
+                  No reports saved yet. Draft and save your first log above.
+                </div>
+              ) : (
+                reports.map(rep => (
+                  <div key={rep.id} style={{ padding: "14px", background: "white", border: "1px solid #f1f5f9", borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.02)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                      <span style={{ fontSize: "13px", fontWeight: "800", color: "#d97706" }}>📌 {rep.topic}</span>
+                      <span style={{ fontSize: "11px", color: "#94a3b8" }}>{rep.date}</span>
+                    </div>
+                    <div style={{ marginTop: 10 }}>{formatReportText(rep.text)}</div>
+                  </div>
+                ))
+              )}
+            </div>
+          </SectionCard>
         </div>
       )}
     </div>
