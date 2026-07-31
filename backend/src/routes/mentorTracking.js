@@ -34,6 +34,18 @@ function requireDbConnection(req, res, next) {
 
 router.use(requireDbConnection);
 
+// --- Mentees ---
+router.get("/mentees", async (req, res, next) => {
+  try {
+    const User = mongoose.model("User");
+    const mentees = await User.find({ role: "teacher", assignedMentor: req.user.id })
+      .select("name email phone status");
+    res.json(mentees);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // --- PDCA / Growth Cycles ---
 router.get("/pdca", async (req, res, next) => {
   try {

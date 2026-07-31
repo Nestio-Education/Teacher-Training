@@ -59,30 +59,27 @@ export default function AttendanceManager({ user, onRosterChange }) {
   const otpInputRefs = useRef([]);
 
   // Load teacher profile, center, and class on mount
+  // Load teacher profile, center, and class on mount or when user updates
   useEffect(() => {
-    getTeacherMe()
-      .then(res => {
-        setTeacherProfile(res.teacher);
-        const defaultClassId = (res.teacher?.teacherProfile?.classes || [])[0]?._id || (res.teacher?.teacherProfile?.classes || [])[0];
-        
-        getTeacherClasses()
-          .then(classRes => {
-            const cls = classRes.classes || [];
-            setClasses(cls);
-            if (defaultClassId) {
-              setSelectedClassId(defaultClassId);
-            } else if (cls.length > 0) {
-              setSelectedClassId(cls[0]._id || cls[0].id);
-            }
-          })
-          .catch(err => {
-            console.error("Error fetching teacher classes:", err);
-          });
-      })
-      .catch(err => {
-        console.error("Error fetching teacher profile:", err);
-      });
-  }, []);
+    if (user) {
+      setTeacherProfile(user);
+      const defaultClassId = (user.teacherProfile?.classes || [])[0]?._id || (user.teacherProfile?.classes || [])[0];
+      
+      getTeacherClasses()
+        .then(classRes => {
+          const cls = classRes.classes || [];
+          setClasses(cls);
+          if (defaultClassId && !selectedClassId) {
+            setSelectedClassId(defaultClassId);
+          } else if (cls.length > 0 && !selectedClassId) {
+            setSelectedClassId(cls[0]._id || cls[0].id);
+          }
+        })
+        .catch(err => {
+          console.error("Error fetching teacher classes:", err);
+        });
+    }
+  }, [user]);
 
   // Fetch children list and attendance for selected date
   useEffect(() => {
