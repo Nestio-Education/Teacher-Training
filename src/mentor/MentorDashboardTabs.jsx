@@ -1248,24 +1248,25 @@ export function ImpactCapstoneTab({ user, setToast, onUserUpdate }) {
   }, []);
 
   const MILESTONES = [
-    { id: 1, title: "Problem Identification", desc: "Identify a core challenge in the community." },
-    { id: 2, title: "Solution Design", desc: "Design a targeted intervention." },
-    { id: 3, title: "Implementation", desc: "Execute the solution and collect data." },
-    { id: 4, title: "Evaluation", desc: "Analyze impact and finalize the report." }
+    { id: 1, title: "Problem Identification", desc: "Identify a core challenge in the early childhood community." },
+    { id: 2, title: "Solution Design", desc: "Design a targeted intervention & pedagogical framework." },
+    { id: 3, title: "Implementation", desc: "Execute the solution in classroom settings & collect data." },
+    { id: 4, title: "Evaluation", desc: "Analyze impact metrics, synthesize findings & finalize report." }
   ];
 
   const milestone = Math.min(submissions.length + 1, 4);
+  const isAllCompleted = submissions.length >= 4;
 
   const handleSubmit = async () => {
     if(!capstoneText.trim()) {
-      setToast?.({ msg: "Please enter your submission notes.", type: "error" });
+      setToast?.({ msg: "Please enter your submission notes or document link.", type: "error" });
       return;
     }
     setSubmitting(true);
     
     try {
       await submitCapstoneMilestone(milestone, capstoneText, "");
-      setToast?.({ msg: "Capstone milestone submitted successfully!", type: "success" });
+      setToast?.({ msg: `Milestone ${milestone} submitted successfully!`, type: "success" });
       setCapstoneText("");
       fetchSubmissions();
     } catch (err) {
@@ -1278,74 +1279,281 @@ export function ImpactCapstoneTab({ user, setToast, onUserUpdate }) {
   const handleDownload = (e, file) => {
     e.preventDefault();
     setToast?.({ msg: `Downloading ${file}...`, type: "info" });
+    const link = document.createElement("a");
+    link.href = `/resources/${encodeURIComponent(file)}`;
+    link.download = file;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
+
+  const menteesCount = user?.mentorProfile?.assignedTeachers?.length || 0;
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
-      <h1 style={S.pageTitle}>Impact & Capstone</h1>
-      <p style={S.pageSub}>Track your Semester 4 Capstone project and overall community impact.</p>
-
-      {/* Impact Overview */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 30 }}>
-        <div style={{ background: "linear-gradient(135deg, #10b981, #059669)", padding: 24, borderRadius: 16, color: "white" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, opacity: 0.9, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Impact Score</div>
-          <div style={{ fontSize: 36, fontWeight: 900 }}>A+</div>
-          <div style={{ fontSize: 13, marginTop: 4, opacity: 0.9 }}>Top 10% of Mentors</div>
-        </div>
-        <div style={{ background: "white", padding: 24, borderRadius: 16, border: "1px solid #e2e8f0" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Teachers Guided</div>
-          <div style={{ fontSize: 36, fontWeight: 900, color: "#0f172a" }}>{user?.mentorProfile?.assignedTeachers?.length || 0}</div>
-          <div style={{ fontSize: 13, marginTop: 4, color: "#10b981", fontWeight: 600 }}>Active mentees</div>
-        </div>
-        <div style={{ background: "white", padding: 24, borderRadius: 16, border: "1px solid #e2e8f0" }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Capstone Status</div>
-          <div style={{ fontSize: 24, fontWeight: 900, color: "#0f172a", marginTop: 8 }}>Milestone {milestone}/4</div>
-          <div style={{ fontSize: 13, marginTop: 4, color: "#f59e0b", fontWeight: 600 }}>In Progress</div>
+      {/* Role Badge + Page Title */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", background: "#f1f5f9", color: "#475569", padding: "2px 8px", borderRadius: 4, border: "1px solid #e2e8f0" }}>
+              Mentor Workspace
+            </span>
+          </div>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0f172a", margin: 0, letterSpacing: "-0.5px" }}>Impact & Capstone</h1>
+          <p style={{ fontSize: 13, color: "#64748b", margin: "4px 0 0" }}>Track your Semester 4 Capstone milestones and mentee leadership impact.</p>
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 350px", gap: 24 }}>
-        <SectionCard title="🎓 Capstone Project Tracker">
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 30, position: "relative" }}>
-            <div style={{ position: "absolute", top: 15, left: 20, right: 20, height: 4, background: "#e2e8f0", zIndex: 0 }}>
-              <div style={{ height: "100%", width: `${((milestone - 1) / 3) * 100}%`, background: "#3b82f6", transition: "width 0.4s ease" }}></div>
+      {/* Top 3 Compact Industrial Stat Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 24 }}>
+        
+        {/* Stat 1: Impact Score */}
+        <div style={{ background: "#ffffff", padding: "18px 20px", borderRadius: 12, border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>Impact Score</span>
+            <span style={{ fontSize: 10, fontWeight: 700, background: "#d1fae5", color: "#047857", padding: "2px 6px", borderRadius: 4 }}>● Top 10%</span>
+          </div>
+          <div style={{ fontSize: 32, fontWeight: 800, color: "#0f172a", letterSpacing: "-0.5px" }}>A+</div>
+          <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>Evaluated from mentee progress & reviews</div>
+        </div>
+
+        {/* Stat 2: Teachers Guided */}
+        <div style={{ background: "#ffffff", padding: "18px 20px", borderRadius: 12, border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>Teachers Guided</span>
+            <span style={{ fontSize: 10, fontWeight: 700, background: "#e0f2fe", color: "#0369a1", padding: "2px 6px", borderRadius: 4 }}>● Active</span>
+          </div>
+          <div style={{ fontSize: 32, fontWeight: 800, color: "#0f172a", letterSpacing: "-0.5px" }}>{menteesCount}</div>
+          <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>Fellows currently assigned under mentorship</div>
+        </div>
+
+        {/* Stat 3: Capstone Status */}
+        <div style={{ background: "#ffffff", padding: "18px 20px", borderRadius: 12, border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>Capstone Status</span>
+            <span style={{ fontSize: 10, fontWeight: 700, background: isAllCompleted ? "#d1fae5" : "#fef3c7", color: isAllCompleted ? "#047857" : "#b45309", padding: "2px 6px", borderRadius: 4 }}>
+              {isAllCompleted ? "Completed" : "In Progress"}
+            </span>
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: "#0f172a", marginTop: 4, letterSpacing: "-0.3px" }}>
+            {isAllCompleted ? "4 / 4 Completed" : `Milestone ${milestone} of 4`}
+          </div>
+          <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{submissions.length} milestone{submissions.length === 1 ? "" : "s"} submitted & verified</div>
+        </div>
+      </div>
+
+      {/* Main Grid: Capstone Hero & Resources Sidebar */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20, alignItems: "start" }}>
+        
+        {/* HERO: Capstone Project Tracker */}
+        <div style={{ background: "#ffffff", borderRadius: 12, border: "1px solid #e2e8f0", padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, paddingBottom: 14, borderBottom: "1px solid #f1f5f9" }}>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#0f172a" }}>Capstone Project Sequence</h2>
+              <p style={{ margin: "2px 0 0", fontSize: 12, color: "#64748b" }}>Complete each milestone in order. Submissions sync with program advisors.</p>
             </div>
-            {MILESTONES.map(m => (
-              <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", zIndex: 1, width: 80 }}>
-                <div style={{ width: 34, height: 34, borderRadius: "50%", background: milestone > m.id ? "#3b82f6" : milestone === m.id ? "#eff6ff" : "white", border: `3px solid ${milestone >= m.id ? "#3b82f6" : "#cbd5e1"}`, color: milestone > m.id ? "white" : milestone === m.id ? "#3b82f6" : "#cbd5e1", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, marginBottom: 8, transition: "all 0.3s" }}>
-                  {milestone > m.id ? "✓" : m.id}
-                </div>
-                <div style={{ fontSize: 11, fontWeight: 700, textAlign: "center", color: milestone >= m.id ? "#1e293b" : "#94a3b8" }}>{m.title}</div>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#475569", background: "#f8fafc", padding: "4px 10px", borderRadius: 6, border: "1px solid #e2e8f0" }}>
+              Progress: {Math.round((submissions.length / 4) * 100)}%
+            </span>
+          </div>
+
+          {/* Stepper Progress Bar */}
+          <div style={{ position: "relative", marginBottom: 32, padding: "0 8px" }}>
+            {/* Background Line */}
+            <div style={{ position: "absolute", top: 14, left: 32, right: 32, height: 2, background: "#e2e8f0", zIndex: 0 }}>
+              <div style={{ height: "100%", width: `${(Math.max(0, submissions.length) / 3) * 100}%`, background: "#2563eb", transition: "width 0.4s ease" }} />
+            </div>
+
+            {/* Nodes */}
+            <div style={{ display: "flex", justifyContent: "space-between", position: "relative", zIndex: 1 }}>
+              {MILESTONES.map((m) => {
+                const isPassed = submissions.length >= m.id;
+                const isCurrent = milestone === m.id && !isAllCompleted;
+                return (
+                  <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 90 }}>
+                    <div style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: "50%",
+                      background: isPassed ? "#059669" : isCurrent ? "#2563eb" : "#f8fafc",
+                      border: `2px solid ${isPassed ? "#059669" : isCurrent ? "#2563eb" : "#cbd5e1"}`,
+                      color: isPassed || isCurrent ? "#ffffff" : "#94a3b8",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 12,
+                      fontWeight: 800,
+                      marginBottom: 8,
+                      boxShadow: isCurrent ? "0 0 0 4px rgba(37, 99, 235, 0.15)" : "none",
+                      transition: "all 0.25s ease"
+                    }}>
+                      {isPassed ? "✓" : m.id}
+                    </div>
+                    <div style={{ fontSize: 11, fontWeight: isCurrent || isPassed ? 700 : 500, textAlign: "center", color: isCurrent ? "#0f172a" : isPassed ? "#059669" : "#64748b", lineHeight: 1.3, height: 28 }}>
+                      {m.title}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Submission / Active Milestone Form */}
+          {!isAllCompleted ? (
+            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10, padding: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#2563eb", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Milestone {milestone} of 4
+                </span>
+                <span style={{ fontSize: 10, fontWeight: 600, color: "#64748b", background: "#ffffff", padding: "2px 8px", borderRadius: 4, border: "1px solid #e2e8f0" }}>
+                  Status: Pending Submission
+                </span>
               </div>
+              <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 800, color: "#0f172a" }}>{MILESTONES[milestone - 1]?.title}</h3>
+              <p style={{ margin: "0 0 16px", fontSize: 12, color: "#64748b", lineHeight: 1.5 }}>{MILESTONES[milestone - 1]?.desc}</p>
+              
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#334155", marginBottom: 4 }}>
+                  Submission Deliverables / Evidence Link <span style={{ color: "#ef4444" }}>*</span>
+                </label>
+                <textarea 
+                  style={{
+                    width: "100%",
+                    minHeight: 110,
+                    padding: "10px 12px",
+                    fontSize: 13,
+                    color: "#0f172a",
+                    background: "#ffffff",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: 8,
+                    outline: "none",
+                    fontFamily: "inherit",
+                    boxSizing: "border-box",
+                    transition: "border-color 0.15s, box-shadow 0.15s"
+                  }} 
+                  placeholder="Provide a summary of your work or paste a link to your Google Drive / Docs evidence folder..."
+                  value={capstoneText}
+                  onChange={e => setCapstoneText(e.target.value)}
+                  onFocus={e => { e.target.style.borderColor = "#2563eb"; e.target.style.boxShadow = "0 0 0 3px rgba(37,99,235,0.1)"; }}
+                  onBlur={e => { e.target.style.borderColor = "#cbd5e1"; e.target.style.boxShadow = "none"; }}
+                />
+                <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
+                  💡 Helper: Paste a Drive/Docs link or write 2–3 detailed sentences explaining your deliverables.
+                </div>
+              </div>
+              
+              <button 
+                onClick={handleSubmit} 
+                disabled={submitting} 
+                style={{
+                  width: "100%",
+                  padding: "11px 16px",
+                  background: "#0f172a",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: submitting ? "not-allowed" : "pointer",
+                  opacity: submitting ? 0.7 : 1,
+                  transition: "background 0.2s"
+                }}
+                onMouseOver={e => { if(!submitting) e.target.style.background = "#1e293b"; }}
+                onMouseOut={e => { if(!submitting) e.target.style.background = "#0f172a"; }}
+              >
+                {submitting ? "Submitting..." : `Submit Milestone ${milestone}`}
+              </button>
+            </div>
+          ) : (
+            <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: 24, textAlign: "center" }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>🎉</div>
+              <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 800, color: "#166534" }}>All Capstone Milestones Completed</h3>
+              <p style={{ margin: 0, fontSize: 13, color: "#15803d" }}>Congratulations! You have submitted all 4 milestones for your Semester 4 Capstone project.</p>
+            </div>
+          )}
+
+          {/* Past Submissions Log */}
+          {submissions.length > 0 && (
+            <div style={{ marginTop: 24, paddingTop: 20, borderTop: "1px solid #f1f5f9" }}>
+              <h3 style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", margin: "0 0 12px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                Submission History ({submissions.length})
+              </h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {submissions.map((sub, idx) => (
+                  <div key={sub._id || idx} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px 14px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#0f172a" }}>
+                        Milestone {sub.milestone || idx + 1}: {MILESTONES[(sub.milestone || idx + 1) - 1]?.title}
+                      </span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: "#047857", background: "#d1fae5", padding: "2px 6px", borderRadius: 4 }}>
+                        ✓ Verified
+                      </span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: 12, color: "#475569", lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
+                      {sub.text || sub.notes || "Submission logged."}
+                    </p>
+                    {sub.createdAt && (
+                      <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>
+                        Logged: {new Date(sub.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* SLIM SIDEBAR: Resources & Guidance */}
+        <div style={{ background: "#ffffff", borderRadius: 12, border: "1px solid #e2e8f0", padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+          <h3 style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 800, color: "#0f172a" }}>📎 Resources & Guides</h3>
+          <p style={{ margin: "0 0 14px", fontSize: 11, color: "#64748b" }}>Reference files for Capstone preparation.</p>
+          
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {[
+              { title: "Semester 4 Handbook (PDF)", file: "Semester 4 Handbook.pdf", size: "2.4 MB", type: "PDF" },
+              { title: "Capstone Presentation Template", file: "Capstone Presentation Template.pptx", size: "1.8 MB", type: "PPTX" },
+              { title: "Impact Measurement Guidelines", file: "Impact Measurement Guidelines.pdf", size: "1.1 MB", type: "PDF" },
+              { title: "Example Capstone Reports", file: "Example Capstone Reports.zip", size: "4.5 MB", type: "ZIP" },
+            ].map((res, i) => (
+              <a 
+                key={i}
+                href="#"
+                onClick={(e) => handleDownload(e, res.file)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "10px 12px",
+                  background: "#f8fafc",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: 8,
+                  textDecoration: "none",
+                  transition: "all 0.15s ease"
+                }}
+                onMouseOver={e => { e.currentTarget.style.background = "#f1f5f9"; e.currentTarget.style.borderColor = "#cbd5e1"; }}
+                onMouseOut={e => { e.currentTarget.style.background = "#f8fafc"; e.currentTarget.style.borderColor = "#e2e8f0"; }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                  <span style={{ fontSize: 14 }}>📄</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {res.title}
+                    </div>
+                    <div style={{ fontSize: 10, color: "#94a3b8" }}>{res.type} · {res.size}</div>
+                  </div>
+                </div>
+                <span style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>↓</span>
+              </a>
             ))}
           </div>
 
-          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: 20 }}>
-            <h3 style={{ margin: "0 0 8px", fontSize: 16, color: "#0f172a" }}>Current: {MILESTONES[milestone-1]?.title}</h3>
-            <p style={{ margin: "0 0 16px", fontSize: 13, color: "#64748b" }}>{MILESTONES[milestone-1]?.desc}</p>
-            
-            <label style={S.label}>Submission Notes / Evidence Link</label>
-            <textarea 
-              style={{...S.input, minHeight: 100, marginBottom: 16}} 
-              placeholder="Provide a summary of your work or link to your evidence folder (Drive/Docs)..."
-              value={capstoneText}
-              onChange={e => setCapstoneText(e.target.value)}
-            />
-            
-            <button onClick={handleSubmit} disabled={submitting} style={{...S.primaryBtn, width: "100%", opacity: submitting ? 0.7 : 1}}>
-              {submitting ? "Submitting..." : `Submit Milestone ${milestone}`}
-            </button>
+          <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px solid #f1f5f9", background: "#faf5ff", padding: 12, borderRadius: 8, border: "1px solid #f3e8ff" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#7e22ce", marginBottom: 2 }}>💬 Need Guidance?</div>
+            <div style={{ fontSize: 11, color: "#6b21a8", lineHeight: 1.4 }}>Contact your assigned program coordinator or reach out via Feedback tab.</div>
           </div>
-        </SectionCard>
+        </div>
 
-        <SectionCard title="📎 Resources">
-          <ul style={{ paddingLeft: 20, margin: 0, color: "#3b82f6", fontSize: 13, lineHeight: 2 }}>
-            <li><a href="#" onClick={(e) => handleDownload(e, "Semester 4 Handbook.pdf")} style={{ color: "inherit", textDecoration: "none" }}>Semester 4 Handbook (PDF)</a></li>
-            <li><a href="#" onClick={(e) => handleDownload(e, "Capstone Presentation Template.pptx")} style={{ color: "inherit", textDecoration: "none" }}>Capstone Presentation Template</a></li>
-            <li><a href="#" onClick={(e) => handleDownload(e, "Impact Measurement Guidelines.pdf")} style={{ color: "inherit", textDecoration: "none" }}>Impact Measurement Guidelines</a></li>
-            <li><a href="#" onClick={(e) => handleDownload(e, "Example Capstone Reports.zip")} style={{ color: "inherit", textDecoration: "none" }}>Example Capstone Reports</a></li>
-          </ul>
-        </SectionCard>
       </div>
     </div>
   );

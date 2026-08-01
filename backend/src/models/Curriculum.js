@@ -4,17 +4,36 @@ const MaterialSchema = new mongoose.Schema({
   type: {
     type: String,
     enum: ["pdf", "video", "link", "doc", "image"],
-    required: true,
+    default: "doc",
   },
   fileUrl: {
     type: String,
-    required: true,
+    default: "",
   },
   title: String,
   uploadedAt: {
     type: Date,
     default: Date.now,
   },
+});
+
+const ModuleSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: true,
+  },
+  modeOfDelivery: [{ type: String }], // e.g. ["Bootcamp", "Field Visit", "Online", "Roleplay"]
+  deliverables: [{ type: String }],  // e.g. ["Child observation sheets", "Milestone chart"]
+  assessmentMethods: [{ type: String }], // e.g. ["Observation checklist", "Written evaluation"]
+  durationWeeks: {
+    type: Number,
+    default: 4,
+  },
+  orderIndex: {
+    type: Number,
+    default: 0,
+  },
+  resources: [MaterialSchema],
 });
 
 const TopicSchema = new mongoose.Schema({
@@ -51,6 +70,13 @@ const curriculumPhaseSchema = new mongoose.Schema(
     },
     startDate: Date,
     endDate: Date,
+    status: {
+      type: String,
+      enum: ["upcoming", "active", "closed"],
+      default: "active",
+    },
+    skillThemes: [{ type: String }],
+    modules: [ModuleSchema],
     topics: [TopicSchema],
   },
   { timestamps: true }
@@ -69,15 +95,32 @@ const curriculumPlanSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    description: {
+      type: String,
+      default: "",
+    },
+    durationMonths: {
+      type: Number,
+      default: 12,
+    },
+    numSemesters: {
+      type: Number,
+      default: 4,
+    },
     durationType: {
       type: String,
-      enum: ["1yr", "2yr"],
-      required: true,
+      default: "1yr",
     },
+    skillThemes: [{ type: String }],
+    assignedFellows: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     status: {
       type: String,
-      enum: ["draft", "published"],
+      enum: ["draft", "published", "archived"],
       default: "draft",
+    },
+    version: {
+      type: Number,
+      default: 1,
     },
   },
   { timestamps: true }
@@ -105,12 +148,23 @@ const curriculumAssignmentSchema = new mongoose.Schema(
     activePhase: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "CurriculumPhase",
-      required: true,
     },
+    movementHistory: [
+      {
+        movedFromPhase: { type: mongoose.Schema.Types.ObjectId, ref: "CurriculumPhase" },
+        movedToPhase: { type: mongoose.Schema.Types.ObjectId, ref: "CurriculumPhase" },
+        movedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        movedAt: { type: Date, default: Date.now },
+      },
+    ],
     status: {
       type: String,
-      enum: ["active", "completed", "dropped"],
+      enum: ["active", "completed", "paused"],
       default: "active",
+    },
+    assignedAt: {
+      type: Date,
+      default: Date.now,
     },
   },
   { timestamps: true }

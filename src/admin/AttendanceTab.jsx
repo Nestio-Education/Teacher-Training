@@ -174,20 +174,21 @@ export default function AttendanceTab({ teachers: initialTeachers = [], role = "
     return Array.from({ length: 4 }, (_, i) => {
       const weekStart = new Date(now);
       weekStart.setDate(weekStart.getDate() - (3 - i) * 7);
+      weekStart.setHours(0, 0, 0, 0);
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
       const weekRecords = records.filter(r => {
         const d = r.attendanceDate ? new Date(r.attendanceDate) : null;
         return d && d >= weekStart && d <= weekEnd;
       });
       const present = weekRecords.filter(r => ["present", "late"].includes(r.status)).length;
-      const total = weekRecords.length || 1;
       return {
         label: `W${4 - i}`,
         present,
         absent: weekRecords.filter(r => r.status === "absent").length,
         total: weekRecords.length,
-        pct: Math.round((present / total) * 100),
+        pct: weekRecords.length ? Math.round((present / weekRecords.length) * 100) : 0,
       };
     });
   }, [records]);
@@ -198,10 +199,13 @@ export default function AttendanceTab({ teachers: initialTeachers = [], role = "
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(now);
       d.setDate(d.getDate() - (6 - i));
-      const dayStr = d.toISOString().split("T")[0];
+      const year = d.getFullYear();
+      const month = d.getMonth();
+      const date = d.getDate();
       const dayRecords = records.filter(r => {
-        const rd = r.attendanceDate ? new Date(r.attendanceDate).toISOString().split("T")[0] : "";
-        return rd === dayStr;
+        if (!r.attendanceDate) return false;
+        const rd = new Date(r.attendanceDate);
+        return rd.getFullYear() === year && rd.getMonth() === month && rd.getDate() === date;
       });
       const present = dayRecords.filter(r => ["present", "late"].includes(r.status)).length;
       return {
