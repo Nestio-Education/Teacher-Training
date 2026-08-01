@@ -3,12 +3,9 @@ import { Logo, Toast, globalCSS } from "../components/Shared";
 import { t, getCurrentLanguageCode, LANG_CHANGE_EVENT } from "../services/i18n";
 import OverviewTab from "../admin/OverviewTab";
 import CenterManagementTab from "../admin/CenterManagementTab";
-import TeacherManagementTab from "../admin/TeacherManagementTab";
-import LessonPlanManagementTab from "../admin/LessonPlanManagementTab";
 import CurriculumTrainingTab from "../admin/CurriculumTrainingTab";
 import ActivityMonitoringTab from "../admin/ActivityMonitoringTab";
 import ChildrenManagementTab from "../admin/ChildrenManagement";
-import TrainerManagementTab from "../admin/TrainerManagementTab";
 import AssignmentReviewTab from "../admin/AssignmentReviewTab";
 import AttendanceTab from "../admin/AttendanceTab";
 import ReportsTab from "../admin/ReportsTab";
@@ -19,6 +16,7 @@ import FeedbackManagementTab from "../admin/FeedbackManagementTab";
 import ParentModulesManagementTab from "../admin/ParentModulesManagementTab";
 // End: Snehal change
 import AdminUserGuide from "./adminuserguide";
+import MentorManagementTab from "../mentor/MentorManagementTab";
 //import ScheduleManagementTab from "../admin/ScheduleManagementTab";
 //import CertificateManagementTab from "../admin/CertificateManagementTab";
 //import AutomationTab from "../admin/AutomationTab";
@@ -89,23 +87,16 @@ export default function AdminDashboard({ user, onLogout }) {
   const navItems = [
     { key:"overview",     label:t("Admin Dashboard"),          icon:"\uD83D\uDCCA" },
     { key:"centers",      label:t("Center Management"), icon:"\uD83C\uDFEB" },
-    { key:"teachers",     label:t("User Management"),icon:"\uD83D\uDC69\u200D\uD83C\uDFEB", badge:pending.length },
+    { key:"mentorMgmt",   label:t("Mentor Management"),  icon:"👨‍🏫" },
     { key: "curriculum", label:t("Course Management"), icon: "\uD83D\uDCDA" },
     // Start: Snehal change
     { key: "parentModules", label:t("Parent Capacity Building"), icon: "\uD83D\uDC6A" },
     // End: Snehal change
     { key: "activities", label:t("Activity Monitoring"), icon: "\uD83D\uDCF8" },
-    { key: "lessonplans", label:t("Lesson Plans"), icon: "\uD83D\uDCCB" },
-
     { key: "children", label:t("Children & Classes"), icon: "\uD83D\uDC76" },
-    { key:"trainers",     label:t("Trainer Management"),icon:"\uD83C\uDF93" },
     { key:"attendance",   label:t("Attendance"),        icon:"\uD83D\uDCC5" },
-
     { key:"reports",      label:t("Reports & Analytics"),icon:"\uD83D\uDCC8" },
-    //{ key:"schedules",    label:t("Schedule Management"), icon:"\uD83D\uDCC5" },
-    //{ key:"certificates", label:t("Certificates"),        icon:"\uD83C\uDFC6" },
- { key:"feedback",     label:t("Feedback"),              icon:"\uD83D\uDCAC" },
-    //{ key:"automation",   label:t("Automation Center"),     icon:"\u2699\uFE0F" },
+    { key:"feedback",     label:t("Feedback"),              icon:"\uD83D\uDCAC" },
   ];
   const persistTeachers = (updater) => {
   setTeachers(prev => {
@@ -127,13 +118,10 @@ export default function AdminDashboard({ user, onLogout }) {
     switch(activeTab) {
       case "overview":     return <OverviewTab teachers={teachers} courses={courses} batches={[]} sessions={[]}/>;
       case "centers": return <CenterManagementTab allTeachers={teachers} setToast={setToast}/>;
-      case "teachers": return <TeacherManagementTab teachers={teachers} setTeachers={persistTeachers} setToast={setToast}/>;
       case "curriculum": return <CurriculumTrainingTab setToast={setToast}/>;
       // case "assessments": return <AssessmentResultsTab setToast={setToast}/>;
       case "activities": return <ActivityMonitoringTab setToast={setToast}/>;
-      case "lessonplans": return <LessonPlanManagementTab setToast={setToast} />;
       case "children": return <ChildrenManagementTab setToast={setToast}/>;
-      case "trainers": return <TrainerManagementTab batches={[]} setToast={setToast}/>;
       case "attendance":   return <AttendanceTab teachers={teachers} sessions={[]}/>;
       case "reports":      return <ReportsTab teachers={teachers} courses={courses} batches={[]}/>;
       case "notifications":return <NotificationsTab teachers={teachers} setToast={setToast}/>;
@@ -141,6 +129,7 @@ export default function AdminDashboard({ user, onLogout }) {
       //case "schedules":    return <ScheduleManagementTab setToast={setToast}/>;
      // case "certificates": return <CertificateManagementTab setToast={setToast}/>;
       case "feedback":     return <FeedbackManagementTab setToast={setToast}/>;
+      case "mentorMgmt":   return <MentorManagementTab setToast={setToast} role="admin" />;
       // Start: Snehal change
       case "parentModules": return <ParentModulesManagementTab setToast={setToast}/>;
       // End: Snehal change

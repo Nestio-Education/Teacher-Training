@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { S, SectionCard, Toast, StatCard, StatusBadge, SearchBar, Modal } from "../components/Shared";
-import { uploadFile, submitFeedback, getFeedbacks, updateMentorMe, changeMentorPassword, recordMenteeObservation, getMenteeObservations, submitCapstoneMilestone, getCapstoneSubmissions, submitPDCACycle, getPDCACycles, getMentorFellows, updateFellowStatus, getMentorMe, updateMenteeTracking, claimFellow, unclaimFellow, deleteMentorFellow } from "../services/api";
+import { uploadFile, submitFeedback, getFeedbacks, updateMentorMe, changeMentorPassword, recordMenteeObservation, getMenteeObservations, submitCapstoneMilestone, getCapstoneSubmissions, submitPDCACycle, getPDCACycles, getMentorFellows, updateFellowStatus, getMentorMe, updateMenteeTracking, claimFellow, unclaimFellow, deleteMentorFellow, getMentorAttendance } from "../services/api";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
@@ -18,6 +18,30 @@ export function MentorProfileTab({ user, onWorkingCenterChange, onUserUpdate }) 
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState(""); 
+  const [stats, setStats] = useState({ pdca: 0, capstones: 0, attendance: 0 });
+
+  useEffect(() => {
+    getPDCACycles()
+      .then(res => {
+        setStats(s => ({ ...s, pdca: (res.cycles || []).length }));
+      })
+      .catch(err => console.error("Failed to load PDCA count for profile", err));
+
+    getCapstoneSubmissions()
+      .then(res => {
+        setStats(s => ({ ...s, capstones: (res.submissions || []).length }));
+      })
+      .catch(err => console.error("Failed to load Capstones count for profile", err));
+
+    getMentorAttendance()
+      .then(res => {
+        const records = res.records || [];
+        const present = records.filter(r => ["present", "late"].includes(r.status)).length;
+        const pct = records.length ? Math.round((present / records.length) * 100) : 100;
+        setStats(s => ({ ...s, attendance: pct }));
+      })
+      .catch(err => console.error("Failed to load mentor attendance for profile", err));
+  }, [user]);
   
   const [profilePhoto, setProfilePhoto] = useState(user.photoUrl || null);
   const [imageLoadError, setImageLoadError] = useState(false);
@@ -204,6 +228,14 @@ export function MentorProfileTab({ user, onWorkingCenterChange, onUserUpdate }) 
         </div>
       </div>
 
+      {/* ── Performance KPI Cards ── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 14, marginBottom: 24 }}>
+        <StatCard icon="👩‍🏫" label="Active Mentees" val={user.mentorProfile?.assignedTeachers?.length || 0} color="#3b82f6" bg="#dbeafe" />
+        <StatCard icon="🔄" label="PDCA Growth Cycles" val={stats.pdca} color="#10b981" bg="#d1fae5" />
+        <StatCard icon="🎓" label="Capstone Submissions" val={stats.capstones} color="#8b5cf6" bg="#ede9fe" />
+        <StatCard icon="📅" label="My Attendance Rate" val={`${stats.attendance}%`} color="#f59e0b" bg="#fef3c7" />
+      </div>
+
       {/* ── Active Mentees Quick List ── */}
       {user.mentorProfile?.assignedTeachers?.length > 0 && (
         <div style={{ marginBottom: 24, padding: "16px", background: "#f8fafc", borderRadius: 16, border: "1px solid #e2e8f0" }}>
@@ -380,52 +412,67 @@ export function MentorProfileTab({ user, onWorkingCenterChange, onUserUpdate }) 
 
 /* ── Mentor Notifications Tab ── */
 export function MentorNotificationsTab({ notifications = [], onMarkRead, onMarkAllRead }) {
+  const icons = {
+    // course-related
+    course: "📚", course_assigned: "📚", course_allocated: "📚",
+    // certificate
+    certificate: "🏆", certificate_issued: "🏆", certificate_generated: "🏆",
+    // lesson / session
+    session: "📹", lesson: "📖", lesson_assigned: "📖",
+    // assignment / task
+    assignment: "📝", task: "📝", daily_task: "📝",
+    // approvals
+    approval: "✅", approved: "✅", status: "✅", status_update: "✅",
+    // attendance
+    attendance: "📋", attendance_alert: "⚠️",
+    // mentor-specific
+    mentor_assigned: "👨‍🏫", teacher_claimed: "🤝", mentee: "👩‍🏫",
+    // general
+    info: "ℹ️", warning: "⚠️", alert: "🔔", system: "⚙️",
+  };
+  const getIcon = (type, msg = "") => {
+    if (!type && !msg) return "🔔";
+    const lower = String(type || "").toLowerCase();
+    // First try exact type match
+    if (lower && icons[lower] && lower !== "info") return icons[lower];
+    // If type is generic/info, scan message content for context
+    const text = (msg || "").toLowerCase();
+    if (text.includes("approved") || text.includes("approval")) return "✅";
+    if (text.includes("course") || text.includes("allocated")) return "📚";
+    if (text.includes("curriculum") || text.includes("published")) return "📖";
+    if (text.includes("fellow") || text.includes("assigned") || text.includes("teacher")) return "👩‍🏫";
+    if (text.includes("capstone") || text.includes("deadline") || text.includes("missed")) return "⚠️";
+    if (text.includes("certificate")) return "🏆";
+    if (text.includes("attendance")) return "📋";
+    if (text.includes("mentor")) return "👨‍🏫";
+    if (text.includes("center")) return "🏫";
+    if (text.includes("lesson")) return "📖";
+    return icons[lower] || "🔔";
+  };
+
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
           <h1 style={S.pageTitle}>Notifications</h1>
-          <p style={S.pageSub}>Stay updated with alerts and messages.</p>
+          <p style={S.pageSub}>{notifications.filter(n=>!n.read).length} unread</p>
         </div>
-        {notifications.some(n => !n.read) && (
-          <button onClick={onMarkAllRead} style={S.exportBtn}>
-            ✓ Mark all as read
-          </button>
-        )}
+        <button onClick={onMarkAllRead} style={S.exportBtn}>✓ Mark all read</button>
       </div>
-
-      <div style={{ background: "white", borderRadius: 16, border: "1px solid #e2e8f0", overflow: "hidden" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {notifications.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#64748b" }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
-            <div style={{ fontSize: 16, fontWeight: 600 }}>All caught up!</div>
-            <div style={{ fontSize: 13, marginTop: 4 }}>You have no new notifications.</div>
+          <div style={{ padding: 40, textAlign: "center", background: "white", borderRadius: 16, border: "1px dashed #cbd5e1", color: "#94a3b8" }}>
+            No notifications.
           </div>
         ) : (
-          notifications.map(n => (
-            <div key={n.id} style={{ 
-              padding: 20, borderBottom: "1px solid #f1f5f9", 
-              background: n.read ? "white" : "#f0fdf4",
-              display: "flex", gap: 16, transition: "background 0.2s"
-            }}>
-              <div style={{ 
-                width: 40, height: 40, borderRadius: "50%", 
-                background: n.type === "alert" ? "#fee2e2" : n.type === "success" ? "#d1fae5" : "#e0e7ff",
-                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0
-              }}>
-                {n.type === "alert" ? "⚠️" : n.type === "success" ? "🎉" : "📩"}
-              </div>
+          notifications.map(n=>(
+            <div key={n.id} onClick={()=>!n.read && onMarkRead(n.id)} style={{ background: n.read?"white":"#fffbeb", borderRadius: 14, padding: "14px 18px", border: `1px solid ${n.read?"#f1f5f9":"#fbbf24"}`, display: "flex", alignItems: "center", gap: 14, cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", borderLeft: `4px solid ${n.read?"#e5e7eb":"#f59e0b"}` }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: n.read?"#f3f4f6":"#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{getIcon(n.type, n.msg)}</div>
               <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <div style={{ fontSize: 14, fontWeight: n.read ? 600 : 800, color: "#1e293b" }}>{n.msg}</div>
-                  <div style={{ fontSize: 11, color: "#9ca3af", whiteSpace: "nowrap", marginLeft: 16 }}>{n.time}</div>
-                </div>
-                {!n.read && (
-                  <button onClick={() => onMarkRead(n.id)} style={{ background: "none", border: "none", color: "#3b82f6", fontSize: 12, fontWeight: 700, padding: 0, cursor: "pointer", marginTop: 8 }}>
-                    Mark as read
-                  </button>
-                )}
+                <div style={{ fontSize: 13, fontWeight: n.read?500:700, color: "#1c1917" }}>{n.msg || n.title || "Notification"}</div>
+                <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>{n.time}</div>
               </div>
+              {!n.read && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b", flexShrink: 0 }}/>}
             </div>
           ))
         )}

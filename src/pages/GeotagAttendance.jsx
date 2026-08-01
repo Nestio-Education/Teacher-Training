@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { SectionCard, S } from "../components/Shared";
-import { getTeacherAttendance, saveTeacherAttendance } from "../services/api";
+import { getTeacherAttendance, saveTeacherAttendance, getSelfMentorAttendance, saveSelfMentorAttendance } from "../services/api";
 
 export default function GeotagAttendance({ user }) {
   const [loading, setLoading] = useState(false);
@@ -49,7 +49,7 @@ export default function GeotagAttendance({ user }) {
     const fetchAttendance = async () => {
       try {
         setLoading(true);
-        const data = await getTeacherAttendance();
+        const data = user?.role === "mentor" ? await getSelfMentorAttendance() : await getTeacherAttendance();
         if (data && data.records) {
           const map = {};
           const logs = [];
@@ -268,7 +268,8 @@ export default function GeotagAttendance({ user }) {
         };
       }
 
-      await saveTeacherAttendance({
+      const saveApi = user?.role === "mentor" ? saveSelfMentorAttendance : saveTeacherAttendance;
+      await saveApi({
         status: "present",
         source: "geo",
         latitude: lat,
@@ -385,11 +386,14 @@ export default function GeotagAttendance({ user }) {
                 <div style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>
                   Assigned Campus Location
                 </div>
-<div style={{ fontSize: "13px", fontWeight: "800", color: "#1c1917" }}>
+ <div style={{ fontSize: "13px", fontWeight: "800", color: "#1c1917" }}>
                    🏫 <span style={{ color: "#d97706" }}>
-                     {user?.teacherProfile?.center?.name 
-                       ? `${user.teacherProfile.center.name}${user.teacherProfile.center.city ? `, ${user.teacherProfile.center.city}` : ""}` 
-                       : "Center not assigned"}
+                     {(() => {
+                       const center = user?.role === "mentor" ? user?.mentorProfile?.center : user?.teacherProfile?.center;
+                       return center?.name 
+                         ? `${center.name}${center.city ? `, ${center.city}` : ""}` 
+                         : "Center not assigned";
+                     })()}
                    </span>
                  </div>
                 <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px", fontFamily: "monospace" }}>

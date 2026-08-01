@@ -774,6 +774,18 @@ export function saveTeacherAttendance(payload) {
   });
 }
 
+export function getSelfMentorAttendance(params = {}) {
+  const searchParams = new URLSearchParams(params);
+  return request(`/api/attendance/mentors?${searchParams.toString()}`);
+}
+
+export function saveSelfMentorAttendance(payload) {
+  return request("/api/attendance/mentors", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 // Trainer APIs
 export function getTrainers() {
   return request("/api/trainers");
@@ -1336,6 +1348,10 @@ export function getAdminMentors() {
   return request("/api/admin/mentors");
 }
 
+export function getAdminMentorTracking() {
+  return request("/api/admin/mentor-tracking");
+}
+
 export function getMyCenter() {
   return request("/api/mentor/center");
 }
@@ -1433,3 +1449,18 @@ export function saveChildAssessment(childId, payload) {
   });
 }
 // End: Dnyaneshwari Thorat
+
+export function getMentorAttendance(params = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.date) searchParams.append("date", params.date);
+  if (params.mentorId) searchParams.append("mentorId", params.mentorId);
+  return request(`/api/attendance/mentors?${searchParams.toString()}`);
+}
+
+export function getMentorFellowsAttendance(params = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.from) searchParams.append("from", params.from);
+  if (params.to) searchParams.append("to", params.to);
+  if (params.date) searchParams.append("date", params.date);
+  return request(`/api/mentor/fellows/attendance?${searchParams.toString()}`);
+}
