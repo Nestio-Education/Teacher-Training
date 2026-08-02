@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "mongodb": "node src/mongodb.js",
     "db:seed": "node src/seed.js",
-    "db:admin": "node src/create-admin.js"
+    "db:admin": "node src/create-admin.js",
+    "db:check-phones": "node src/scripts/checkTeacherPhoneQuality.js"
   },
   "dependencies": {
     "@vitalets/google-translate-api": "^9.2.1",

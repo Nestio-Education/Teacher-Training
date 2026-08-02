@@ -33,6 +33,16 @@ const teacherAttendanceRecordSchema = new mongoose.Schema(
     latitude: Number,
     longitude: Number,
     note: String,
+    
+    checkInTime: String,
+    checkOutTime: String,
+    checkedIn: { type: Boolean, default: false },
+    checkedOut: { type: Boolean, default: false },
+    distanceOffset: Number,
+    distanceOffsetOut: Number,
+    snapshot: String,
+    snapshotOut: String,
+    
     markedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }
@@ -42,3 +52,30 @@ teacherAttendanceRecordSchema.index({ teacher: 1, attendanceDate: 1 }, { unique:
 
 export const ChildAttendanceSession = mongoose.model("ChildAttendanceSession", childAttendanceSessionSchema);
 export const TeacherAttendanceRecord = mongoose.model("TeacherAttendanceRecord", teacherAttendanceRecordSchema);
+
+const mentorAttendanceRecordSchema = new mongoose.Schema(
+  {
+    mentor: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    attendanceDate: { type: Date, required: true, index: true },
+    status: { type: String, enum: ["present", "absent", "late", "excused"], default: "present" },
+    source: { type: String, enum: ["manual", "geo", "system"], default: "geo" },
+    latitude: Number,
+    longitude: Number,
+    address: String,
+    note: String,
+    
+    checkInTime: String,
+    checkOutTime: String,
+    checkedIn: { type: Boolean, default: false },
+    checkedOut: { type: Boolean, default: false },
+    distanceOffset: Number,
+    distanceOffsetOut: Number,
+    snapshot: String,
+    snapshotOut: String,
+  },
+  { timestamps: true }
+);
+
+mentorAttendanceRecordSchema.index({ mentor: 1, attendanceDate: 1 }, { unique: true });
+
+export const MentorAttendanceRecord = mongoose.model("MentorAttendanceRecord", mentorAttendanceRecordSchema);

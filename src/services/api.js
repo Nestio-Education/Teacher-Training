@@ -2,22 +2,37 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000
 
 async function request(path, options = {}) {
   const token = localStorage.getItem("spaceece_auth_token");
-  
+
   const headers = {
     ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   };
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers,
+      cache: "no-store" // Prevent aggressive browser disk caching of GET requests
+    });
+  } catch (networkError) {
+    console.error(
+      `[api] Network request failed before reaching the server.\n` +
+      `  URL attempted: ${API_BASE_URL}${path}\n` +
+      `  Likely cause: backend not running, wrong VITE_API_BASE_URL, or CORS block.\n` +
+      `  Original error:`, networkError
+    );
+    throw new Error(
+      `Could not reach the server at ${API_BASE_URL}. ` +
+      `Check that the backend is running and VITE_API_BASE_URL is correct.`
+    );
+  }
 
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(data.message || "Request failed");
+    throw new Error(data.message || `Request failed (${response.status})`);
   }
 
   return data;
@@ -345,8 +360,9 @@ export function changeTeacherPassword(currentPassword, newPassword) {
   });
 }
 
-export function getTeacherProgress() {
-  return request("/api/teacher/progress");
+export function getTeacherProgress(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/api/teacher/progress${qs ? `?${qs}` : ""}`);
 }
 
 export function getTeacherGrades() {
@@ -448,15 +464,51 @@ export function askTeacherChatbot(message) {
 }
 
 // Course Management APIs
-export function getCourses() {
-  return request("/api/courses");
+export function getCourses(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/api/courses${qs ? `?${qs}` : ""}`);
 }
 
 export function getParentModules(params = {}) {
   const qs = new URLSearchParams(params).toString();
   return request(`/api/parent-modules${qs ? `?${qs}` : ""}`);
 }
-// Snehal change
+// Start: Snehal change
+export function createParentModule(payload) {
+  return request("/api/parent-modules", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+export function getParentModuleAssignments(moduleId) {
+  return request(`/api/parent-module-assignments?moduleId=${moduleId}`);
+}
+
+export function assignParentModule({ moduleId, classId, teacherId }) {
+  return request("/api/parent-module-assignments", {
+    method: "POST",
+    body: JSON.stringify({ moduleId, classId, teacherId }),
+  });
+}
+
+export function removeParentModuleAssignment(assignmentId) {
+  return request(`/api/parent-module-assignments/${assignmentId}`, {
+    method: "DELETE",
+  });
+}
+export function updateParentModule(id, payload) {
+  return request(`/api/parent-modules/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+export function deleteParentModule(id) {
+  return request(`/api/parent-modules/${id}`, {
+    method: "DELETE",
+  });
+}
+// End: Snehal change
+// // Snehal change
 export function getParentSessionAssignments(moduleId) {
   return request(`/api/parent-session-assignments?moduleId=${moduleId}`);
 }
@@ -561,8 +613,9 @@ export function getTeacherCourseNotes(courseId) {
 
 
 // Lesson Plan APIs
-export function getLessonPlans() {
-  return request("/api/lesson-plans");
+export function getLessonPlans(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/api/lesson-plans${qs ? `?${qs}` : ""}`);
 }
 
 export function createLessonPlan(lessonData) {
@@ -716,6 +769,18 @@ export function getTeacherAttendance(params = {}) {
 
 export function saveTeacherAttendance(payload) {
   return request("/api/attendance/teachers", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function getSelfMentorAttendance(params = {}) {
+  const searchParams = new URLSearchParams(params);
+  return request(`/api/attendance/mentors?${searchParams.toString()}`);
+}
+
+export function saveSelfMentorAttendance(payload) {
+  return request("/api/attendance/mentors", {
     method: "POST",
     body: JSON.stringify(payload)
   });
@@ -936,7 +1001,7 @@ export function saveTwilioConfig(twilioData) {
 export function updateAdminLanguage(lang) {
   return request("/api/admin/me/language", {
     method: "PATCH",
-    body: JSON.stringify({ language: lang }),
+    body: JSON.stringify({ lang }),
   });
 }
 
@@ -1238,8 +1303,53 @@ export function registerMentor(payload) {
   });
 }
 
+export function getMentorFellows() {
+  return request("/api/mentor/fellows");
+}
+
+export function updateFellowStatus(id, status) {
+  return request(`/api/mentor/fellows/${id}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status })
+  });
+}
+
+// start dnyaneshwari thorat
+export function claimFellow(id) {
+  return request(`/api/mentor/fellows/${id}/claim`, {
+    method: "POST"
+  });
+}
+
+export function unclaimFellow(id) {
+  return request(`/api/mentor/fellows/${id}/unclaim`, {
+    method: "POST"
+  });
+}
+
+export function deleteMentorFellow(id) {
+  return request(`/api/mentor/fellows/${id}`, { method: "DELETE" });
+}
+// end dnyaneshwari thorat
+
+
+export function updateMenteeTracking(id, data) {
+  return request(`/api/mentor/mentee/${id}/tracking`, {
+    method: "PATCH",
+    body: JSON.stringify(data)
+  });
+}
+
+export function getCurriculumUnits() {
+  return request("/api/curriculum");
+}
+
 export function getAdminMentors() {
   return request("/api/admin/mentors");
+}
+
+export function getAdminMentorTracking() {
+  return request("/api/admin/mentor-tracking");
 }
 
 export function getMyCenter() {
@@ -1253,6 +1363,10 @@ export function updateMentorMe(data) {
   });
 }
 
+export function getMentorMe() {
+  return request("/api/mentor/me");
+}
+
 export function changeMentorPassword(currentPassword, newPassword) {
   return request("/api/mentor/change-password", {
     method: "POST",
@@ -1261,24 +1375,58 @@ export function changeMentorPassword(currentPassword, newPassword) {
 }
 
 // ── Mentor Tabs APIs ──
-export function recordMenteeObservation(menteeId, notes) {
-  return request("/api/mentor/observation", {
+// ── Mentor Tracking APIs ──
+export function getMenteeObservations() {
+  return request("/api/mentor/tracking/observations");
+}
+
+export function recordMenteeObservation(menteeId, observation) {
+  return request("/api/mentor/tracking/observations", {
     method: "POST",
-    body: JSON.stringify({ menteeId, notes })
+    body: JSON.stringify({ menteeId, observation })
   });
 }
 
-export function submitCapstoneMilestone(notes, evidenceLink) {
-  return request("/api/mentor/capstone", {
+export function getMentorStats() {
+  return request("/api/mentor/stats");
+}
+
+export function getCapstoneSubmissions() {
+  return request("/api/mentor/tracking/capstone");
+}
+
+export function submitCapstoneMilestone(milestone, notes, fileUrl, evidenceLink = "") {
+  return request(`/api/mentor/tracking/capstone/milestones/${milestone}/submit`, {
     method: "POST",
-    body: JSON.stringify({ notes, evidenceLink })
+    body: JSON.stringify({ milestone, notes, fileUrl, evidenceLink })
   });
 }
 
-export function submitPDCACycle(plan, doAction, check, act) {
-  return request("/api/mentor/pdca", {
+export function getPDCACycles() {
+  return request("/api/mentor/tracking/pdca");
+}
+
+// UPDATED: PDCA cycles are now linked to a specific mentee.
+// menteeId is required — pass the mentee's _id selected in the PDCA form.
+export function submitPDCACycle(cycleNumber, plan, doAction, check, act, menteeId) {
+  return request("/api/mentor/tracking/pdca", {
     method: "POST",
-    body: JSON.stringify({ plan, do: doAction, check, act })
+    body: JSON.stringify({ cycleNumber, plan, do: doAction, check, act, menteeId })
+  });
+}
+
+// ── Mentor: Pending Fellow Approvals reminder ──
+// Lightweight count used by the polling reminder component so it doesn't need
+// to pull the full fellow list just to check for pending ones.
+export function getPendingApprovalsCount() {
+  return request("/api/mentor/tracking/pending-approvals-count");
+}
+
+// Triggers a backend email to the mentor's own login address when they have
+// pending fellows. Safe to call often — the backend no-ops if none are pending.
+export function notifyPendingApprovals() {
+  return request("/api/mentor/tracking/notify-pending", {
+    method: "POST",
   });
 }
 
@@ -1320,3 +1468,18 @@ export function saveChildAssessment(childId, payload) {
   });
 }
 // End: Dnyaneshwari Thorat
+
+export function getMentorAttendance(params = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.date) searchParams.append("date", params.date);
+  if (params.mentorId) searchParams.append("mentorId", params.mentorId);
+  return request(`/api/attendance/mentors?${searchParams.toString()}`);
+}
+
+export function getMentorFellowsAttendance(params = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.from) searchParams.append("from", params.from);
+  if (params.to) searchParams.append("to", params.to);
+  if (params.date) searchParams.append("date", params.date);
+  return request(`/api/mentor/fellows/attendance?${searchParams.toString()}`);
+}

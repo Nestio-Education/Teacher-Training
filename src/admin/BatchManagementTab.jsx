@@ -1,3 +1,4 @@
+import { t } from "../services/i18n";
 import { useState } from "react";
 import { Modal, S, Toast } from "../components/Shared";
 import { CLOSE_BTN, MODAL_BOX, MODAL_HDR, MODAL_OVERLAY } from "./adminStyles";
@@ -43,7 +44,7 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
   const handleCreate = e => {
     e.preventDefault();
     if (!form.name || !form.course || !form.start) {
-      setToast({ msg: "Fill required fields (Name, Course, Start Date).", type: "error" });
+      setToast({ msg: t("Fill required fields (Name, Course, Start Date)."), type: "error" });
       return;
     }
     const newBatch = {
@@ -55,7 +56,7 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
       teachers: [],
     };
     setBatches(p => [...p, newBatch]);
-    setToast({ msg: "Batch created!", type: "success" });
+    setToast({ msg: t("Batch created!"), type: "success" });
     setAddModal(false);
     setForm(emptyForm);
   };
@@ -86,7 +87,7 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
  
   const addScheduleItem = () => {
     if (!schedForm.title || !schedForm.date) {
-      setToast({ msg: "Fill title and date.", type: "error" });
+      setToast({ msg: t("Fill title and date."), type: "error" });
       return;
     }
     const item = { id: Date.now(), ...schedForm };
@@ -95,7 +96,7 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
     ));
     setSelected(s => ({ ...s, schedule: [...(s.schedule || []), item] }));
     setSchedForm({ title: "", date: "", time: "", type: "session", duration: 60 });
-    setToast({ msg: "Schedule item added!", type: "success" });
+    setToast({ msg: t("Schedule item added!"), type: "success" });
   };
  
   const removeScheduleItem = schedId => {
@@ -108,8 +109,8 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
   };
  
   const sendBroadcast = () => {
-    if (!bcastMsg.trim()) { setToast({ msg: "Message cannot be empty.", type: "error" }); return; }
-    setToast({ msg: `Broadcast sent to all teachers in this batch! 📨`, type: "success" });
+    if (!bcastMsg.trim()) { setToast({ msg: t("Message cannot be empty."), type: "error" }); return; }
+    setToast({ msg: t("Broadcast sent to all teachers in this batch! 📨"), type: "success" });
     setBcastId(null);
     setBcastMsg("");
   };
@@ -139,7 +140,7 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
                   style={{ ...S.input, height: 110, resize: "none", marginBottom: 16 }}
                   value={bcastMsg}
                   onChange={e => setBcastMsg(e.target.value)}
-                  placeholder="Write a message to all enrolled teachers..."
+                  placeholder={t("Write a message to all enrolled teachers...")}
                 />
                 <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 16 }}>
                   Will be sent to {enTeachers.length} enrolled teacher(s) via in-app + email.
@@ -167,7 +168,7 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
                 </p>
                 <div style={{ display: "flex", gap: 10 }}>
                   <button onClick={handleClone} style={{ ...S.primaryBtn, flex: 1 }}>🔁 Clone Now</button>
-                  <button onClick={() => setClone(null)} style={{ ...S.tblBtn, flex: 1 }}>Cancel</button>
+                  <button onClick={() => setClone(null)} style={{ ...S.tblBtn, flex: 1 }}>{t("Cancel")}</button>
                 </div>
               </div>
             </div>
@@ -198,7 +199,7 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
  
           {/* Status control */}
           <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 8 }}>Status Control</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".4px", marginBottom: 8 }}>{t("Status Control")}</div>
             <div style={{ display: "flex", gap: 8 }}>
               {["upcoming", "active", "completed", "cancelled"].map(s => (
                 <button key={s} onClick={() => changeStatus(bt.id, s)}
@@ -236,7 +237,7 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
           {/* Capacity bar */}
           <div style={{ marginTop: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
-              <span style={{ color: "#9ca3af", fontWeight: 600 }}>Capacity Utilisation</span>
+              <span style={{ color: "#9ca3af", fontWeight: 600 }}>{t("Capacity Utilisation")}</span>
               <span style={{ fontWeight: 800, color: heatColor(p) }}>{p}%</span>
             </div>
             <div style={{ height: 8, background: "#f3f4f6", borderRadius: 6, overflow: "hidden" }}>
@@ -251,7 +252,7 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
           {enTeachers.length === 0 ? (
             <div style={{ textAlign: "center", padding: 24, color: "#9ca3af" }}>
               <div style={{ fontSize: 28, marginBottom: 6 }}>👥</div>
-              <div style={{ fontSize: 12 }}>No teachers enrolled yet</div>
+              <div style={{ fontSize: 12 }}>{t("No teachers enrolled yet")}</div>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -289,23 +290,23 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto", gap: 8, alignItems: "end" }}>
               <div>
                 <label style={S.label}>Title *</label>
-                <input style={{ ...S.input, marginBottom: 0 }} value={schedForm.title} onChange={e => setSchedForm(f => ({ ...f, title: e.target.value }))} placeholder="Session / Assignment title" />
+                <input style={{ ...S.input, marginBottom: 0 }} value={schedForm.title} onChange={e => setSchedForm(f => ({ ...f, title: e.target.value }))} placeholder={t("Session / Assignment title")} />
               </div>
               <div>
                 <label style={S.label}>Date *</label>
                 <input style={{ ...S.input, marginBottom: 0 }} type="date" value={schedForm.date} onChange={e => setSchedForm(f => ({ ...f, date: e.target.value }))} />
               </div>
               <div>
-                <label style={S.label}>Time</label>
+                <label style={S.label}>{t("Time")}</label>
                 <input style={{ ...S.input, marginBottom: 0 }} type="time" value={schedForm.time} onChange={e => setSchedForm(f => ({ ...f, time: e.target.value }))} />
               </div>
               <div>
-                <label style={S.label}>Type</label>
+                <label style={S.label}>{t("Type")}</label>
                 <select style={{ ...S.input, marginBottom: 0 }} value={schedForm.type} onChange={e => setSchedForm(f => ({ ...f, type: e.target.value }))}>
-                  <option value="session">Session</option>
-                  <option value="assignment">Assignment Due</option>
-                  <option value="quiz">Quiz</option>
-                  <option value="holiday">Holiday</option>
+                  <option value="session">{t("Session")}</option>
+                  <option value="assignment">{t("Assignment Due")}</option>
+                  <option value="quiz">{t("Quiz")}</option>
+                  <option value="holiday">{t("Holiday")}</option>
                 </select>
               </div>
               <button onClick={addScheduleItem} style={{ ...S.primaryBtn, height: 38, whiteSpace: "nowrap" }}>+ Add</button>
@@ -316,7 +317,7 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
           {(bt.schedule || []).length === 0 ? (
             <div style={{ textAlign: "center", padding: 24, color: "#9ca3af" }}>
               <div style={{ fontSize: 28, marginBottom: 6 }}>📭</div>
-              <div style={{ fontSize: 12 }}>No schedule items yet. Add sessions and deadlines above.</div>
+              <div style={{ fontSize: 12 }}>{t("No schedule items yet. Add sessions and deadlines above.")}</div>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -366,7 +367,7 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
               </p>
               <div style={{ display: "flex", gap: 10 }}>
                 <button onClick={handleClone} style={{ ...S.primaryBtn, flex: 1 }}>🔁 Clone Now</button>
-                <button onClick={() => setClone(null)} style={{ ...S.tblBtn, flex: 1 }}>Cancel</button>
+                <button onClick={() => setClone(null)} style={{ ...S.tblBtn, flex: 1 }}>{t("Cancel")}</button>
               </div>
             </div>
           </div>
@@ -386,11 +387,11 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
                 <div>
                   <label style={S.label}>Batch Name *</label>
-                  <input style={S.input} value={form.name} onChange={e => upd("name", e.target.value)} placeholder="Batch A — July 2026" />
+                  <input style={S.input} value={form.name} onChange={e => upd("name", e.target.value)} placeholder={t("Batch A — July 2026")} />
                 </div>
                 <div>
                   <label style={S.label}>Linked Course *</label>
-                  <input style={S.input} value={form.course} onChange={e => upd("course", e.target.value)} placeholder="Pre-Primary Teacher Training" />
+                  <input style={S.input} value={form.course} onChange={e => upd("course", e.target.value)} placeholder={t("Pre-Primary Teacher Training")} />
                 </div>
               </div>
               {/* Row 2 */}
@@ -400,7 +401,7 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
                   <input style={S.input} type="date" value={form.start} onChange={e => upd("start", e.target.value)} />
                 </div>
                 <div>
-                  <label style={S.label}>End Date</label>
+                  <label style={S.label}>{t("End Date")}</label>
                   <input style={S.input} type="date" value={form.end} onChange={e => upd("end", e.target.value)} />
                 </div>
                 <div>
@@ -411,19 +412,19 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
               {/* Row 3 */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
                 <div>
-                  <label style={S.label}>Mode</label>
+                  <label style={S.label}>{t("Mode")}</label>
                   <select style={S.input} value={form.mode} onChange={e => upd("mode", e.target.value)}>
                     {["Online", "Offline", "Hybrid"].map(m => <option key={m}>{m}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label style={S.label}>Platform</label>
+                  <label style={S.label}>{t("Platform")}</label>
                   <select style={S.input} value={form.platform} onChange={e => upd("platform", e.target.value)}>
                     {["Zoom", "Google Meet", "Microsoft Teams", "In-Person", "Other"].map(p => <option key={p}>{p}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label style={S.label}>Initial Status</label>
+                  <label style={S.label}>{t("Initial Status")}</label>
                   <select style={S.input} value={form.status} onChange={e => upd("status", e.target.value)}>
                     {["upcoming", "active", "completed", "cancelled"].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
                   </select>
@@ -431,18 +432,18 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
               </div>
               {/* Meeting Link */}
               <div style={{ marginBottom: 12 }}>
-                <label style={S.label}>Meeting Link</label>
-                <input style={S.input} value={form.meetingLink} onChange={e => upd("meetingLink", e.target.value)} placeholder="https://zoom.us/j/..." />
+                <label style={S.label}>{t("Meeting Link")}</label>
+                <input style={S.input} value={form.meetingLink} onChange={e => upd("meetingLink", e.target.value)} placeholder={t("https://zoom.us/j/...")} />
               </div>
               {/* Trainers */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
                 <div>
-                  <label style={S.label}>Primary Trainer</label>
-                  <input style={S.input} value={form.trainer} onChange={e => upd("trainer", e.target.value)} placeholder="Dr. Rekha Iyer" />
+                  <label style={S.label}>{t("Primary Trainer")}</label>
+                  <input style={S.input} value={form.trainer} onChange={e => upd("trainer", e.target.value)} placeholder={t("Dr. Rekha Iyer")} />
                 </div>
                 <div>
                   <label style={S.label}>Co-Trainer (optional)</label>
-                  <input style={S.input} value={form.coTrainer} onChange={e => upd("coTrainer", e.target.value)} placeholder="Prof. Amol Desai" />
+                  <input style={S.input} value={form.coTrainer} onChange={e => upd("coTrainer", e.target.value)} placeholder={t("Prof. Amol Desai")} />
                 </div>
               </div>
               {/* Auto-enroll */}
@@ -453,8 +454,8 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
                   <div style={{ position: "absolute", top: 2, left: form.autoEnroll ? 18 : 2, width: 20, height: 20, borderRadius: "50%", background: "white", transition: "left .3s", boxShadow: "0 1px 3px rgba(0,0,0,.2)" }} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>Auto-Enroll Waiting Teachers</div>
-                  <div style={{ fontSize: 11, color: "#9ca3af" }}>Automatically enroll registered teachers waiting for this course</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{t("Auto-Enroll Waiting Teachers")}</div>
+                  <div style={{ fontSize: 11, color: "#9ca3af" }}>{t("Automatically enroll registered teachers waiting for this course")}</div>
                 </div>
               </div>
               <button type="submit" style={{ ...S.primaryBtn, width: "100%" }}>Create Batch →</button>
@@ -466,7 +467,7 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
       {/* Page header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
-          <h1 style={S.pageTitle}>Batch Management</h1>
+          <h1 style={S.pageTitle}>{t("Batch Management")}</h1>
           <p style={S.pageSub}>
             {batches.length} batches · {batches.filter(b => b.status === "active").length} active · {batches.filter(b => b.status === "upcoming").length} upcoming
           </p>
@@ -531,7 +532,7 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
               {/* Capacity bar */}
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3, fontSize: 11 }}>
-                  <span style={{ color: "#9ca3af" }}>Capacity</span>
+                  <span style={{ color: "#9ca3af" }}>{t("Capacity")}</span>
                   <span style={{ fontWeight: 700, color: heatColor(p) }}>{p}%</span>
                 </div>
                 <div style={{ height: 6, background: "#f3f4f6", borderRadius: 4, overflow: "hidden" }}>
@@ -574,11 +575,11 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
                     onChange={e => setBcastMsg(e.target.value)}
                     rows={3}
                     style={{ ...S.input, marginBottom: 8, resize: "none" }}
-                    placeholder="Write your message..."
+                    placeholder={t("Write your message...")}
                   />
                   <div style={{ display: "flex", gap: 8 }}>
                     <button onClick={sendBroadcast} style={{ ...S.primaryBtn, flex: 1, fontSize: 11 }}>📤 Send</button>
-                    <button onClick={() => { setBcastId(null); setBcastMsg(""); }} style={{ ...S.tblBtn, flex: 1, fontSize: 11 }}>Cancel</button>
+                    <button onClick={() => { setBcastId(null); setBcastMsg(""); }} style={{ ...S.tblBtn, flex: 1, fontSize: 11 }}>{t("Cancel")}</button>
                   </div>
                 </div>
               )}
@@ -590,7 +591,7 @@ export default function BatchManagementTab({ batches, setBatches, teachers, setT
       {filtered.length === 0 && (
         <div style={{ textAlign: "center", padding: 60, color: "#9ca3af" }}>
           <div style={{ fontSize: 40, marginBottom: 10 }}>🗂️</div>
-          <div style={{ fontSize: 14, fontWeight: 700 }}>No batches found</div>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>{t("No batches found")}</div>
         </div>
       )}
     </div>

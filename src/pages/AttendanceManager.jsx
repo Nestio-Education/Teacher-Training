@@ -38,6 +38,7 @@ export default function AttendanceManager({ user, onRosterChange }) {
   const [newStudentGender, setNewStudentGender] = useState("");
   const [newStudentParentName, setNewStudentParentName] = useState("");
   const [newStudentParentPhone, setNewStudentParentPhone] = useState("");
+  const [newStudentClassId, setNewStudentClassId] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [loading, setLoading] = useState(true);
@@ -58,30 +59,27 @@ export default function AttendanceManager({ user, onRosterChange }) {
   const otpInputRefs = useRef([]);
 
   // Load teacher profile, center, and class on mount
+  // Load teacher profile, center, and class on mount or when user updates
   useEffect(() => {
-    getTeacherMe()
-      .then(res => {
-        setTeacherProfile(res.teacher);
-        const defaultClassId = (res.teacher?.teacherProfile?.classes || [])[0]?._id || (res.teacher?.teacherProfile?.classes || [])[0];
-        
-        getTeacherClasses()
-          .then(classRes => {
-            const cls = classRes.classes || [];
-            setClasses(cls);
-            if (defaultClassId) {
-              setSelectedClassId(defaultClassId);
-            } else if (cls.length > 0) {
-              setSelectedClassId(cls[0]._id || cls[0].id);
-            }
-          })
-          .catch(err => {
-            console.error("Error fetching teacher classes:", err);
-          });
-      })
-      .catch(err => {
-        console.error("Error fetching teacher profile:", err);
-      });
-  }, []);
+    if (user) {
+      setTeacherProfile(user);
+      const defaultClassId = (user.teacherProfile?.classes || [])[0]?._id || (user.teacherProfile?.classes || [])[0];
+      
+      getTeacherClasses()
+        .then(classRes => {
+          const cls = classRes.classes || [];
+          setClasses(cls);
+          if (defaultClassId && !selectedClassId) {
+            setSelectedClassId(defaultClassId);
+          } else if (cls.length > 0 && !selectedClassId) {
+            setSelectedClassId(cls[0]._id || cls[0].id);
+          }
+        })
+        .catch(err => {
+          console.error("Error fetching teacher classes:", err);
+        });
+    }
+  }, [user]);
 
   // Fetch children list and attendance for selected date
   useEffect(() => {
@@ -419,7 +417,8 @@ export default function AttendanceManager({ user, onRosterChange }) {
 
   const handleAddStudent = (e) => {
     e.preventDefault();
-    const classId = selectedClassId || (teacherProfile?.teacherProfile?.classes || [])[0]?._id || (teacherProfile?.teacherProfile?.classes || [])[0];
+    const fallbackClassId = selectedClassId || (teacherProfile?.teacherProfile?.classes || [])[0]?._id || (teacherProfile?.teacherProfile?.classes || [])[0];
+    const classId = newStudentClassId || fallbackClassId;
 
     // Start: Dnyaneshwari Thorat
     if (bulkMode) {
@@ -471,6 +470,7 @@ export default function AttendanceManager({ user, onRosterChange }) {
         setNewStudentGender("");
         setNewStudentParentName("");
         setNewStudentParentPhone("");
+        setNewStudentClassId("");
         setShowAddModal(false);
         setRosterVersion(v => v + 1);
         onRosterChange?.();
@@ -899,6 +899,19 @@ export default function AttendanceManager({ user, onRosterChange }) {
                 </div>
               ) : (
                 <div>
+                  <label style={S.label}>Assign Class *</label>
+                  <select
+                    required
+                    style={{ ...S.input, marginBottom: 12 }}
+                    value={newStudentClassId}
+                    onChange={e => setNewStudentClassId(e.target.value)}
+                  >
+                    <option value="">Select a class…</option>
+                    {classes.map(c => (
+                      <option key={c._id || c.id} value={c._id || c.id}>{c.name} ({c.ageGroup || "All Ages"})</option>
+                    ))}
+                  </select>
+
                   <label style={S.label}>Student Full Name *</label>
                   <input
                     required

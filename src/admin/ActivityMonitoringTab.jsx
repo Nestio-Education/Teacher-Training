@@ -22,15 +22,15 @@ const getFileUrl = (file) => {
   let path = file.publicUrl || file.path || (typeof file === "string" ? file : "");
   if (!path) return null;
   if (path.startsWith("http")) return path;
-  
+
   // Normalize slashes (replace backslashes with forward slashes)
   path = path.replace(/\\/g, "/");
-  
+
   // Ensure path starts with a single slash
   if (!path.startsWith("/")) {
     path = "/" + path;
   }
-  
+
   const base = API_BASE_URL.endsWith("/") ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
   return `${base}${path}`;
 };
@@ -381,6 +381,13 @@ export default function ActivityMonitoringTab({ setToast }) {
   const [loadError, setLoadError]   = useState(null);
   const [toast, setLocalToast]      = useState({ msg: "", type: "" });
 
+  // ===== PRAJWAL EDIT START: view mode toggle (Grid / By Center) =====
+  // Adds a second way to browse activities — grouped Center -> Teacher,
+  // so admins can see how active each teacher at each center has been.
+  const [viewMode, setViewMode] = useState("grid"); // 'grid' | 'byCenter'
+  const [collapsedCenters, setCollapsedCenters] = useState({});
+  // ===== PRAJWAL EDIT END =====
+
   const showToast = setToast || setLocalToast;
 
   const loadData = async () => {
@@ -416,6 +423,49 @@ export default function ActivityMonitoringTab({ setToast }) {
     const matchTo = !dateTo || act.createdAt <= new Date(new Date(dateTo).setHours(23, 59, 59, 999));
     return matchSearch && matchCenter && matchStatus && matchFrom && matchTo;
   }), [activities, search, centerFilter, statusFilter, dateFrom, dateTo]);
+
+  // ===== PRAJWAL EDIT START: group filtered activities Center -> Teacher =====
+  // Builds a nested structure { centerId, centerName, total, teachers: [{ teacherId, teacherName,
+  // teacherAvatar, activities, pending, approved, flagged, rejected }] } off the SAME `filtered`
+  // list, so it always matches whatever search/status/date filters are active.
+  const groupedByCenter = useMemo(() => {
+    const centersMap = {};
+    filtered.forEach(act => {
+      const centerKey = act.centerId || act.centerName;
+      if (!centersMap[centerKey]) {
+        centersMap[centerKey] = { centerName: act.centerName, teachers: {}, total: 0 };
+      }
+      const teacherKey = act.teacherId || act.teacherName;
+      if (!centersMap[centerKey].teachers[teacherKey]) {
+        centersMap[centerKey].teachers[teacherKey] = {
+          teacherName: act.teacherName,
+          teacherAvatar: act.teacherAvatar,
+          activities: [],
+          pending: 0, approved: 0, flagged: 0, rejected: 0,
+        };
+      }
+      centersMap[centerKey].teachers[teacherKey].activities.push(act);
+      centersMap[centerKey].teachers[teacherKey][act.status] =
+        (centersMap[centerKey].teachers[teacherKey][act.status] || 0) + 1;
+      centersMap[centerKey].total += 1;
+    });
+
+    return Object.entries(centersMap)
+      .map(([centerId, data]) => ({
+        centerId,
+        centerName: data.centerName,
+        total: data.total,
+        teachers: Object.entries(data.teachers)
+          .map(([teacherId, tdata]) => ({ teacherId, ...tdata }))
+          .sort((a, b) => a.teacherName.localeCompare(b.teacherName)),
+      }))
+      .sort((a, b) => a.centerName.localeCompare(b.centerName));
+  }, [filtered]);
+
+  const toggleCenterCollapse = (centerId) => {
+    setCollapsedCenters(prev => ({ ...prev, [centerId]: !prev[centerId] }));
+  };
+  // ===== PRAJWAL EDIT END =====
 
   const hasActiveFilters = search || centerFilter !== "all" || dateFrom || dateTo;
 
@@ -542,6 +592,89 @@ export default function ActivityMonitoringTab({ setToast }) {
     rejected: { color: "#6b7280", bg: "#f3f4f6" },
   };
 
+  // ===== PRAJWAL EDIT START: card JSX extracted into a function =====
+  // Previously this whole block lived inline inside `filtered.map(act => {...})`
+  // in the Grid section below. Pulled out unchanged so the exact same card
+  // can also be rendered inside the new "By Center" grouped view without
+  // duplicating ~60 lines of JSX twice.
+  const renderActivityCard = (act) => {
+    const sc = statusConfig[act.status] || { color: "#6b7280", bg: "#f3f4f6" };
+    const isSelected = selectedIds.includes(act.id);
+    return (
+      <div key={act.id} style={{ background: "white", borderRadius: 16,
+        border: isSelected ? "2px solid #f59e0b" : "1px solid #f1f5f9",
+        boxShadow: "0 2px 12px rgba(0,0,0,0.06)", overflow: "hidden", display: "flex", flexDirection: "column",
+        borderTop: `3px solid ${sc.color}`, position: "relative" }}>
+
+        {/* FEATURE: bulk-select checkbox, only shown for pending items */}
+        {act.status === "pending" && (
+          <label style={{ position: "absolute", top: 10, left: 10, zIndex: 2,
+            width: 22, height: 22, borderRadius: 6, background: "rgba(255,255,255,0.9)",
+            display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+            boxShadow: "0 1px 4px rgba(0,0,0,0.15)" }}>
+            <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(act.id)}
+              style={{ width: 16, height: 16, cursor: "pointer", accentColor: "#f59e0b" }} />
+          </label>
+        )}
+
+        {/* Image */}
+        {act.image ? (
+          <div style={{ height: 160, overflow: "hidden", background: "#f1f5f9" }}>
+            <img src={act.image} alt={act.imageName}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              onError={e => { e.target.parentElement.innerHTML = '<div style="height:160px;display:flex;align-items:center;justify-content:center;background:#fef3c7;color:#b45309;font-size:12px;font-weight:700;gap:8px"><span style=\'font-size:24px\'>📝</span>Image unavailable</div>'; }} />
+          </div>
+        ) : (
+          <div style={{ height: 160, background: `${sc.bg}`, display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center", color: sc.color, gap: 6 }}>
+            <span style={{ fontSize: 40 }}>📝</span>
+            <span style={{ fontSize: 11, fontWeight: 700 }}>Text Report Only</span>
+          </div>
+        )}
+
+        {/* Body */}
+        <div style={{ padding: "14px 16px", flex: 1, display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {act.teacherAvatar && (
+                <img src={act.teacherAvatar} alt="" style={{ width: 28, height: 28, borderRadius: "50%", border: `1.5px solid ${sc.color}` }} />
+              )}
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: "#1c1917" }}>{act.teacherName}</div>
+                <div style={{ fontSize: 10, color: "#9ca3af" }}>{act.date}</div>
+              </div>
+            </div>
+            <StatusBadge status={act.status} />
+          </div>
+
+          <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 8 }}>
+            🏢 {act.centerName} · <span style={{ color: "#374151" }}>{act.className}</span>
+          </div>
+
+          <p style={{ fontSize: 12, color: "#475569", margin: "0 0 12px", lineHeight: 1.5, flex: 1 }}>
+            {act.description.length > 120 ? act.description.substring(0, 120) + "..." : act.description || "No description."}
+          </p>
+
+          {act.adminComments && (
+            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8,
+              padding: "8px 10px", fontSize: 11, color: "#334155", marginBottom: 10 }}>
+              💬 <b>Admin:</b> {act.adminComments.length > 80 ? act.adminComments.substring(0, 80) + "..." : act.adminComments}
+            </div>
+          )}
+
+          <button onClick={() => setSelectedActivity(act)}
+            style={{ ...S.primaryBtn, width: "100%", fontSize: 12, padding: "9px 12px",
+              background: act.status === "pending"
+                ? "linear-gradient(135deg,#f59e0b,#d97706)"
+                : "linear-gradient(135deg,#6b7280,#4b5563)" }}>
+            {act.status === "pending" ? "🔎 Review & Decide" : "🔎 View & Update"}
+          </button>
+        </div>
+      </div>
+    );
+  };
+  // ===== PRAJWAL EDIT END =====
+
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
       {!setToast && <Toast msg={toast.msg} type={toast.type} onClose={() => setLocalToast({ msg: "", type: "" })} />}
@@ -573,16 +706,16 @@ export default function ActivityMonitoringTab({ setToast }) {
 
       {/* KPI Stat Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 14, marginBottom: 20 }}>
-        <StatCard icon="📸" label="Total Submissions" val={activities.length} color="#3b82f6" bg="#dbeafe" />
-        <StatCard icon="⏳" label="Awaiting Review"   val={pending}           color="#f59e0b" bg="#fef3c7" />
-        <StatCard icon="✅" label="Approved"           val={approved}          color="#10b981" bg="#d1fae5" />
-        <StatCard icon="🚩" label="Flagged"            val={flagged}           color="#dc2626" bg="#fee2e2" />
-        <StatCard icon="✕" label="Rejected"            val={rejected}          color="#6b7280" bg="#f3f4f6" />
+        <StatCard icon="📸" label={t("Total Submissions")} val={activities.length} color="#3b82f6" bg="#dbeafe" />
+        <StatCard icon="⏳" label={t("Awaiting Review")}   val={pending}           color="#f59e0b" bg="#fef3c7" />
+        <StatCard icon="✅" label={t("Approved")}           val={approved}          color="#10b981" bg="#d1fae5" />
+        <StatCard icon="🚩" label={t("Flagged")}            val={flagged}           color="#dc2626" bg="#fee2e2" />
+        <StatCard icon="✕" label={t("Rejected")}            val={rejected}          color="#6b7280" bg="#f3f4f6" />
       </div>
 
       {/* Status filter pills */}
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
-        {[["all", "All"], ["pending", "⏳ Pending"], ["approved", "✅ Approved"], ["flagged", "🚩 Flagged"], ["rejected", "✕ Rejected"]].map(([val, label]) => (
+        {[["all", t("All")], ["pending", "⏳ " + t("Pending")], ["approved", "✅ " + t("Approved")], ["flagged", "🚩 " + t("Flagged")], ["rejected", "✕ " + t("Rejected")]].map(([val, label]) => (
           <button key={val} onClick={() => setStatusFilter(val)}
             style={{ padding: "7px 14px", borderRadius: 20,
               border: `1.5px solid ${statusFilter === val ? (statusConfig[val]?.color || "#374151") : "#e5e7eb"}`,
@@ -602,7 +735,7 @@ export default function ActivityMonitoringTab({ setToast }) {
           <SearchBar value={search} onChange={setSearch} placeholder="Search by teacher, class, center, description..." />
         </div>
         <select style={{ ...S.input, width: 200, marginBottom: 0 }} value={centerFilter} onChange={e => setCenterFilter(e.target.value)}>
-          <option value="all">All Centers</option>
+          <option value="all">{t("All Centers")}</option>
           {centers.map(c => <option key={c._id || c.id} value={c._id || c.id}>{c.name}</option>)}
         </select>
         {/* FEATURE: date range filter */}
@@ -629,11 +762,11 @@ export default function ActivityMonitoringTab({ setToast }) {
           padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center",
           gap: 10, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12, color: "#92400e", fontWeight: 600 }}>
-            {selectedIds.length > 0 ? `${selectedIds.length} selected` : `${pendingInView.length} pending in view`}
+            {selectedIds.length > 0 ? `${selectedIds.length} ${t("selected")}` : `${pendingInView.length} ${t("pending in view")}`}
           </span>
           {selectedIds.length === 0 ? (
             <button onClick={selectAllPendingInView} style={{ ...S.tblBtn }}>
-              Select all pending in view
+              {t("Select all pending in view")}
             </button>
           ) : (
             <>
@@ -649,91 +782,116 @@ export default function ActivityMonitoringTab({ setToast }) {
         </div>
       )}
 
-      <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 12 }}>
-        Showing {filtered.length} of {activities.length} submissions
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 10 }}>
+        <div style={{ fontSize: 12, color: "#9ca3af" }}>
+          Showing {filtered.length} of {activities.length} submissions
+        </div>
+
+        {/* ===== PRAJWAL EDIT START: Grid / By Center view toggle ===== */}
+        <div style={{ display: "flex", gap: 6, background: "#f3f4f6", padding: 4, borderRadius: 10 }}>
+          <button onClick={() => setViewMode("grid")}
+            style={{ padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer",
+              background: viewMode === "grid" ? "white" : "transparent",
+              boxShadow: viewMode === "grid" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+              fontSize: 12, fontWeight: 700, color: viewMode === "grid" ? "#374151" : "#9ca3af" }}>
+            ▦ {t("Grid")}
+          </button>
+          <button onClick={() => setViewMode("byCenter")}
+            style={{ padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer",
+              background: viewMode === "byCenter" ? "white" : "transparent",
+              boxShadow: viewMode === "byCenter" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+              fontSize: 12, fontWeight: 700, color: viewMode === "byCenter" ? "#374151" : "#9ca3af" }}>
+            🏢 {t("By Center")}
+          </button>
+        </div>
+        {/* ===== PRAJWAL EDIT END ===== */}
       </div>
 
-      {/* Activities Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 20 }}>
-        {filtered.map(act => {
-          const sc = statusConfig[act.status] || { color: "#6b7280", bg: "#f3f4f6" };
-          const isSelected = selectedIds.includes(act.id);
-          return (
-            <div key={act.id} style={{ background: "white", borderRadius: 16,
-              border: isSelected ? "2px solid #f59e0b" : "1px solid #f1f5f9",
-              boxShadow: "0 2px 12px rgba(0,0,0,0.06)", overflow: "hidden", display: "flex", flexDirection: "column",
-              borderTop: `3px solid ${sc.color}`, position: "relative" }}>
+      {/* Activities Grid (unchanged, now just uses renderActivityCard) */}
+      {viewMode === "grid" && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))", gap: 20 }}>
+          {filtered.map(act => renderActivityCard(act))}
+        </div>
+      )}
 
-              {/* FEATURE: bulk-select checkbox, only shown for pending items */}
-              {act.status === "pending" && (
-                <label style={{ position: "absolute", top: 10, left: 10, zIndex: 2,
-                  width: 22, height: 22, borderRadius: 6, background: "rgba(255,255,255,0.9)",
-                  display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-                  boxShadow: "0 1px 4px rgba(0,0,0,0.15)" }}>
-                  <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(act.id)}
-                    style={{ width: 16, height: 16, cursor: "pointer", accentColor: "#f59e0b" }} />
-                </label>
-              )}
+      {/* ===== PRAJWAL EDIT START: By Center -> Teacher grouped view ===== */}
+      {viewMode === "byCenter" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          {groupedByCenter.map(center => {
+            const isCollapsed = collapsedCenters[center.centerId];
+            return (
+              <div key={center.centerId} style={{ background: "white", borderRadius: 16,
+                border: "1px solid #f1f5f9", overflow: "hidden" }}>
 
-              {/* Image */}
-              {act.image ? (
-                <div style={{ height: 160, overflow: "hidden", background: "#f1f5f9" }}>
-                  <img src={act.image} alt={act.imageName}
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    onError={e => { e.target.parentElement.innerHTML = '<div style="height:160px;display:flex;align-items:center;justify-content:center;background:#fef3c7;color:#b45309;font-size:12px;font-weight:700;gap:8px"><span style=\'font-size:24px\'>📝</span>Image unavailable</div>'; }} />
-                </div>
-              ) : (
-                <div style={{ height: 160, background: `${sc.bg}`, display: "flex", flexDirection: "column",
-                  alignItems: "center", justifyContent: "center", color: sc.color, gap: 6 }}>
-                  <span style={{ fontSize: 40 }}>📝</span>
-                  <span style={{ fontSize: 11, fontWeight: 700 }}>Text Report Only</span>
-                </div>
-              )}
-
-              {/* Body */}
-              <div style={{ padding: "14px 16px", flex: 1, display: "flex", flexDirection: "column" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {act.teacherAvatar && (
-                      <img src={act.teacherAvatar} alt="" style={{ width: 28, height: 28, borderRadius: "50%", border: `1.5px solid ${sc.color}` }} />
-                    )}
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: "#1c1917" }}>{act.teacherName}</div>
-                      <div style={{ fontSize: 10, color: "#9ca3af" }}>{act.date}</div>
-                    </div>
+                {/* Center header — click to expand/collapse */}
+                <div onClick={() => toggleCenterCollapse(center.centerId)}
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+                    padding: "14px 18px", cursor: "pointer",
+                    background: "linear-gradient(135deg,#fff7ed,#ffedd5)",
+                    borderBottom: isCollapsed ? "none" : "1px solid #fed7aa" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 14, color: "#9a3412" }}>{isCollapsed ? "▶" : "▼"}</span>
+                    <span style={{ fontSize: 15, fontWeight: 800, color: "#9a3412" }}>🏢 {center.centerName}</span>
                   </div>
-                  <StatusBadge status={act.status} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#b45309",
+                    background: "#fed7aa", padding: "4px 10px", borderRadius: 12 }}>
+                    {center.teachers.length} {t("teacher")}{center.teachers.length !== 1 ? "s" : ""} · {center.total} {t("activities")}
+                  </span>
                 </div>
 
-                <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 8 }}>
-                  🏢 {act.centerName} · <span style={{ color: "#374151" }}>{act.className}</span>
-                </div>
-
-                <p style={{ fontSize: 12, color: "#475569", margin: "0 0 12px", lineHeight: 1.5, flex: 1 }}>
-                  {act.description.length > 120 ? act.description.substring(0, 120) + "..." : act.description || "No description."}
-                </p>
-
-                {act.adminComments && (
-                  <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8,
-                    padding: "8px 10px", fontSize: 11, color: "#334155", marginBottom: 10 }}>
-                    💬 <b>Admin:</b> {act.adminComments.length > 80 ? act.adminComments.substring(0, 80) + "..." : act.adminComments}
+                {/* Per-teacher breakdown within this center */}
+                {!isCollapsed && (
+                  <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: 22 }}>
+                    {center.teachers.map(teacher => (
+                      <div key={teacher.teacherId}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+                          {teacher.teacherAvatar && (
+                            <img src={teacher.teacherAvatar} alt="" style={{ width: 26, height: 26, borderRadius: "50%" }} />
+                          )}
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "#1c1917" }}>👩‍🏫 {teacher.teacherName}</span>
+                          <span style={{ fontSize: 11, color: "#9ca3af" }}>
+                            ({teacher.activities.length} {t("submissions")})
+                          </span>
+                          <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
+                            {teacher.pending > 0 && (
+                              <span style={{ fontSize: 10, fontWeight: 700, color: "#f59e0b", background: "#fef3c7", padding: "2px 8px", borderRadius: 10 }}>⏳ {teacher.pending}</span>
+                            )}
+                            {teacher.approved > 0 && (
+                              <span style={{ fontSize: 10, fontWeight: 700, color: "#10b981", background: "#d1fae5", padding: "2px 8px", borderRadius: 10 }}>✅ {teacher.approved}</span>
+                            )}
+                            {teacher.flagged > 0 && (
+                              <span style={{ fontSize: 10, fontWeight: 700, color: "#dc2626", background: "#fee2e2", padding: "2px 8px", borderRadius: 10 }}>🚩 {teacher.flagged}</span>
+                            )}
+                            {teacher.rejected > 0 && (
+                              <span style={{ fontSize: 10, fontWeight: 700, color: "#6b7280", background: "#f3f4f6", padding: "2px 8px", borderRadius: 10 }}>✕ {teacher.rejected}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))", gap: 16 }}>
+                          {teacher.activities.map(act => renderActivityCard(act))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
+              </div>
+            );
+          })}
 
-                <button onClick={() => setSelectedActivity(act)}
-                  style={{ ...S.primaryBtn, width: "100%", fontSize: 12, padding: "9px 12px",
-                    background: act.status === "pending"
-                      ? "linear-gradient(135deg,#f59e0b,#d97706)"
-                      : "linear-gradient(135deg,#6b7280,#4b5563)" }}>
-                  {act.status === "pending" ? "🔎 Review & Decide" : "🔎 View & Update"}
-                </button>
+          {groupedByCenter.length === 0 && (
+            <div style={{ textAlign: "center", padding: "60px 20px", color: "#9ca3af" }}>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>📸</div>
+              <div style={{ fontSize: 14, fontWeight: 700 }}>No activities found</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>
+                {statusFilter !== "all" ? `No ${statusFilter} activities match your filters.` : "No activity submissions yet."}
               </div>
             </div>
-          );
-        })}
-      </div>
+          )}
+        </div>
+      )}
+      {/* ===== PRAJWAL EDIT END ===== */}
 
-      {filtered.length === 0 && (
+      {viewMode === "grid" && filtered.length === 0 && (
         <div style={{ textAlign: "center", padding: "60px 20px", color: "#9ca3af" }}>
           <div style={{ fontSize: 48, marginBottom: 12 }}>📸</div>
           <div style={{ fontSize: 14, fontWeight: 700 }}>No activities found</div>

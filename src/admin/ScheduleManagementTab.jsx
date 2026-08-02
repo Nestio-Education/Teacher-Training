@@ -1,3 +1,4 @@
+import { t } from "../services/i18n";
 import { useState, useEffect } from "react";
 import { Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
 import { getAdminTeachers } from "../services/api";

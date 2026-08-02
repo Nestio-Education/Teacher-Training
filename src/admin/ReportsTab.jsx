@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AttendanceBar, BarChart, S, SectionCard, StatCard, StatusBadge } from "../components/Shared";
-import { getCourseAssignments, getTeacherAttendance, getTrainers, getCenters, getClasses, getChildren, getLessonPlans, getAdminLessonAssignments, getActivities, getCourses } from "../services/api";
+import { getCourseAssignments, getTeacherAttendance, getTrainers, getCenters, getClasses, getChildren, getLessonPlans, getAdminLessonAssignments, getActivities, getCourses, getAdminMentors, getMentorAttendance, getAdminMentorTracking } from "../services/api";
+import { t } from "../services/i18n";
 
 function downloadCsv(filename, rows) {
   const csv = rows.map((row) => row.map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -81,6 +82,9 @@ export default function ReportsTab({ teachers = [], courses = [], setToast }) {
   const [lessonPlans, setLessonPlans] = useState([]);
   const [planAssignments, setPlanAssignments] = useState([]);
   const [allActivities, setAllActivities] = useState([]);
+  const [mentors, setMentors] = useState([]);
+  const [mentorAttendance, setMentorAttendance] = useState([]);
+  const [trackingData, setTrackingData] = useState({ pdca: [], capstone: [], observations: [] });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -88,8 +92,9 @@ export default function ReportsTab({ teachers = [], courses = [], setToast }) {
     Promise.all([
       getCourseAssignments(), getTrainers(), getTeacherAttendance(),
       getCenters(), getClasses(), getChildren(), getLessonPlans(),
-      getAdminLessonAssignments(), getActivities()
-    ]).then(([a, tr, at, ce, cl, ch, lp, pa, act]) => {
+      getAdminLessonAssignments(), getActivities(), getAdminMentors(),
+      getMentorAttendance(), getAdminMentorTracking()
+    ]).then(([a, tr, at, ce, cl, ch, lp, pa, act, mt, ma, mtrack]) => {
       setAssignments(a?.assignments || []);
       setTrainers(tr?.trainers || []);
       setAttendanceRecords(at?.records || []);
@@ -99,6 +104,9 @@ export default function ReportsTab({ teachers = [], courses = [], setToast }) {
       setLessonPlans(lp?.lessonPlans || []);
       setPlanAssignments(pa?.assignments || []);
       setAllActivities(act?.activities || act?.submissions || []);
+      setMentors(mt?.mentors || []);
+      setMentorAttendance(ma?.records || ma?.attendanceRecords || []);
+      setTrackingData(mtrack || { pdca: [], capstone: [], observations: [] });
     }).catch(err => {
       console.error("Reports data load error:", err);
     }).finally(() => setLoading(false));
@@ -182,16 +190,51 @@ export default function ReportsTab({ teachers = [], courses = [], setToast }) {
 
   const monthlyActivity = useMemo(() => buildMonthlyActivity(allActivities), [allActivities]);
 
+  /* ── Mentors Performance Report ── */
+  const mentorsReport = useMemo(() => {
+    return mentors.map(m => {
+      const center = m.mentorProfile?.center;
+      const centerName = center?.name || m.mentorProfile?.assignedCenter || "—";
+      const menteesCount = (m.mentorProfile?.assignedTeachers || []).length;
+      
+      const pdcaCount = (trackingData.pdca || []).filter(p => String(p.mentorId?._id || p.mentorId) === String(m._id)).length;
+      const capstoneCount = (trackingData.capstone || []).filter(c => String(c.mentorId?._id || c.mentorId) === String(m._id)).length;
+      const observationCount = (trackingData.observations || []).filter(o => String(o.mentorId?._id || o.mentorId) === String(m._id)).length;
+      
+      const mAttendance = (mentorAttendance || []).filter(r => String(r.mentor?._id || r.mentor || r.teacher?._id || r.teacher) === String(m._id));
+      const present = mAttendance.filter(r => ["present", "late"].includes(r.status)).length;
+      const attendanceRate = mAttendance.length ? Math.round((present / mAttendance.length) * 100) : 0;
+      
+      return {
+        mentor: m,
+        centerName,
+        menteesCount,
+        pdcaCount,
+        capstoneCount,
+        observationCount,
+        attendanceRate
+      };
+    });
+  }, [mentors, mentorAttendance, trackingData]);
+
+  const exportMentorsReport = () => {
+    downloadCsv("mentors-performance-report.csv", [
+      ["Mentor Name", "Email", "Center", "Mentees Count", "PDCA Growth Cycles", "Capstone Submissions", "Observations", "Attendance Rate"],
+      ...mentorsReport.map(r => [r.mentor.name, r.mentor.email, r.centerName, r.menteesCount, r.pdcaCount, r.capstoneCount, r.observationCount, `${r.attendanceRate}%`])
+    ]);
+  };
+
   const reportTabs = [
-    { key: "teacherPerformance", label: "Teacher Performance", icon: "👩‍🏫" },
-    { key: "classProgress", label: "Class Progress", icon: "🎒" },
-    { key: "childDevelopment", label: "Child Development", icon: "👶" },
-    { key: "centerSummary", label: "Center Summary", icon: "🏫" },
-    { key: "monthlyActivity", label: "Monthly Activity", icon: "📊" },
-    { key: "enrollment", label: "Enrollment Trend", icon: "📈" },
+    { key: "teacherPerformance", label: t("Teacher Performance"), icon: "👩‍🏫" },
+    { key: "classProgress", label: t("Class Progress"), icon: "🎒" },
+    { key: "childDevelopment", label: t("Child Development"), icon: "👶" },
+    { key: "centerSummary", label: t("Center Summary"), icon: "🏫" },
+    { key: "monthlyActivity", label: t("Monthly Activity"), icon: "📊" },
+    { key: "enrollment", label: t("Enrollment Trend"), icon: "📈" },
     { key: "completion", label: "Course Completion", icon: "✅" },
     { key: "attendance", label: "Attendance", icon: "📅" },
-    { key: "trainer", label: "Trainers", icon: "🎯" },
+    { key: "trainer", label: t("Trainers"), icon: "🎯" },
+    { key: "mentors", label: t("Mentors"), icon: "👨‍🏫" },
   ];
 
   const exportTeacherPerformance = () => {
@@ -235,16 +278,16 @@ export default function ReportsTab({ teachers = [], courses = [], setToast }) {
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
-      <h1 style={S.pageTitle}>Reports & Analytics</h1>
-      <p style={S.pageSub}>Comprehensive operational reports — all data exportable as CSV.</p>
+      <h1 style={S.pageTitle}>{t("Reports & Analytics")}</h1>
+      <p style={S.pageSub}>{t("Comprehensive operational reports — all data exportable as CSV.")}</p>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 14, marginBottom: 24 }}>
-        <StatCard icon="👩‍🏫" label="Teachers" val={approvedTeachers.length} color="#f59e0b" bg="#fef3c7" />
-        <StatCard icon="🎒" label="Classes" val={classes.length} color="#3b82f6" bg="#dbeafe" />
-        <StatCard icon="👶" label="Children" val={children.length} color="#10b981" bg="#d1fae5" />
-        <StatCard icon="🏫" label="Centers" val={centers.filter(c => c.status === "active").length} color="#8b5cf6" bg="#ede9fe" />
-        <StatCard icon="📚" label="Courses" val={publishedCourses.length} color="#06b6d4" bg="#cffafe" />
-        <StatCard icon="📝" label="Activities" val={allActivities.length} color="#ef4444" bg="#fee2e2" />
+        <StatCard icon="👩‍🏫" label={t("Teachers")} val={approvedTeachers.length} color="#f59e0b" bg="#fef3c7" />
+        <StatCard icon="🎒" label={t("Classes")} val={classes.length} color="#3b82f6" bg="#dbeafe" />
+        <StatCard icon="👶" label={t("Children")} val={children.length} color="#10b981" bg="#d1fae5" />
+        <StatCard icon="🏫" label={t("Centers")} val={centers.filter(c => c.status === "active").length} color="#8b5cf6" bg="#ede9fe" />
+        <StatCard icon="📚" label={t("Courses")} val={publishedCourses.length} color="#06b6d4" bg="#cffafe" />
+        <StatCard icon="📝" label={t("Activities")} val={allActivities.length} color="#ef4444" bg="#fee2e2" />
       </div>
 
       <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
@@ -481,6 +524,48 @@ export default function ReportsTab({ teachers = [], courses = [], setToast }) {
               ))}
             </tbody>
           </table>
+        </SectionCard>
+      )}
+
+      {/* Mentors */}
+      {activeReport === "mentors" && (
+        <SectionCard title="Mentor Performance & Tracking Report" action={<button style={S.exportBtn} onClick={exportMentorsReport}>Export CSV</button>}>
+          {mentorsReport.length === 0 ? <div style={{ color: "#9ca3af", fontSize: 13 }}>No mentors found.</div> : (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
+                <thead>
+                  <tr style={{ borderBottom: "2px solid #f3f4f6" }}>
+                    {["Mentor", "Center", "Assigned Mentees", "PDCA Cycles", "Capstones", "Observations", "Attendance Rate"].map(h => (
+                      <th key={h} style={{ padding: "10px 12px", fontSize: 11, fontWeight: 700, color: "#9ca3af", textAlign: "left", textTransform: "uppercase" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {mentorsReport.map(r => (
+                    <tr key={r.mentor._id} style={{ borderBottom: "1px solid #f9fafb" }}>
+                      <td style={{ padding: "12px" }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#1c1917" }}>{r.mentor.name}</div>
+                        <div style={{ fontSize: 10, color: "#9ca3af" }}>{r.mentor.email}</div>
+                      </td>
+                      <td style={{ padding: "12px", fontSize: 12, color: "#4b5563" }}>{r.centerName}</td>
+                      <td style={{ padding: "12px", fontSize: 13, fontWeight: 700, color: "#3b82f6" }}>{r.menteesCount}</td>
+                      <td style={{ padding: "12px", fontSize: 13, fontWeight: 700, color: "#10b981" }}>{r.pdcaCount}</td>
+                      <td style={{ padding: "12px", fontSize: 13, fontWeight: 700, color: "#f59e0b" }}>{r.capstoneCount}</td>
+                      <td style={{ padding: "12px", fontSize: 13, fontWeight: 700, color: "#8b5cf6" }}>{r.observationCount}</td>
+                      <td style={{ padding: "12px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <div style={{ height: 6, width: 50, background: "#f3f4f6", borderRadius: 3, overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${r.attendanceRate}%`, background: r.attendanceRate >= 90 ? "#10b981" : "#f59e0b", borderRadius: 3 }} />
+                          </div>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: r.attendanceRate >= 90 ? "#10b981" : "#d97706" }}>{r.attendanceRate}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </SectionCard>
       )}
     </div>

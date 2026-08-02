@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 const activitySubmissionSchema = new mongoose.Schema(
   {
     teacher: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    mentor: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true },
     center: { type: mongoose.Schema.Types.ObjectId, ref: "Center" },
     class: { type: mongoose.Schema.Types.ObjectId, ref: "Class" },
     lessonPlan: { type: mongoose.Schema.Types.ObjectId, ref: "LessonPlan" },
@@ -28,8 +29,9 @@ const activitySubmissionSchema = new mongoose.Schema(
     instructions: String,
     expectedOutput: String,
     notes: String,
-    files: [{ type: mongoose.Schema.Types.ObjectId, ref: "FileAsset" }],
+    files: [mongoose.Schema.Types.Mixed],
     status: { type: String, enum: ["pending", "approved", "flagged", "rejected"], default: "pending", index: true },
+    rating: { type: Number, default: 5 },
     adminComments: { type: String },
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     reviewedAt: { type: Date },

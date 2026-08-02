@@ -1,3 +1,4 @@
+import { t } from "../services/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { Modal, S, StatCard } from "../components/Shared";
 import { getAdminNotifications, sendAdminNotification, deleteNotification, markAllNotificationsRead } from "../services/api";
@@ -277,8 +278,8 @@ export default function NotificationsTab({ teachers = [], setToast }) {
       )}
 
       <div style={{ marginBottom: 20 }}>
-        <h1 style={S.pageTitle}>Notifications Management</h1>
-        <p style={S.pageSub}>Send real notifications to teachers and review the delivery log.</p>
+        <h1 style={S.pageTitle}>{t("Notifications Management")}</h1>
+        <p style={S.pageSub}>{t("Send real notifications to teachers and review the delivery log.")}</p>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14, marginBottom: 20 }}>
@@ -290,10 +291,10 @@ export default function NotificationsTab({ teachers = [], setToast }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
         <div style={{ background: "white", borderRadius: 16, border: "1px solid #e5e7eb", padding: 20 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#111827", marginBottom: 12 }}>Compose Notification</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#111827", marginBottom: 12 }}>{t("Compose Notification")}</div>
 
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 6 }}>Quick Templates</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#334155", marginBottom: 6 }}>{t("Quick Templates")}</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {NOTIFICATION_TEMPLATES.map((t, i) => (
                 <button
@@ -323,7 +324,7 @@ export default function NotificationsTab({ teachers = [], setToast }) {
               <option value="all">All teachers ({teachers.length})</option>
               <option value="approved">Approved teachers ({teachers.filter((t) => t.status === "approved").length})</option>
               <option value="pending">Pending teachers ({teachers.filter((t) => t.status === "pending").length})</option>
-              <option value="specific">Specific teacher...</option>
+              <option value="specific">{t("Specific teacher...")}</option>
             </select>
             {audience === "specific" && (
               <select
@@ -331,7 +332,7 @@ export default function NotificationsTab({ teachers = [], setToast }) {
                 onChange={(e) => setSelectedTeacherId(e.target.value)}
                 style={{ ...S.input, marginBottom: 12, background: "white" }}
               >
-                <option value="">Select a teacher...</option>
+                <option value="">{t("Select a teacher...")}</option>
                 {teachers.map((t) => (
                   <option key={t._id || t.id} value={t._id || t.id}>
                     {t.name} {t.email ? `(${t.email})` : ""}
@@ -345,14 +346,14 @@ export default function NotificationsTab({ teachers = [], setToast }) {
             <label style={S.label}>Channel</label>
             {/* Start: Dnyaneshwari Thorat */}
             <select value={channel} onChange={(e) => setChannel(e.target.value)} style={{ ...S.input, marginBottom: 8, background: "white" }}>
-              <option value="all">🌐 All channels</option>
-              <option value="in_app">📱 In-app notification</option>
-              <option value="email">📧 Email (requires SMTP config)</option>
-              <option value="sms">💬 SMS (requires Twilio config)</option>
-              <option value="whatsapp">🟢 WhatsApp (requires Twilio config)</option>
+              <option value="all">{t("🌐 All channels")}</option>
+              <option value="in_app">{t("📱 In-app notification")}</option>
+              <option value="email">{t("📧 Email (requires SMTP config)")}</option>
+              <option value="sms">{t("💬 SMS (requires Twilio config)")}</option>
+              <option value="whatsapp">{t("🟢 WhatsApp (requires Twilio config)")}</option>
             </select>
             <div style={{ fontSize: 11, color: "#6b7280", lineHeight: 1.5 }}>
-              Choose <b>All channels</b> to send the same notification through in-app, email, SMS, and WhatsApp together.
+              Choose <b>{t("All channels")}</b> to send the same notification through in-app, email, SMS, and WhatsApp together.
             </div>
             {/* End: Dnyaneshwari Thorat */}
           </div>
@@ -362,17 +363,17 @@ export default function NotificationsTab({ teachers = [], setToast }) {
           </div>
 
           <div style={{ marginBottom: 12 }}>
-            <label style={S.label}>Subject *</label>
+            <label style={S.label}>{t("Subject *")}</label>
             <input
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               style={{ ...S.input, marginBottom: 8, background: "white" }}
-              placeholder="Enter notification subject..."
+              placeholder={t("Enter notification subject...")}
             />
           </div>
 
           <div style={{ marginBottom: 4 }}>
-            <label style={S.label}>Message *</label>
+            <label style={S.label}>{t("Message *")}</label>
             <div style={{ position: "relative" }}>
               <textarea
                 value={body}
@@ -380,7 +381,7 @@ export default function NotificationsTab({ teachers = [], setToast }) {
                   if (e.target.value.length <= bodyMaxChars) setBody(e.target.value);
                 }}
                 style={{ ...S.input, minHeight: 120, resize: "vertical", marginBottom: 4, background: "white" }}
-                placeholder="Write your notification message here..."
+                placeholder={t("Write your notification message here...")}
               />
               <div
                 style={{
@@ -419,7 +420,7 @@ export default function NotificationsTab({ teachers = [], setToast }) {
 
         <div style={{ background: "white", borderRadius: 16, border: "1px solid #e5e7eb", padding: 20, display: "flex", flexDirection: "column" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>Delivery Log</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>{t("Delivery Log")}</div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {hasUnread && (
                 <button onClick={handleMarkAllRead} style={{ ...S.tblBtn, fontSize: 11, color: "#2563eb", borderColor: "#93c5fd" }}>
@@ -434,7 +435,7 @@ export default function NotificationsTab({ teachers = [], setToast }) {
             <input
               value={logSearch}
               onChange={(e) => setLogSearch(e.target.value)}
-              placeholder="Search..."
+              placeholder={t("Search...")}
               style={{ ...S.input, marginBottom: 0, flex: 1, minWidth: 120, fontSize: 12, padding: "6px 10px", background: "white" }}
             />
             <select
@@ -462,11 +463,11 @@ export default function NotificationsTab({ teachers = [], setToast }) {
           </div>
 
           {loading ? (
-            <div style={{ color: "#9ca3af", fontSize: 13 }}>Loading notification history...</div>
+            <div style={{ color: "#9ca3af", fontSize: 13 }}>{t("Loading notification history...")}</div>
           ) : filteredNotifications.length === 0 ? (
             <div style={{ textAlign: "center", padding: 30, color: "#9ca3af" }}>
-              <div style={{ fontSize: 28, marginBottom: 6 }}>📭</div>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>No notifications found</div>
+              <div style={{ fontSize: 28, marginBottom: 6 }}>{t("📭")}</div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{t("No notifications found")}</div>
             </div>
           ) : (
             <div style={{ flex: 1, overflowY: "auto", maxHeight: 300 }}>
