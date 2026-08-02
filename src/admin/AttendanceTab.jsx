@@ -1,7 +1,7 @@
 import { t } from "../services/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { StatCard, SectionCard } from "../components/Shared";
-import { getTeacherAttendance, sendAdminNotification } from "../services/api";
+import { getTeacherAttendance, sendAdminNotification, getMentorAttendance, getMentorFellowsAttendance, getMentorFellows, getAdminTeachers } from "../services/api";
 
 const STATUS_COLORS = {
   present: { bg: "#10b981", light: "#d1fae5", text: "#065f46" },
@@ -27,6 +27,8 @@ const S = {
   primaryBtn: { padding: "8px 16px", background: "#f59e0b", color: "white", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
 };
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+
 function exportCsv(filename, rows) {
   const csv = rows.map((row) => row.map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -38,22 +40,29 @@ function exportCsv(filename, rows) {
   URL.revokeObjectURL(url);
 }
 
-const MiniBarChart = ({ data, color = "#f59e0b", height = 100 }) => {
+const MiniBarChart = ({ data, color = "#f59e0b", height = 120 }) => {
   const max = Math.max(...data.map(d => d.val || 0), 1);
   return (
-    <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height, padding: "0 2px" }}>
-      {data.map((d, i) => (
-        <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-          <span style={{ fontSize: 9, fontWeight: 700, color: "#374151" }}>{d.val || 0}</span>
-          <div style={{ width: "100%", height: `${Math.max(((d.val || 0) / max) * 100, 4)}%`, background: color, borderRadius: 3, transition: "height 0.3s" }} />
-          <span style={{ fontSize: 8, color: "#9ca3af", fontWeight: 600 }}>{d.label}</span>
-        </div>
-      ))}
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 10, height, padding: "10px 2px" }}>
+      {data.map((d, i) => {
+        const barHeightPct = Math.round(((d.val || 0) / max) * 100);
+        return (
+          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: "#374151", marginBottom: 4 }}>{d.val || 0}</span>
+            <div style={{ width: "100%", flex: 1, display: "flex", alignItems: "flex-end", minHeight: 4 }}>
+              <div style={{ width: "100%", height: `${Math.max(barHeightPct, 4)}%`, background: color, borderRadius: "4px 4px 0 0", transition: "height 0.3s" }} />
+            </div>
+            <span style={{ fontSize: 9, color: "#9ca3af", fontWeight: 700, marginTop: 4 }}>{d.label}</span>
+          </div>
+        );
+      })}
     </div>
   );
 };
 
-export default function AttendanceTab({ teachers = [] }) {
+export default function AttendanceTab({ teachers: initialTeachers = [], role = "admin", user = null }) {
+  const [activeRole, setActiveRole] = useState(role === "mentor" ? "Fellow" : "Teacher"); // "Teacher" | "Mentor" | "Fellow"
+  const [teachers, setTeachers] = useState(initialTeachers);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dateFilter, setDateFilter] = useState("");
@@ -62,11 +71,53 @@ export default function AttendanceTab({ teachers = [] }) {
 
   useEffect(() => {
     setLoading(true);
-    getTeacherAttendance(dateFilter ? { date: dateFilter } : {})
-      .then((data) => setRecords(data?.records || []))
-      .catch((error) => console.error("Failed to load teacher attendance", error))
+    
+    const fetchFunc = () => {
+      if (role === "mentor") {
+        return getMentorFellowsAttendance(dateFilter ? { date: dateFilter } : {});
+      } else if (activeRole === "Mentor") {
+        return getMentorAttendance(dateFilter ? { date: dateFilter } : {});
+      } else {
+        return getTeacherAttendance(dateFilter ? { date: dateFilter } : {});
+      }
+    };
+
+    const fetchTeachers = async () => {
+      if (role === "mentor") {
+        try {
+          const res = await getMentorFellows();
+          const myFellows = res.fellows || [];
+          setTeachers(myFellows);
+        } catch (err) {
+          console.error("Failed to load mentor fellows for attendance", err);
+        }
+      } else if (initialTeachers.length > 0) {
+        setTeachers(initialTeachers);
+      } else {
+        try {
+          if (activeRole === "Mentor") {
+            const res = await fetch(`${API_BASE_URL}/api/admin/mentors`, {
+              headers: { "Authorization": `Bearer ${localStorage.getItem("spaceece_auth_token")}` }
+            });
+            const data = await res.json();
+            setTeachers(data.mentors || []);
+          } else {
+            const res = await getAdminTeachers();
+            setTeachers(res.teachers || []);
+          }
+        } catch (err) {
+          console.error("Failed to load users for attendance", err);
+        }
+      }
+    };
+
+    Promise.all([fetchFunc(), fetchTeachers()])
+      .then(([data]) => {
+        setRecords(data?.records || data?.attendanceRecords || []);
+      })
+      .catch((error) => console.error("Failed to load attendance", error))
       .finally(() => setLoading(false));
-  }, [dateFilter]);
+  }, [dateFilter, activeRole, role, initialTeachers, user]);
 
   const filteredRecords = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -123,20 +174,21 @@ export default function AttendanceTab({ teachers = [] }) {
     return Array.from({ length: 4 }, (_, i) => {
       const weekStart = new Date(now);
       weekStart.setDate(weekStart.getDate() - (3 - i) * 7);
+      weekStart.setHours(0, 0, 0, 0);
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
       const weekRecords = records.filter(r => {
         const d = r.attendanceDate ? new Date(r.attendanceDate) : null;
         return d && d >= weekStart && d <= weekEnd;
       });
       const present = weekRecords.filter(r => ["present", "late"].includes(r.status)).length;
-      const total = weekRecords.length || 1;
       return {
         label: `W${4 - i}`,
         present,
         absent: weekRecords.filter(r => r.status === "absent").length,
         total: weekRecords.length,
-        pct: Math.round((present / total) * 100),
+        pct: weekRecords.length ? Math.round((present / weekRecords.length) * 100) : 0,
       };
     });
   }, [records]);
@@ -147,10 +199,13 @@ export default function AttendanceTab({ teachers = [] }) {
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(now);
       d.setDate(d.getDate() - (6 - i));
-      const dayStr = d.toISOString().split("T")[0];
+      const year = d.getFullYear();
+      const month = d.getMonth();
+      const date = d.getDate();
       const dayRecords = records.filter(r => {
-        const rd = r.attendanceDate ? new Date(r.attendanceDate).toISOString().split("T")[0] : "";
-        return rd === dayStr;
+        if (!r.attendanceDate) return false;
+        const rd = new Date(r.attendanceDate);
+        return rd.getFullYear() === year && rd.getMonth() === month && rd.getDate() === date;
       });
       const present = dayRecords.filter(r => ["present", "late"].includes(r.status)).length;
       return {
@@ -169,14 +224,45 @@ export default function AttendanceTab({ teachers = [] }) {
     <div style={{ animation: "fadeIn 0.3s ease" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
         <div>
-          <h1 style={S.pageTitle}>{t("Teacher Attendance")}</h1>
-          <p style={S.pageSub}>{t("Live attendance records with trend analysis and absent-teacher flagging.")}</p>
+          <h1 style={S.pageTitle}>
+            {role === "mentor" ? t("Teacher Attendance") : (activeRole === "Mentor" ? t("Mentor Attendance") : t("Teacher Attendance"))}
+          </h1>
+          <p style={S.pageSub}>
+            {role === "mentor" 
+              ? t("Live teacher attendance records with trend analysis and absent flagging.")
+              : t("Live attendance records with trend analysis and absent flagging.")}
+          </p>
         </div>
-        <button onClick={() => exportCsv("teacher-attendance.csv", [
-          ["Teacher", "Email", "Date", "Status", "Source", "Note"],
+        <button onClick={() => exportCsv(activeRole === "Mentor" ? "mentor-attendance.csv" : "teacher-attendance.csv", [
+          [activeRole === "Mentor" ? "Mentor" : "Teacher", "Email", "Date", "Status", "Source", "Note"],
           ...filteredRecords.map(r => [r.teacher?.name || "", r.teacher?.email || "", r.attendanceDate ? new Date(r.attendanceDate).toLocaleDateString("en-IN") : "", r.status, r.source || "", r.note || ""])
         ])} style={S.exportBtn}>{t("📥 Export CSV")}</button>
       </div>
+
+      {role === "admin" && (
+        <div style={{ display: "flex", background: "#f1f5f9", padding: 4, borderRadius: 12, width: "fit-content", marginBottom: 20 }}>
+          {["Teacher", "Mentor"].map(r => (
+            <button
+              key={r}
+              onClick={() => setActiveRole(r)}
+              style={{
+                padding: "8px 20px",
+                borderRadius: 8,
+                background: activeRole === r ? "white" : "transparent",
+                color: activeRole === r ? "#0f172a" : "#64748b",
+                fontWeight: activeRole === r ? 700 : 600,
+                fontSize: 12,
+                border: "none",
+                boxShadow: activeRole === r ? "0 2px 4px rgba(0,0,0,0.05)" : "none",
+                cursor: "pointer",
+                transition: "all 0.2s"
+              }}
+            >
+              {t(r + "s")}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14, marginBottom: 20 }}>
@@ -184,7 +270,7 @@ export default function AttendanceTab({ teachers = [] }) {
         <StatCard icon="✅" label={t("Present")} val={summary.present} color="#10b981" bg="#d1fae5" />
         <StatCard icon="⏰" label={t("Late")} val={summary.late} color="#f59e0b" bg="#fef3c7" />
         <StatCard icon="❌" label={t("Absent")} val={summary.absent} color="#ef4444" bg="#fee2e2" />
-        <StatCard icon="🚨" label={t("Flagged Teachers")} val={flaggedTeachers.length} color="#dc2626" bg="#fee2e2" />
+        <StatCard icon="🚨" label={activeRole === "Mentor" ? t("Flagged Mentors") : (role === "mentor" ? t("Flagged Fellows") : t("Flagged Teachers"))} val={flaggedTeachers.length} color="#dc2626" bg="#fee2e2" />
       </div>
 
       {/* Trend Charts */}
@@ -211,9 +297,17 @@ export default function AttendanceTab({ teachers = [] }) {
         <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 14, padding: 18, marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
             <span style={{ fontSize: 20 }}>{t("🚨")}</span>
-            <span style={{ fontSize: 14, fontWeight: 800, color: "#991b1b" }}>{t("Absent Teachers Flagged")} ({flaggedTeachers.length})</span>
+            <span style={{ fontSize: 14, fontWeight: 800, color: "#991b1b" }}>
+              {activeRole === "Mentor" ? t("Absent Mentors Flagged") : (role === "mentor" ? t("Absent Fellows Flagged") : t("Absent Teachers Flagged"))} ({flaggedTeachers.length})
+            </span>
           </div>
-          <div style={{ fontSize: 12, color: "#b91c1c", marginBottom: 12 }}>{t("Teachers with &lt;50% attendance or 3+ consecutive absences need attention.")}</div>
+          <div style={{ fontSize: 12, color: "#b91c1c", marginBottom: 12 }}>
+            {activeRole === "Mentor" 
+              ? t("Mentors with <50% attendance or 3+ consecutive absences need attention.") 
+              : (role === "mentor" 
+                ? t("Fellows with <50% attendance or 3+ consecutive absences need attention.") 
+                : t("Teachers with <50% attendance or 3+ consecutive absences need attention."))}
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {flaggedTeachers.map(item => (
               <div key={item.teacher._id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "white", borderRadius: 10, padding: "10px 14px", border: "1px solid #fecaca" }}>
@@ -241,7 +335,7 @@ export default function AttendanceTab({ teachers = [] }) {
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
             <div style={{ flex: 1, minWidth: 200, position: "relative" }}>
               <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: "#9ca3af" }}>{t("🔍")}</span>
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("Search teacher or email...")}
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={activeRole === "Mentor" ? t("Search mentor or email...") : (role === "mentor" ? t("Search fellow or email...") : t("Search teacher or email..."))}
                 style={{ ...S.input, paddingLeft: 36, marginBottom: 0, background: "white" }} />
             </div>
             <input type="date" value={dateFilter} onChange={(e) => setDateFilter(e.target.value)}

@@ -374,3 +374,54 @@ export const globalCSS = `
     animation: micPulse 1.4s infinite ease-in-out !important;
   }
 `;
+
+/* ── DonutChart ── */
+export function DonutChart({ value, max, color, size = 64 }) {
+  const pct = max > 0 ? Math.min(Math.round((value / max) * 100), 100) : 0;
+  const r = 24, cx = size / 2, cy = size / 2;
+  const circ = 2 * Math.PI * r;
+  const dash = (pct / 100) * circ;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f3f4f6" strokeWidth={6} />
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={6}
+        strokeDasharray={`${dash} ${circ - dash}`}
+        strokeLinecap="round"
+        transform={`rotate(-90 ${cx} ${cy})`} />
+      <text x={cx} y={cy + 5} textAnchor="middle" fontSize="11" fontWeight="800" fill={color}>{pct}%</text>
+    </svg>
+  );
+}
+
+/* ── ActivityItem ── */
+export function ActivityItem({ icon, text, time, color }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid #f8fafc" }}>
+      <div style={{ width: 34, height: 34, borderRadius: 10, background: `${color}15`,
+        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}>{icon}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "#1c1917", lineHeight: 1.4 }}>{text}</div>
+        <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 2 }}>{time}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ── ProgressCard ── */
+export function ProgressCard({ title, val, color = "#f59e0b", bg = "#fef3c7", icon }) {
+  return (
+    <div style={{ background: "white", borderRadius: 16, padding: "18px 20px", border: "1px solid #f1f5f9", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+        {icon && <div style={{ width: 34, height: 34, borderRadius: 10, background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>{icon}</div>}
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1c1917" }}>{title}</div>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <span style={{ fontSize: 18, fontWeight: 800, color: "#1c1917" }}>{val}%</span>
+      </div>
+      <div style={{ height: 6, background: "#f3f4f6", borderRadius: 4, overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${val}%`, background: color, borderRadius: 4, transition: "width 0.8s" }} />
+      </div>
+    </div>
+  );
+}
+

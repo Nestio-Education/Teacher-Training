@@ -774,6 +774,18 @@ export function saveTeacherAttendance(payload) {
   });
 }
 
+export function getSelfMentorAttendance(params = {}) {
+  const searchParams = new URLSearchParams(params);
+  return request(`/api/attendance/mentors?${searchParams.toString()}`);
+}
+
+export function saveSelfMentorAttendance(payload) {
+  return request("/api/attendance/mentors", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 // Trainer APIs
 export function getTrainers() {
   return request("/api/trainers");
@@ -989,7 +1001,7 @@ export function saveTwilioConfig(twilioData) {
 export function updateAdminLanguage(lang) {
   return request("/api/admin/me/language", {
     method: "PATCH",
-    body: JSON.stringify({ language: lang }),
+    body: JSON.stringify({ lang }),
   });
 }
 
@@ -1336,6 +1348,10 @@ export function getAdminMentors() {
   return request("/api/admin/mentors");
 }
 
+export function getAdminMentorTracking() {
+  return request("/api/admin/mentor-tracking");
+}
+
 export function getMyCenter() {
   return request("/api/mentor/center");
 }
@@ -1371,14 +1387,18 @@ export function recordMenteeObservation(menteeId, observation) {
   });
 }
 
+export function getMentorStats() {
+  return request("/api/mentor/stats");
+}
+
 export function getCapstoneSubmissions() {
   return request("/api/mentor/tracking/capstone");
 }
 
-export function submitCapstoneMilestone(milestone, notes, fileUrl) {
-  return request("/api/mentor/tracking/capstone", {
+export function submitCapstoneMilestone(milestone, notes, fileUrl, evidenceLink = "") {
+  return request(`/api/mentor/tracking/capstone/milestones/${milestone}/submit`, {
     method: "POST",
-    body: JSON.stringify({ milestone, notes, fileUrl })
+    body: JSON.stringify({ milestone, notes, fileUrl, evidenceLink })
   });
 }
 
@@ -1386,10 +1406,27 @@ export function getPDCACycles() {
   return request("/api/mentor/tracking/pdca");
 }
 
-export function submitPDCACycle(cycleNumber, plan, doAction, check, act) {
+// UPDATED: PDCA cycles are now linked to a specific mentee.
+// menteeId is required — pass the mentee's _id selected in the PDCA form.
+export function submitPDCACycle(cycleNumber, plan, doAction, check, act, menteeId) {
   return request("/api/mentor/tracking/pdca", {
     method: "POST",
-    body: JSON.stringify({ cycleNumber, plan, do: doAction, check, act })
+    body: JSON.stringify({ cycleNumber, plan, do: doAction, check, act, menteeId })
+  });
+}
+
+// ── Mentor: Pending Fellow Approvals reminder ──
+// Lightweight count used by the polling reminder component so it doesn't need
+// to pull the full fellow list just to check for pending ones.
+export function getPendingApprovalsCount() {
+  return request("/api/mentor/tracking/pending-approvals-count");
+}
+
+// Triggers a backend email to the mentor's own login address when they have
+// pending fellows. Safe to call often — the backend no-ops if none are pending.
+export function notifyPendingApprovals() {
+  return request("/api/mentor/tracking/notify-pending", {
+    method: "POST",
   });
 }
 
@@ -1404,6 +1441,21 @@ export function generateAILessonPlan(data) {
   return request(`/api/courses/${courseId}/assessment`);
 }
 
+// Child Feedback (AI-structured teacher feedback) APIs
+export function getAllChildFeedback() {
+  return request("/api/child-feedback");
+}
+
+export function getChildFeedbackByChild(childId) {
+  return request(`/api/child-feedback/child/${childId}`);
+}
+
+export function submitChildFeedback(payload) {
+  return request("/api/child-feedback", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
 // Start: Dnyaneshwari Thorat
 export function getChildAssessments(childId) {
   return request(`/api/teacher/children/${childId}/assessments`);
@@ -1453,4 +1505,17 @@ export function assignTeacherTaskByAdmin(teacherId, payload) {
     method: "POST",
     body: JSON.stringify({ teacherId, ...payload })
   });
+export function getMentorAttendance(params = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.date) searchParams.append("date", params.date);
+  if (params.mentorId) searchParams.append("mentorId", params.mentorId);
+  return request(`/api/attendance/mentors?${searchParams.toString()}`);
+}
+
+export function getMentorFellowsAttendance(params = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.from) searchParams.append("from", params.from);
+  if (params.to) searchParams.append("to", params.to);
+  if (params.date) searchParams.append("date", params.date);
+  return request(`/api/mentor/fellows/attendance?${searchParams.toString()}`);
 }

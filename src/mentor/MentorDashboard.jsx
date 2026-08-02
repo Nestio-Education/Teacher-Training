@@ -1,13 +1,27 @@
-import { useState, useEffect } from "react";
-import { Logo, Toast, Badge, StatusBadge, StatCard, SectionCard, S, globalCSS } from "../components/Shared";
+import { useState, useEffect, useMemo } from "react";
+import { Logo, Toast, Badge, StatusBadge, StatCard, SectionCard, S, globalCSS, DonutChart, ActivityItem, ProgressCard, BarChart } from "../components/Shared";
 import { t } from "../services/i18n";
-import { getStoredSession, getMyCenter, getMentorMe } from "../services/api";
+import { 
+  getStoredSession, 
+  getMyCenter, 
+  getMentorMe, 
+  getMentorFellows, 
+  getActivities, 
+  getChildren, 
+  getMentorFellowsAttendance, 
+  getCourseAssignments,
+  getPDCACycles, 
+  getCapstoneSubmissions, 
+  getMenteeObservations 
+} from "../services/api";
 import { MentorProfileTab, MentorNotificationsTab, MentorFeedbackTab, MenteeManagementTab, ImpactCapstoneTab, PDCATab } from "./MentorDashboardTabs";
 import MentorActivitiesTab from "./MentorActivitiesTab";
-import MentorFellowAttendanceTab from "./MentorFellowAttendanceTab";
-import MentorAttendanceTab from "./MentorAttendanceTab";
 import MentorCurriculumTab from "./MentorCurriculumTab";
-import { getPDCACycles, getCapstoneSubmissions, getMenteeObservations } from "../services/api";
+import { PendingApprovalsReminder } from "./PendingApprovalsReminder";
+import TeacherManagementTab from "../admin/TeacherManagementTab";
+import AttendanceTab from "../admin/AttendanceTab";
+import GeotagAttendance from "../pages/GeotagAttendance";
+import { calculateTeacherScore } from "../admin/OverviewTab";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
@@ -44,65 +58,189 @@ function UnderConstructionTab({ label = "This page", icon = "🚧" }) {
   );
 }
 
+function buildMonthlyRegistrations(teachers) {
+  const now = new Date();
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const month = date.toLocaleString("en-IN", { month: "short" });
+    const count = teachers.filter((t) => {
+      const d = t.createdAt ? new Date(t.createdAt) : null;
+      return d && d.getMonth() === date.getMonth() && d.getFullYear() === date.getFullYear();
+    }).length;
+    months.push({ month, val: count });
+  }
+  return months;
+}
+
 /* ── OverviewTab ── */
 function OverviewTab({ user, workingCenter }) {
+  const [teachers, setTeachers] = useState([]);
+  const [assignments, setAssignments] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [children, setChildren] = useState([]);
+  const [attendance, setAttendance] = useState([]);
+  
   const [pdcaCount, setPdcaCount] = useState(0);
   const [capstoneSubmissionsCount, setCapstoneCount] = useState(0);
   const [observationsCount, setObservationsCount] = useState(0);
-  const [recentActivities, setRecentActivities] = useState([]);
-  
+  const [mentorActivities, setMentorActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   useEffect(() => {
-    Promise.all([
-      getPDCACycles().catch(()=>({cycles:[]})),
-      getCapstoneSubmissions().catch(()=>({submissions:[]})),
-      getMenteeObservations().catch(()=>({observations:[]}))
-    ]).then(([pdcaRes, capRes, obsRes]) => {
-      const pdcas = pdcaRes.cycles || [];
-      const caps = capRes.submissions || [];
-      const obs = obsRes.observations || [];
-      
-      setPdcaCount(pdcas.filter(p => p.status === "Completed").length);
-      setCapstoneCount(caps.length);
-      setObservationsCount(obs.length);
-      
-      const merged = [
-        ...pdcas.map(p => ({
-          id: "pdca_" + p._id,
-          title: "Completed PDCA Cycle",
-          date: new Date(p.createdAt || p.date),
-          type: "pdca"
-        })),
-        ...caps.map(c => ({
-          id: "cap_" + c._id,
-          title: `Submitted Capstone Milestone ${c.milestone}`,
-          date: new Date(c.createdAt || c.submittedAt),
-          type: "capstone"
-        })),
-        ...obs.map(m => ({
-          id: "obs_" + m._id,
-          title: "Logged an Observation",
-          date: new Date(m.createdAt || m.date),
-          type: "observation"
-        }))
-      ].sort((a, b) => b.date - a.date).slice(0, 10);
-      setRecentActivities(merged);
+    let ignore = false;
+    let isInitialLoad = true;
+
+    const fetchOverviewData = () => {
+      Promise.all([
+        getMentorFellows().catch(() => ({ fellows: [] })),
+        getCourseAssignments().catch(() => ({ assignments: [] })),
+        getActivities().catch(() => ({ activities: [] })),
+        getChildren().catch(() => ({ children: [] })),
+        getMentorFellowsAttendance().catch(() => ({ attendanceRecords: [] })),
+        getPDCACycles().catch(() => ({ cycles: [] })),
+        getCapstoneSubmissions().catch(() => ({ submissions: [] })),
+        getMenteeObservations().catch(() => ({ observations: [] }))
+      ])
+        .then(([fellowsData, assignData, activData, childData, attendData, pdcaRes, capRes, obsRes]) => {
+          if (ignore) return;
+          setTeachers(fellowsData?.fellows || []);
+          setAssignments(assignData?.assignments || []);
+          setActivities(activData?.activities || []);
+          setChildren(childData?.children || []);
+          setAttendance(attendData?.attendanceRecords || []);
+          
+          const pdcas = pdcaRes.cycles || [];
+          const caps = capRes.submissions || [];
+          const obs = obsRes.observations || [];
+          
+          setPdcaCount(pdcas.filter(p => p.status === "Completed").length);
+          setCapstoneCount(caps.length);
+          setObservationsCount(obs.length);
+          
+          const merged = [
+            ...pdcas.map(p => ({
+              id: "pdca_" + p._id,
+              title: `Completed PDCA Cycle (Mentee: ${p.menteeId?.name || "Fellow"})`,
+              date: new Date(p.createdAt || p.date),
+              type: "pdca"
+            })),
+            ...caps.map(c => ({
+              id: "cap_" + c._id,
+              title: `Submitted Capstone Milestone ${c.milestone}`,
+              date: new Date(c.createdAt || c.submittedAt),
+              type: "capstone"
+            })),
+            ...obs.map(m => ({
+              id: "obs_" + m._id,
+              title: `Logged an Observation (Mentee: ${m.menteeId?.name || "Fellow"})`,
+              date: new Date(m.createdAt || m.date),
+              type: "observation"
+            }))
+          ].sort((a, b) => b.date - a.date).slice(0, 10);
+          setMentorActivities(merged);
+        })
+        .catch(err => {
+          if (!ignore) {
+            console.error("Mentor Overview poll failed:", err);
+            if (isInitialLoad) setError(err.message);
+          }
+        })
+        .finally(() => {
+          if (!ignore && isInitialLoad) setLoading(false);
+          isInitialLoad = false;
+        });
+    };
+
+    fetchOverviewData();
+    const interval = setInterval(fetchOverviewData, 8000); // 8-second poll
+
+    return () => {
+      ignore = true;
+      clearInterval(interval);
+    };
+  }, [user]);
+
+  const myTeachers = useMemo(() => {
+    return teachers.filter(t => String(t.assignedMentor?._id || t.assignedMentor) === String(user._id || user.id));
+  }, [teachers, user]);
+
+  const stats = useMemo(() => {
+    const uniqueCenters = new Set(myTeachers.map(t => t.teacherProfile?.center?._id || t.teacherProfile?.center).filter(Boolean));
+    const totalCenters = uniqueCenters.size;
+    const totalChildren = children.length;
+    const uniqueCourses = new Set(assignments.map(a => a.course?._id || a.course).filter(Boolean));
+    const totalCourses = uniqueCourses.size;
+    const pendingActivities = activities.filter(a => a.status === "pending").length;
+    const pendingReviews = assignments.filter(a => ["submitted", "under_review"].includes(a.status)).length;
+    const avgCourseCompletion = assignments.length
+      ? Math.round(assignments.reduce((sum, a) => sum + (a.progressPercent || 0), 0) / assignments.length)
+      : 0;
+    const activeTeachers = myTeachers.filter(t => t.status === "approved").length;
+    const inactiveTeachers = myTeachers.filter(t => t.status !== "approved").length;
+
+    return {
+      totalAssigned: myTeachers.length,
+      totalCenters,
+      totalChildren,
+      totalCourses,
+      pendingActivities,
+      pendingReviews,
+      avgCourseCompletion,
+      activeTeachers,
+      inactiveTeachers
+    };
+  }, [myTeachers, assignments, activities, children]);
+
+  const attendanceToday = useMemo(() => {
+    const todayStr = new Date().toDateString();
+    const todayRecs = attendance.filter(r => {
+      const dStr = new Date(r.attendanceDate).toDateString();
+      return dStr === todayStr;
     });
-  }, []);
+
+    const present = todayRecs.filter(r => r.status === "present").length;
+    const absent = todayRecs.filter(r => r.status === "absent").length;
+    const late = todayRecs.filter(r => r.status === "late").length;
+    const halfDay = todayRecs.filter(r => r.status === "half_day").length;
+
+    return { present, absent, late, halfDay };
+  }, [attendance]);
+
+  const completionStats = useMemo(() => {
+    const completed = assignments.filter(a => ["completed", "approved", "reviewed"].includes(a.status)).length;
+    const inProgress = assignments.filter(a => ["in_progress", "submitted", "under_review", "revision"].includes(a.status)).length;
+    const notStarted = assignments.filter(a => a.status === "assigned").length;
+
+    return { completed, inProgress, notStarted };
+  }, [assignments]);
+
+  const monthlyReg = useMemo(() => buildMonthlyRegistrations(myTeachers), [myTeachers]);
+
+  const leaderboardData = useMemo(() => {
+    const approvedMyTeachers = myTeachers.filter(t => t.status === "approved");
+    return approvedMyTeachers.map(t => {
+      const score = calculateTeacherScore(t, assignments, attendance);
+      return { teacher: t, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+  }, [myTeachers, assignments, attendance]);
 
   const photoUrl = getMentorPhotoUrl(user);
   const semester = user?.mentorProfile?.fellowshipSemester || 3;
-  const mentees = user?.mentorProfile?.assignedTeachers || [];
   const centerName = workingCenter
     ? [workingCenter.name, workingCenter.city].filter(Boolean).join(", ")
     : "Center not assigned";
 
-  const approvedFellowsCount = mentees.length; // all assigned mentees are approved fellows for this mentor
-  
-  let impactScoreRaw = (pdcaCount * 10) + (observationsCount * 5) + (capstoneSubmissionsCount * 15) + (approvedFellowsCount * 8);
-  const impactScore = Math.min(impactScoreRaw, 100);
-  
-  const totalMilestones = 4;
-  const capstoneProgress = Math.round((Math.min(capstoneSubmissionsCount, 4)) / totalMilestones * 100);
+  if (loading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "50vh" }}>
+        <div style={{ fontSize: 16, fontWeight: "bold", color: "#64748b" }}>⏳ Loading Overview Tab...</div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
@@ -119,86 +257,151 @@ function OverviewTab({ user, workingCenter }) {
               <span style={{ fontSize: 22, fontWeight: 800, color: "white" }}>{user.name?.[0] || "?"}</span>
             )}
           </div>
-          {photoUrl && <span style={{ position: "absolute", bottom: 0, right: 0, background: "#10b981", borderRadius: "50%", width: 14, height: 14, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, border: "2px solid white" }}>📷</span>}
         </div>
       </div>
 
-      <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700 }}>
-        <span style={{ fontSize: 18 }}>@</span>
+      <div style={{ marginTop: 12, marginBottom: 24, display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700 }}>
+        <span style={{ fontSize: 18 }}>🏫</span>
         <span>Working Center: {centerName}</span>
       </div>
 
-      {/* ── My Assigned Mentees Section ── */}
-      <div style={{ marginBottom: 20, marginTop: 20 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#1c1917", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 18 }}>👥</span> My Assigned Mentees
-        </div>
-        
-        {mentees.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {/* start dnyaneshwari thorat */}
-            {mentees.map((mentee, i) => (
-              <div key={mentee?._id || mentee?.id || i} style={{
-                background: "white", borderRadius: 14, padding: "16px",
-                border: "1px solid #e5e7eb", boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-                borderLeft: "4px solid #f59e0b"
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                  <div style={{
-                    width: 40, height: 40, borderRadius: 10,
-                    background: "linear-gradient(135deg,#fef3c7,#fbbf24)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 18, flexShrink: 0
-                  }}>👩‍🏫</div>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: "#1c1917" }}>{mentee?.name || "Unknown Teacher"}</div>
-                    {mentee?.teacherProfile?.subject && <div style={{ fontSize: 11, color: "#6b7280" }}>{mentee.teacherProfile.subject}</div>}
-                  </div>
-                </div>
-              </div>
-            ))}
-            {/* end dnyaneshwari thorat */}
-          </div>
-        ) : (
-          <div style={{
-            background: "white", borderRadius: 14, padding: "24px",
-            border: "1px solid #e5e7eb", textAlign: "center"
-          }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>📋</div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: "#6b7280" }}>No mentees assigned yet</div>
-            <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 4 }}>Contact admin to assign teachers to you</div>
-          </div>
-        )}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 20, marginBottom: 24 }}>
+        {[
+          { label: t("Assigned Teachers"), val: stats.totalAssigned, color: "#3b82f6", bg: "#dbeafe", icon: "👩‍🏫" },
+          { label: t("Total Centers"),     val: stats.totalCenters,  color: "#f59e0b", bg: "#fef3c7", icon: "🏫" },
+          { label: t("Children Enrolled"), val: stats.totalChildren, color: "#10b981", bg: "#d1fae5", icon: "👶" },
+          { label: t("Assigned Courses"),  val: stats.totalCourses,  color: "#8b5cf6", bg: "#ede9fe", icon: "📚" }
+        ].map((c, i) => (
+          <StatCard key={i} label={c.label} val={c.val} color={c.color} bg={c.bg} icon={c.icon} />
+        ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 16, marginBottom: 24, marginTop: 16 }}>
-        <StatCard icon="👥" label="Assigned Mentees" val={mentees.length || "0"} color="#3b82f6" bg="#dbeafe"/>
-        <StatCard icon="📈" label="Impact Score" val={impactScore} color="#10b981" bg="#d1fae5"/>
-        <StatCard icon="📝" label="Observations" val={observationsCount} color="#8b5cf6" bg="#ede9fe"/>
-        <StatCard icon="🏆" label="Capstone Progress" val={`${capstoneProgress}%`} color="#06b6d4" bg="#cffafe"/>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 20, marginBottom: 24 }}>
+        <ProgressCard title="Average Course Completion" val={stats.avgCourseCompletion} color="#3b82f6" bg="#dbeafe" icon="📈" />
+        <div style={{ background: "white", borderRadius: 16, padding: "18px 20px", border: "1px solid #f1f5f9", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>Teacher Status</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#10b981" }}>{stats.activeTeachers}</div>
+              <div style={{ fontSize: 11, color: "#64748b" }}>Active</div>
+            </div>
+            <div style={{ borderLeft: "1px solid #e2e8f0", height: 30 }} />
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#ef4444" }}>{stats.inactiveTeachers}</div>
+              <div style={{ fontSize: 11, color: "#64748b" }}>Pending/Inactive</div>
+            </div>
+          </div>
+        </div>
+        <div style={{ background: "white", borderRadius: 16, padding: "18px 20px", border: "1px solid #f1f5f9", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>Pending Reviews</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#f59e0b" }}>{stats.pendingActivities}</div>
+              <div style={{ fontSize: 11, color: "#64748b" }}>Activities</div>
+            </div>
+            <div style={{ borderLeft: "1px solid #e2e8f0", height: 30 }} />
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#8b5cf6" }}>{stats.pendingReviews}</div>
+              <div style={{ fontSize: 11, color: "#64748b" }}>Course Submissions</div>
+            </div>
+          </div>
+        </div>
       </div>
-      
-      <SectionCard title="Recent Activity" icon="🕒">
-         {recentActivities.length > 0 ? (
-           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-             {recentActivities.map((act) => (
-               <div key={act.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0" }}>
-                 <div style={{ width: 32, height: 32, borderRadius: "50%", background: "white", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-                   {act.type === "pdca" ? "📝" : act.type === "capstone" ? "🏆" : "👀"}
-                 </div>
-                 <div style={{ flex: 1 }}>
-                   <div style={{ fontSize: 14, fontWeight: 600, color: "#1e293b" }}>{act.title}</div>
-                   <div style={{ fontSize: 11, color: "#64748b" }}>{act.date.toLocaleString()}</div>
-                 </div>
-               </div>
-             ))}
-           </div>
-         ) : (
-           <div style={{ textAlign: "center", padding: 20, color: "#9ca3af", fontSize: 12 }}>
-             No recent activity.
-           </div>
-         )}
-      </SectionCard>
+
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1.2fr", gap: 20, marginBottom: 24 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <SectionCard title={t("Platform Performance Summary")}>
+            <div style={{ display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: 20, padding: "10px 0" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <DonutChart value={attendanceToday.present} max={Math.max(stats.totalAssigned, 1)} color="#10b981" />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>Teachers Present Today</div>
+                  <div style={{ fontSize: 11, color: "#64748b" }}>{attendanceToday.present} of {stats.totalAssigned} teachers</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <DonutChart value={completionStats.completed} max={Math.max(assignments.length, 1)} color="#3b82f6" />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>Completed Courses</div>
+                  <div style={{ fontSize: 11, color: "#64748b" }}>{completionStats.completed} of {assignments.length} assignments</div>
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: 20, padding: "10px 0", borderTop: "1px solid #f1f5f9", marginTop: 10 }}>
+              <div style={{ fontSize: 12, color: "#64748b", display: "flex", gap: 15 }}>
+                <span>Late Today: <strong>{attendanceToday.late}</strong></span>
+                <span>Absent Today: <strong>{attendanceToday.absent}</strong></span>
+                <span>Half Day Today: <strong>{attendanceToday.halfDay}</strong></span>
+              </div>
+              <div style={{ fontSize: 12, color: "#64748b", display: "flex", gap: 15 }}>
+                <span>In Progress: <strong>{completionStats.inProgress}</strong></span>
+                <span>Not Started: <strong>{completionStats.notStarted}</strong></span>
+              </div>
+            </div>
+          </SectionCard>
+
+          <SectionCard title={t("Teacher Registration Trends")}>
+            <div style={{ height: 260 }}>
+              <BarChart data={monthlyReg} />
+            </div>
+          </SectionCard>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <SectionCard title={`🏆 ${t("Top Performing Teachers")}`}>
+            {leaderboardData.length === 0 ? (
+              <div style={{ color: "#9ca3af", fontSize: 13, textAlign: "center", padding: "20px 0" }}>{t("No approved teachers yet.")}</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {leaderboardData.map(({ teacher: t, score }, i) => {
+                  const rankBadges = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"];
+                  const rankColors = ["#f59e0b", "#64748b", "#b45309", "#475569", "#475569"];
+                  const rankBg = ["#fef3c7", "#f1f5f9", "#ffedd5", "#f8fafc", "#f8fafc"];
+                  return (
+                    <div key={t._id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: "#f8fafc", borderRadius: 12, border: "1px solid #f1f5f9" }}>
+                      <div style={{ width: 24, height: 24, borderRadius: "50%", background: rankBg[i], color: rankColors[i], display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, flexShrink: 0 }}>
+                        {i < 3 ? rankBadges[i] : i + 1}
+                      </div>
+                      <div style={{ width: 36, height: 36, borderRadius: "50%", background: `linear-gradient(135deg, ${rankColors[i]}22, ${rankColors[i]}44)`, color: rankColors[i], display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 14, flexShrink: 0 }}>
+                        {t.name?.[0]?.toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</div>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: rankColors[i] }}>{score}%</span>
+                        </div>
+                        <div style={{ height: 6, background: "#e2e8f0", borderRadius: 3, overflow: "hidden" }}>
+                          <div style={{ width: `${score}%`, height: "100%", background: rankColors[i], borderRadius: 3, transition: "width 0.8s" }} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </SectionCard>
+
+          <SectionCard title={t("Recent Activities")} style={{ display: "flex", flexDirection: "column", height: "100%", maxHeight: 350, overflowY: "auto" }}>
+            {mentorActivities.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {mentorActivities.map((act) => (
+                  <ActivityItem
+                    key={act.id}
+                    icon={act.type === "pdca" ? "📝" : act.type === "capstone" ? "🏆" : "👀"}
+                    text={act.title}
+                    time={act.date.toLocaleString()}
+                    color={act.type === "pdca" ? "#f59e0b" : act.type === "capstone" ? "#3b82f6" : "#8b5cf6"}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div style={{ textAlign: "center", padding: 20, color: "#9ca3af", fontSize: 12 }}>
+                No recent activity.
+              </div>
+            )}
+          </SectionCard>
+        </div>
+      </div>
     </div>
   );
 }
@@ -232,6 +435,9 @@ export default function MentorDashboard({ user, onLogout }) {
   const [currentUser, setCurrentUser] = useState(user);
   const [workingCenter, setWorkingCenter] = useState(null);
   const [toast, setToast] = useState({ msg: "", type: "" });
+  // ADDED: live pending-fellow-approvals count, fed by the reminder poller below.
+  // Used to show a badge on the "Mentee Management" nav item.
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
   
   useEffect(() => {
     getMyCenter().then(res => {
@@ -239,9 +445,14 @@ export default function MentorDashboard({ user, onLogout }) {
     }).catch(err => console.error("Failed to load working center", err));
 
     // start dnyaneshwari thorat
-    getMentorMe().then(res => {
-      if (res.mentor) setCurrentUser(res.mentor);
-    }).catch(err => console.error("Failed to load mentor profile", err));
+    const fetchMentorMe = () => {
+      getMentorMe().then(res => {
+        if (res.mentor) setCurrentUser(res.mentor);
+      }).catch(err => console.error("Failed to load mentor profile", err));
+    };
+    fetchMentorMe();
+    const interval = setInterval(fetchMentorMe, 8000); // 8-second poll for near-real-time updates
+    return () => clearInterval(interval);
     // end dnyaneshwari thorat
   }, []);
 
@@ -256,14 +467,28 @@ export default function MentorDashboard({ user, onLogout }) {
         });
         const data = await res.json();
         if (res.ok) {
-          setNotifications(data.notifications.map(n => ({
-            id: n._id,
-            type: "info",
-            msg: n.body,
-            title: n.title,
-            time: new Date(n.createdAt).toLocaleTimeString(),
-            read: n.read
-          })) || []);
+          setNotifications((data.notifications || []).map(n => {
+            // Relative time like teacher side
+            let timeVal = "Just now";
+            if (n.createdAt) {
+              const diffMs = new Date() - new Date(n.createdAt);
+              const diffMins = Math.floor(diffMs / 60000);
+              if (diffMins < 60) timeVal = `${diffMins}m ago`;
+              else {
+                const diffHrs = Math.floor(diffMins / 60);
+                if (diffHrs < 24) timeVal = `${diffHrs}h ago`;
+                else timeVal = `${Math.floor(diffHrs / 24)}d ago`;
+              }
+            }
+            return {
+              id: n._id,
+              type: n.type || "info",
+              msg: n.body ? `${n.title}: ${n.body}` : n.title || "",
+              title: n.title,
+              time: timeVal,
+              read: n.read
+            };
+          }));
         }
       } catch (error) {
         console.error("Failed to fetch notifications:", error);
@@ -305,22 +530,22 @@ export default function MentorDashboard({ user, onLogout }) {
   
   const navItems = [
     { key: "overview", label: "Overview", icon: "📊" },
+    { key: "mentees", label: "Teacher Management", icon: "👥", badge: pendingApprovalsCount },
+    { key: "fellow_attendance", label: "Teacher Attendance", icon: "📅" },
     { key: "my_attendance", label: "My Attendance", icon: "📍" },
-    { key: "mentees", label: "Mentee Management", icon: "👥" },
-    { key: "fellow_attendance", label: "Fellow Attendance", icon: "📅" },
     { key: "activities", label: "Fellow Activities", icon: "📝" },
     { key: "curriculum", label: "Curriculum Management", icon: "📚" },
     { key: "impact", label: "Impact & Capstone", icon: "🏆" },
-    { key: "documentation", label: "Documentation (PDCA)", icon: "📝" },
+    { key: "documentation", label: "Growth Cycle", icon: "📝" },
     { key: "feedback", label: "Feedback", icon: "💬" },
   ];
 
   const renderContent = () => {
     switch(activeTab) {
       case "overview": return <OverviewTab user={currentUser} workingCenter={workingCenter} />;
-      case "my_attendance": return <MentorAttendanceTab user={currentUser} setToast={setToast} />;
-      case "mentees": return <MenteeManagementTab user={currentUser} setToast={setToast} onUserUpdate={setCurrentUser} />;
-      case "fellow_attendance": return <MentorFellowAttendanceTab user={currentUser} setToast={setToast} />;
+      case "mentees": return <TeacherManagementTab role="mentor" user={currentUser} setToast={setToast} onUserUpdate={setCurrentUser} />;
+      case "fellow_attendance": return <AttendanceTab role="mentor" user={currentUser} setToast={setToast} />;
+      case "my_attendance": return <GeotagAttendance user={currentUser} />;
       case "activities": return <MentorActivitiesTab user={currentUser} setToast={setToast} />;
       case "curriculum": return <MentorCurriculumTab user={currentUser} setToast={setToast} />;
       case "impact": return <ImpactCapstoneTab user={currentUser} setToast={setToast} onUserUpdate={setCurrentUser} />;
@@ -336,6 +561,12 @@ export default function MentorDashboard({ user, onLogout }) {
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "#f8fafc", fontFamily: "'Segoe UI','Inter',-apple-system,sans-serif" }}>
       <style>{globalCSS}</style>
       <Toast msg={toast.msg} type={toast.type} onClose={() => setToast({ msg: "", type: "" })} />
+
+      {/* ADDED: mounted once here (not inside a specific tab) so it keeps polling
+          for pending fellow approvals no matter which tab the mentor is viewing.
+          It drives the in-app toast above, the "email nudge" to the mentor's own
+          login email via the backend, and the nav badge count via onPendingCountChange. */}
+      <PendingApprovalsReminder setToast={setToast} onPendingCountChange={setPendingApprovalsCount} />
       
       {/* Sidebar - Matching Teacher Dashboard */}
       <div style={{ width: 240, background: "white", borderRight: "1px solid #f1f5f9", display: "flex", flexDirection: "column", flexShrink: 0, boxShadow: "2px 0 12px rgba(0,0,0,0.04)", position: "relative", height: "100vh" }}>

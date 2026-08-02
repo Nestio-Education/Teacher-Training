@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { S, SectionCard, Toast, StatCard, StatusBadge, SearchBar, Modal } from "../components/Shared";
-import { uploadFile, submitFeedback, getFeedbacks, updateMentorMe, changeMentorPassword, recordMenteeObservation, getMenteeObservations, submitCapstoneMilestone, getCapstoneSubmissions, submitPDCACycle, getPDCACycles, getMentorFellows, updateFellowStatus, getMentorMe, updateMenteeTracking, claimFellow, unclaimFellow, deleteMentorFellow, getMentorAttendance } from "../services/api";
+import { uploadFile, submitFeedback, getFeedbacks, updateMentorMe, changeMentorPassword, recordMenteeObservation, getMenteeObservations, submitCapstoneMilestone, getCapstoneSubmissions, submitPDCACycle, getPDCACycles, getMentorFellows, updateFellowStatus, getMentorMe, updateMenteeTracking, claimFellow, unclaimFellow, deleteMentorFellow } from "../services/api";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
@@ -18,30 +18,6 @@ export function MentorProfileTab({ user, onWorkingCenterChange, onUserUpdate }) 
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [messageType, setMessageType] = useState(""); 
-  const [stats, setStats] = useState({ pdca: 0, capstones: 0, attendance: 0 });
-
-  useEffect(() => {
-    getPDCACycles()
-      .then(res => {
-        setStats(s => ({ ...s, pdca: (res.cycles || []).length }));
-      })
-      .catch(err => console.error("Failed to load PDCA count for profile", err));
-
-    getCapstoneSubmissions()
-      .then(res => {
-        setStats(s => ({ ...s, capstones: (res.submissions || []).length }));
-      })
-      .catch(err => console.error("Failed to load Capstones count for profile", err));
-
-    getMentorAttendance()
-      .then(res => {
-        const records = res.records || [];
-        const present = records.filter(r => ["present", "late"].includes(r.status)).length;
-        const pct = records.length ? Math.round((present / records.length) * 100) : 100;
-        setStats(s => ({ ...s, attendance: pct }));
-      })
-      .catch(err => console.error("Failed to load mentor attendance for profile", err));
-  }, [user]);
   
   const [profilePhoto, setProfilePhoto] = useState(user.photoUrl || null);
   const [imageLoadError, setImageLoadError] = useState(false);
@@ -228,14 +204,6 @@ export function MentorProfileTab({ user, onWorkingCenterChange, onUserUpdate }) 
         </div>
       </div>
 
-      {/* ── Performance KPI Cards ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 14, marginBottom: 24 }}>
-        <StatCard icon="👩‍🏫" label="Active Mentees" val={user.mentorProfile?.assignedTeachers?.length || 0} color="#3b82f6" bg="#dbeafe" />
-        <StatCard icon="🔄" label="PDCA Growth Cycles" val={stats.pdca} color="#10b981" bg="#d1fae5" />
-        <StatCard icon="🎓" label="Capstone Submissions" val={stats.capstones} color="#8b5cf6" bg="#ede9fe" />
-        <StatCard icon="📅" label="My Attendance Rate" val={`${stats.attendance}%`} color="#f59e0b" bg="#fef3c7" />
-      </div>
-
       {/* ── Active Mentees Quick List ── */}
       {user.mentorProfile?.assignedTeachers?.length > 0 && (
         <div style={{ marginBottom: 24, padding: "16px", background: "#f8fafc", borderRadius: 16, border: "1px solid #e2e8f0" }}>
@@ -412,67 +380,52 @@ export function MentorProfileTab({ user, onWorkingCenterChange, onUserUpdate }) 
 
 /* ── Mentor Notifications Tab ── */
 export function MentorNotificationsTab({ notifications = [], onMarkRead, onMarkAllRead }) {
-  const icons = {
-    // course-related
-    course: "📚", course_assigned: "📚", course_allocated: "📚",
-    // certificate
-    certificate: "🏆", certificate_issued: "🏆", certificate_generated: "🏆",
-    // lesson / session
-    session: "📹", lesson: "📖", lesson_assigned: "📖",
-    // assignment / task
-    assignment: "📝", task: "📝", daily_task: "📝",
-    // approvals
-    approval: "✅", approved: "✅", status: "✅", status_update: "✅",
-    // attendance
-    attendance: "📋", attendance_alert: "⚠️",
-    // mentor-specific
-    mentor_assigned: "👨‍🏫", teacher_claimed: "🤝", mentee: "👩‍🏫",
-    // general
-    info: "ℹ️", warning: "⚠️", alert: "🔔", system: "⚙️",
-  };
-  const getIcon = (type, msg = "") => {
-    if (!type && !msg) return "🔔";
-    const lower = String(type || "").toLowerCase();
-    // First try exact type match
-    if (lower && icons[lower] && lower !== "info") return icons[lower];
-    // If type is generic/info, scan message content for context
-    const text = (msg || "").toLowerCase();
-    if (text.includes("approved") || text.includes("approval")) return "✅";
-    if (text.includes("course") || text.includes("allocated")) return "📚";
-    if (text.includes("curriculum") || text.includes("published")) return "📖";
-    if (text.includes("fellow") || text.includes("assigned") || text.includes("teacher")) return "👩‍🏫";
-    if (text.includes("capstone") || text.includes("deadline") || text.includes("missed")) return "⚠️";
-    if (text.includes("certificate")) return "🏆";
-    if (text.includes("attendance")) return "📋";
-    if (text.includes("mentor")) return "👨‍🏫";
-    if (text.includes("center")) return "🏫";
-    if (text.includes("lesson")) return "📖";
-    return icons[lower] || "🔔";
-  };
-
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
           <h1 style={S.pageTitle}>Notifications</h1>
-          <p style={S.pageSub}>{notifications.filter(n=>!n.read).length} unread</p>
+          <p style={S.pageSub}>Stay updated with alerts and messages.</p>
         </div>
-        <button onClick={onMarkAllRead} style={S.exportBtn}>✓ Mark all read</button>
+        {notifications.some(n => !n.read) && (
+          <button onClick={onMarkAllRead} style={S.exportBtn}>
+            ✓ Mark all as read
+          </button>
+        )}
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+
+      <div style={{ background: "white", borderRadius: 16, border: "1px solid #e2e8f0", overflow: "hidden" }}>
         {notifications.length === 0 ? (
-          <div style={{ padding: 40, textAlign: "center", background: "white", borderRadius: 16, border: "1px dashed #cbd5e1", color: "#94a3b8" }}>
-            No notifications.
+          <div style={{ padding: 40, textAlign: "center", color: "#64748b" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>📭</div>
+            <div style={{ fontSize: 16, fontWeight: 600 }}>All caught up!</div>
+            <div style={{ fontSize: 13, marginTop: 4 }}>You have no new notifications.</div>
           </div>
         ) : (
-          notifications.map(n=>(
-            <div key={n.id} onClick={()=>!n.read && onMarkRead(n.id)} style={{ background: n.read?"white":"#fffbeb", borderRadius: 14, padding: "14px 18px", border: `1px solid ${n.read?"#f1f5f9":"#fbbf24"}`, display: "flex", alignItems: "center", gap: 14, cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", borderLeft: `4px solid ${n.read?"#e5e7eb":"#f59e0b"}` }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: n.read?"#f3f4f6":"#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>{getIcon(n.type, n.msg)}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: n.read?500:700, color: "#1c1917" }}>{n.msg || n.title || "Notification"}</div>
-                <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>{n.time}</div>
+          notifications.map(n => (
+            <div key={n.id} style={{ 
+              padding: 20, borderBottom: "1px solid #f1f5f9", 
+              background: n.read ? "white" : "#f0fdf4",
+              display: "flex", gap: 16, transition: "background 0.2s"
+            }}>
+              <div style={{ 
+                width: 40, height: 40, borderRadius: "50%", 
+                background: n.type === "alert" ? "#fee2e2" : n.type === "success" ? "#d1fae5" : "#e0e7ff",
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0
+              }}>
+                {n.type === "alert" ? "⚠️" : n.type === "success" ? "🎉" : "📩"}
               </div>
-              {!n.read && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b", flexShrink: 0 }}/>}
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                  <div style={{ fontSize: 14, fontWeight: n.read ? 600 : 800, color: "#1e293b" }}>{n.msg}</div>
+                  <div style={{ fontSize: 11, color: "#9ca3af", whiteSpace: "nowrap", marginLeft: 16 }}>{n.time}</div>
+                </div>
+                {!n.read && (
+                  <button onClick={() => onMarkRead(n.id)} style={{ background: "none", border: "none", color: "#3b82f6", fontSize: 12, fontWeight: 700, padding: 0, cursor: "pointer", marginTop: 8 }}>
+                    Mark as read
+                  </button>
+                )}
+              </div>
             </div>
           ))
         )}
@@ -1559,28 +1512,25 @@ export function ImpactCapstoneTab({ user, setToast, onUserUpdate }) {
   );
 }
 
-/* ── Growth Cycle Tab (formerly "Documentation (PDCA)") ──
-   Same underlying concept: Plan → Do → Check → Act reflective cycles.
-   NEW in this version:
-   - Mentor must pick which fellow a cycle is being assigned/logged for.
-   - A "Fellow Progress" panel summarizes each fellow's cycle count + last activity.
-   - History can be filtered by fellow.
-   Component name kept as PDCATab so no other file needs to change its import. */
+/* ── Documentation (PDCA) Tab ──
+   UPDATED: PDCA cycles are now linked to a specific mentee via menteeId.
+   - A mentee selector has been added to the "New PDCA Cycle" form (required).
+   - History cards now show which mentee the cycle belongs to.
+   - Milestone/cycle numbering is computed per-mentee, not globally across all mentees.
+*/
 export function PDCATab({ user, setToast, onUserUpdate }) {
   const mentees = user?.mentorProfile?.assignedTeachers || [];
-
-  const [selectedMenteeId, setSelectedMenteeId] = useState("");
+  const [selectedMenteeId, setSelectedMenteeId] = useState(mentees[0]?._id || "");
   const [pdcaForm, setPdcaForm] = useState({ plan: "", do: "", check: "", act: "" });
   const [submitting, setSubmitting] = useState(false);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [historyFilter, setHistoryFilter] = useState("all"); // "all" or a mentee _id
 
   const fetchCycles = () => {
     setLoading(true);
     getPDCACycles()
       .then(res => setHistory(res.cycles || []))
-      .catch(err => console.error("Failed to fetch Growth Cycles", err))
+      .catch(err => console.error("Failed to fetch PDCA", err))
       .finally(() => setLoading(false));
   };
 
@@ -1588,62 +1538,38 @@ export function PDCATab({ user, setToast, onUserUpdate }) {
     fetchCycles();
   }, []);
 
-  // Resolve the mentee id a given cycle belongs to, whether menteeId
-  // came back populated ({_id, name, email}) or as a raw id string.
-  const cycleMenteeId = (cycle) => {
-    const m = cycle.menteeId;
-    if (!m) return null;
-    return typeof m === "object" ? (m._id || m.id) : m;
-  };
+  // Keep the selected mentee valid if the mentee list changes (e.g. after claim/unclaim)
+  useEffect(() => {
+    if (!selectedMenteeId && mentees.length > 0) {
+      setSelectedMenteeId(mentees[0]._id);
+    }
+  }, [mentees, selectedMenteeId]);
 
-  const cycleMenteeName = (cycle) => {
-    const m = cycle.menteeId;
-    if (!m) return "Unassigned";
-    if (typeof m === "object" && m.name) return m.name;
-    // fall back to looking the id up in the mentee list currently assigned
-    const found = mentees.find(mm => String(mm._id) === String(m));
-    return found?.name || "Unknown Fellow";
-  };
-
-  // Per-fellow progress summary, built from cycle history.
-  const menteeProgress = mentees.map((m) => {
-    const cyclesForMentee = history.filter(h => String(cycleMenteeId(h)) === String(m._id));
-    const sorted = [...cyclesForMentee].sort((a, b) => new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0));
-    const latest = sorted[0];
-    return {
-      mentee: m,
-      count: cyclesForMentee.length,
-      latest,
-      lastDate: latest ? (latest.createdAt || latest.date) : null,
-    };
-  });
-
-  const filteredHistory = historyFilter === "all"
-    ? history
-    : history.filter(h => String(cycleMenteeId(h)) === String(historyFilter));
+  // Cycle numbering/history filtering is per-mentee, not global
+  const cyclesForSelectedMentee = history.filter(
+    h => (h.menteeId?._id || h.menteeId) === selectedMenteeId
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedMenteeId) {
-      setToast?.({ msg: "Please select which fellow this Growth Cycle is for.", type: "error" });
+      setToast?.({ msg: "Please select a mentee for this PDCA cycle.", type: "error" });
       return;
     }
-    if(!pdcaForm.plan || !pdcaForm.do || !pdcaForm.check || !pdcaForm.act) {
-      setToast?.({ msg: "Please fill out all Growth Cycle fields.", type: "error" });
+    if (!pdcaForm.plan || !pdcaForm.do || !pdcaForm.check || !pdcaForm.act) {
+      setToast?.({ msg: "Please fill out all PDCA fields.", type: "error" });
       return;
     }
     setSubmitting(true);
-    
+
     try {
-      // Cycle number is scoped per-fellow so each fellow's own sequence starts at 1.
-      const existingForMentee = history.filter(h => String(cycleMenteeId(h)) === String(selectedMenteeId));
-      const cycleNumber = existingForMentee.length + 1;
+      const cycleNumber = cyclesForSelectedMentee.length + 1;
       await submitPDCACycle(cycleNumber, pdcaForm.plan, pdcaForm.do, pdcaForm.check, pdcaForm.act, selectedMenteeId);
-      setToast?.({ msg: "Growth Cycle assigned and recorded successfully!", type: "success" });
+      setToast?.({ msg: "PDCA cycle recorded successfully!", type: "success" });
       setPdcaForm({ plan: "", do: "", check: "", act: "" });
       fetchCycles();
     } catch (err) {
-      setToast?.({ msg: err.message || "Failed to save Growth Cycle", type: "error" });
+      setToast?.({ msg: err.message || "Failed to save PDCA cycle", type: "error" });
     } finally {
       setSubmitting(false);
     }
@@ -1651,30 +1577,29 @@ export function PDCATab({ user, setToast, onUserUpdate }) {
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
-      <h1 style={S.pageTitle}>Growth Cycle</h1>
-      <p style={S.pageSub}>Assign Plan–Do–Check–Act growth cycles to your fellows and track their progress.</p>
+      <h1 style={S.pageTitle}>Documentation (PDCA)</h1>
+      <p style={S.pageSub}>Record and reflect on your Plan-Do-Check-Act cycles for each mentee.</p>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-        <SectionCard title="🔄 New Growth Cycle">
+        <SectionCard title="🔄 New PDCA Cycle">
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: 16 }}>
-              <label style={S.label}>Assign To Fellow *</label>
-              {mentees.length === 0 ? (
-                <div style={{ padding: "10px 12px", background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 8, fontSize: 12, color: "#92400e" }}>
-                  You have no fellows assigned yet. Claim a fellow from Mentee Management first.
-                </div>
-              ) : (
-                <select
-                  style={S.input}
-                  value={selectedMenteeId}
-                  onChange={e => setSelectedMenteeId(e.target.value)}
-                  required
-                >
-                  <option value="">Select a fellow…</option>
-                  {mentees.map(m => (
-                    <option key={m._id} value={m._id}>{m.name || "Unknown Fellow"}</option>
-                  ))}
-                </select>
+              <label style={S.label}>Mentee *</label>
+              <select
+                style={{ ...S.input }}
+                value={selectedMenteeId}
+                onChange={e => setSelectedMenteeId(e.target.value)}
+                required
+              >
+                <option value="">Select a mentee...</option>
+                {mentees.map(m => (
+                  <option key={m._id} value={m._id}>{m.name || "Unknown Fellow"}</option>
+                ))}
+              </select>
+              {mentees.length === 0 && (
+                <span style={{ fontSize: 11, color: "#ef4444", marginTop: 4, display: "block" }}>
+                  No mentees assigned yet. Claim a fellow first from Mentee Management.
+                </span>
               )}
             </div>
 
@@ -1710,76 +1635,38 @@ export function PDCATab({ user, setToast, onUserUpdate }) {
               <textarea style={{...S.input, minHeight: 60}} value={pdcaForm.act} onChange={e=>setPdcaForm({...pdcaForm, act: e.target.value})} placeholder="What changes will you make for the next cycle?" required />
             </div>
 
-            <button type="submit" disabled={submitting || mentees.length === 0} style={{...S.primaryBtn, width: "100%", opacity: (submitting || mentees.length === 0) ? 0.7 : 1}}>
-              {submitting ? "Saving..." : "Assign & Save Growth Cycle"}
+            <button type="submit" disabled={submitting || !selectedMenteeId} style={{...S.primaryBtn, width: "100%", opacity: (submitting || !selectedMenteeId) ? 0.7 : 1}}>
+              {submitting ? "Saving..." : "Save PDCA Cycle"}
             </button>
           </form>
         </SectionCard>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          {/* Fellow Progress Summary */}
-          <SectionCard title="📊 Fellow Progress">
-            {mentees.length === 0 ? (
-              <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No fellows assigned yet.</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {menteeProgress.map(({ mentee, count, lastDate }) => (
-                  <button
-                    key={mentee._id}
-                    onClick={() => setHistoryFilter(historyFilter === mentee._id ? "all" : mentee._id)}
-                    style={{
-                      display: "flex", justifyContent: "space-between", alignItems: "center",
-                      padding: "12px 14px", borderRadius: 10, textAlign: "left", cursor: "pointer",
-                      border: historyFilter === mentee._id ? "1.5px solid #3b82f6" : "1px solid #e2e8f0",
-                      background: historyFilter === mentee._id ? "#eff6ff" : "#f8fafc",
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>{mentee.name || "Unknown Fellow"}</div>
-                      <div style={{ fontSize: 11, color: "#64748b" }}>
-                        {count} cycle{count !== 1 ? "s" : ""} logged{lastDate ? ` · last on ${new Date(lastDate).toLocaleDateString()}` : ""}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 16, fontWeight: 900, color: count > 0 ? "#10b981" : "#cbd5e1" }}>{count}</div>
-                  </button>
-                ))}
-                {historyFilter !== "all" && (
-                  <button onClick={() => setHistoryFilter("all")} style={{ ...S.exportBtn, alignSelf: "flex-start", marginTop: 4 }}>
-                    Clear filter (show all fellows)
-                  </button>
-                )}
-              </div>
-            )}
-          </SectionCard>
-
-          {/* Growth Cycle History (filterable by fellow) */}
-          <SectionCard title="📚 Growth Cycle History">
+          <SectionCard title="📚 PDCA History">
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {loading ? (
-                <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>Loading...</div>
-              ) : filteredHistory.length === 0 ? (
-                <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>
-                  {historyFilter === "all" ? "No Growth Cycles recorded yet." : "No Growth Cycles recorded for this fellow yet."}
-                </div>
-              ) : filteredHistory.map((item, i) => (
+              {history.length === 0 ? (
+                <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No PDCA cycles recorded yet.</div>
+              ) : history.map((item, i) => (
                 <div key={item._id || i} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: 16 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#3b82f6" }}>🎓 {cycleMenteeName(item)}</div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>{new Date(item.createdAt || item.date).toLocaleDateString("en-US", { month:"short", day:"2-digit", year:"numeric" })}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#3b82f6" }}>{item.menteeId?.name || "Unknown Mentee"}</div>
                     <div style={{ fontSize: 10, fontWeight: 800, background: "#d1fae5", color: "#059669", padding: "2px 8px", borderRadius: 10 }}>{item.status || "Completed"}</div>
                   </div>
+                  <div style={{ fontSize: 11, color: "#64748b", marginBottom: 4 }}>
+                    {item.createdAt ? new Date(item.createdAt).toLocaleDateString("en-US", { month:"short", day:"2-digit", year:"numeric" }) : ""}
+                  </div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", marginBottom: 8 }}>{item.plan.substring(0, 60) + (item.plan.length > 60 ? "..." : "")}</div>
-                  <button onClick={() => setToast?.({ msg: `Plan: ${item.plan}\nDo: ${item.do}\nCheck: ${item.check}\nAct: ${item.act}`, type: "info" })} style={{ background: "none", border: "none", color: "#3b82f6", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>View Full Cycle →</button>
+                  <button onClick={() => setToast?.({ msg: `Mentee: ${item.menteeId?.name || "Unknown"}\nPlan: ${item.plan}\nDo: ${item.do}\nCheck: ${item.check}\nAct: ${item.act}`, type: "info" })} style={{ background: "none", border: "none", color: "#3b82f6", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>View Full Cycle →</button>
                 </div>
               ))}
             </div>
           </SectionCard>
 
-          <SectionCard title="💡 Growth Cycle Tips">
+          <SectionCard title="💡 PDCA Tips">
             <ul style={{ paddingLeft: 20, margin: 0, color: "#475569", fontSize: 13, lineHeight: 1.6 }}>
               <li style={{marginBottom: 8}}>Keep objectives SMART (Specific, Measurable, Achievable, Relevant, Time-bound).</li>
               <li style={{marginBottom: 8}}>Document data and specific observations in the <strong>Check</strong> phase.</li>
-              <li>Use the <strong>Act</strong> phase to refine your strategy for the next iteration, and revisit the Fellow Progress panel to see who may need a follow-up cycle.</li>
+              <li>Use the <strong>Act</strong> phase to refine your strategy for the next iteration.</li>
             </ul>
           </SectionCard>
         </div>

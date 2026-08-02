@@ -78,6 +78,55 @@ function SidebarAvatar({ teacher, size = 34 }) {
   );
 }
 
+/* ── Mentor Avatar for My Mentor section — resolves photo from any format ── */
+function MentorAvatarInline({ mentor, size = 48 }) {
+  const [imgError, setImgError] = useState(false);
+
+  // Resolve photo URL from various possible shapes
+  const resolvePhoto = () => {
+    const raw = mentor?.photoUrl || mentor?.mentorProfile?.profilePhoto || mentor?.mentorProfile?.photo || mentor?.profilePhoto || mentor?.photo;
+    if (!raw) return null;
+    if (typeof raw === "string") {
+      if (!raw) return null;
+      return raw.startsWith("http") ? raw : `${API_BASE_URL}${raw}`;
+    }
+    // Object shape: { publicUrl, url, path }
+    const path = raw.publicUrl || raw.url || raw.path;
+    if (!path) return null;
+    return path.startsWith("http") ? path : `${API_BASE_URL}${path}`;
+  };
+
+  const photoUrl = resolvePhoto();
+
+  if (!photoUrl || imgError) {
+    return (
+      <div style={{
+        width: size, height: size, borderRadius: "50%",
+        background: "linear-gradient(135deg,#3b82f6,#1d4ed8)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: size * 0.4, fontWeight: 800, color: "white", flexShrink: 0,
+        border: "2px solid #bfdbfe"
+      }}>
+        {mentor?.name?.[0]?.toUpperCase() || "👨‍🏫"}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: "50%",
+      overflow: "hidden", flexShrink: 0, border: "2px solid #bfdbfe"
+    }}>
+      <img
+        src={photoUrl}
+        alt={mentor?.name}
+        onError={() => setImgError(true)}
+        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+      />
+    </div>
+  );
+}
+
 /* ── Under Construction Placeholder ── */
 function UnderConstructionTab({ label = "This page", icon = "🚧" }) {
   return (
@@ -1116,8 +1165,8 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
       </div>
 
       {/* ── My Mentor Section ── */}
-      {user.role === 'fellow' && (
-        <div style={{ marginBottom: 20 }}>
+      {(user.role === 'teacher' || user.role === 'fellow') && (
+        <div style={{ marginBottom: 20, marginTop: 20 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#1c1917", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontSize: 18 }}>🎓</span> My Mentor
           </div>
@@ -1129,18 +1178,7 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
               borderLeft: "4px solid #3b82f6", display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center", justifyContent: "space-between"
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{
-                  width: 48, height: 48, borderRadius: "50%",
-                  background: "linear-gradient(135deg,#dbeafe,#93c5fd)",
-                  display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
-                  fontSize: 18, flexShrink: 0, border: "2px solid #bfdbfe"
-                }}>
-                  {user.assignedMentor.photoUrl ? (
-                    <img src={user.assignedMentor.photoUrl.startsWith('http') ? user.assignedMentor.photoUrl : `${API_BASE_URL}${user.assignedMentor.photoUrl}`} alt={user.assignedMentor.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  ) : (
-                    "👨‍🏫"
-                  )}
-                </div>
+                <MentorAvatarInline mentor={user.assignedMentor} />
                 <div>
                   <h4 style={{ margin: "0 0 4px", fontSize: 16, color: "#1e293b" }}>{user.assignedMentor.name}</h4>
                   <div style={{ fontSize: 12, color: "#64748b", display: "flex", alignItems: "center", gap: 6 }}>
@@ -1186,6 +1224,37 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
         <MyAttendanceSummaryCard attendance={attendance} summary={summary} attendanceMap={summary.attendanceMap || {}} setActiveTab={setActiveTab} />
+        <SectionCard title="My Attendance Summary">
+          {(() => {
+            const monthly = summary.monthlyAttendance || [];
+            // If backend provides monthly data, use it; otherwise fall back to overall rate
+            const bars = monthly.length > 0
+              ? monthly.map(m => ({ label: m.month, val: m.rate !== null ? m.rate : null }))
+              : [{ label: "Overall", val: attendance }];
+            const maxBarH = 160;
+            return (
+              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-around", height: 220, paddingTop: 15 }}>
+                {bars.map((d, i) => {
+                  const isNull = d.val === null;
+                  const val = isNull ? 0 : d.val;
+                  const barH = isNull ? 0 : Math.max(val * (maxBarH / 100), 6);
+                  const barColor = isNull ? "#e5e7eb" : val >= 90 ? "linear-gradient(180deg,#34d399,#10b981)" : val >= 80 ? "linear-gradient(180deg,#fbbf24,#f59e0b)" : "linear-gradient(180deg,#f87171,#ef4444)";
+                  const textColor = isNull ? "#9ca3af" : val >= 90 ? "#10b981" : val >= 80 ? "#f59e0b" : "#ef4444";
+                  return (
+                    <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1 }}>
+                      <span style={{ marginBottom: 8, fontSize: 12, fontWeight: 800, color: textColor }}>{isNull ? "—" : `${val}%`}</span>
+                      <div style={{ width: 32, height: `${barH}px`, minHeight: isNull ? 0 : 6, borderRadius: "8px 8px 0 0", background: barColor, transition: "all .6s ease" }} />
+                      <span style={{ marginTop: 10, fontSize: 10, fontWeight: 700, color: "#6b7280" }}>{d.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+          <div style={{ textAlign: "center", marginTop: 8, fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>
+            Overall: <span style={{ color: attColor, fontWeight: 800 }}>{attendance}%</span>
+          </div>
+        </SectionCard>
 
         <SectionCard title="Course Progress">
           {courses.length === 0 ? (
@@ -2859,9 +2928,14 @@ export default function TeacherDashboard({ user, onLogout }) {
       };
       setNotifications((prev) => [mapped, ...prev]);
       setToast({ msg: `🔔 ${newNotif.title}`, type: "info" });
-
-      // Dynamically refresh the dashboard if it's an approval, claim, or status update
-      if (["status_update", "approval", "mentor_assigned"].includes(newNotif.type) || newNotif.title?.includes("Mentor Assigned")) {
+      
+      // Dynamically refresh the dashboard if it's an approval, claim, status update, or class/center assignment
+      if (
+        ["status_update", "approval", "mentor_assigned", "class_assigned", "class_assignment"].includes(newNotif.type) || 
+        newNotif.title?.includes("Mentor Assigned") ||
+        newNotif.title?.includes("Class Assigned") ||
+        newNotif.title?.includes("Center Assigned")
+      ) {
         refreshCoreData();
       }
     });
@@ -3106,14 +3180,45 @@ export default function TeacherDashboard({ user, onLogout }) {
       </div>
 
       <div style={{ flex: 1, width: "0px", minWidth: "0px", padding: "28px 32px", overflowY: "auto", maxHeight: "100vh" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginBottom: 20, position: "relative" }}>
-          <div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: "#1c1917", margin: 0, letterSpacing: "-0.3px" }}>
-              Hi, {currentUser.name?.split(" ")[0] || (currentUser.role === "fellow" ? "Fellow" : "Teacher")}! 👋
-            </h1>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 500, background: "#f8fafc", padding: "3px 10px", borderRadius: 12, border: "1px solid #e2e8f0" }}>
-                📅 {new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginBottom: 16, position: "relative" }}>
+          <button
+            onClick={() => setShowGuide(true)}
+            title={t("User Guide")}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "6px 14px", borderRadius: 20,
+              border: "1px solid #bfdbfe", background: "white",
+              color: "#1e40af", fontSize: 12, fontWeight: 600,
+              cursor: "pointer", fontFamily: "inherit",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+              transition: "all 0.18s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "#eff6ff"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "white"; }}
+          >
+            <span style={{ fontSize: 14, lineHeight: 1 }}>📖</span>
+            {t("User Guide")}
+          </button>
+
+          <div
+            onClick={() => setMenuOpen(!menuOpen)}
+            title={t("My Profile")}
+            style={{
+              display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
+              padding: "6px 12px", borderRadius: 20, background: "#fef3c7",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.1)", border: "1px solid #fbbf24",
+              transition: "all 0.2s ease", position: "relative"
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = "#fde68a"}
+            onMouseLeave={(e) => e.currentTarget.style.background = "#fef3c7"}
+          >
+            {unreadCount > 0 && (
+              <span style={{
+                position: "absolute", top: -4, right: -4, background: "#ef4444", color: "white",
+                borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center",
+                justifyContent: "center", fontSize: 10, fontWeight: "bold", border: "2px solid white"
+              }}>
+                {unreadCount}
               </span>
               <span style={{ fontSize: 11, color: "#92400e", fontWeight: 600, background: "#fef3c7", padding: "3px 10px", borderRadius: 12, border: "1px solid #fde68a", display: "inline-flex", alignItems: "center", gap: 4 }}>
                 📍 {topCenterName}
