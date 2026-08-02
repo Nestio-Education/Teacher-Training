@@ -1,7 +1,7 @@
 import { t } from "../services/i18n";
 import { useState, useEffect } from "react";
 import { Modal, S, SearchBar, StatCard, StatusBadge, Toast } from "../components/Shared";
-import { getChildren, updateChild, deleteChild, getCenters, getClasses } from "../services/api";
+import { getChildren, updateChild, deleteChild, getCenters, getClasses, getChildFeedbackByChild } from "../services/api";
 
 const mapChildFromApi = (c) => ({
   id: c._id || c.id,
@@ -266,6 +266,54 @@ function ChildDetailModal({ child, centers = [], classes = [], onClose }) {
   );
 }
 
+/* ── Feedback History Modal (NEW) ── */
+function ChildFeedbackModal({ child, onClose }) {
+  const [feedbackList, setFeedbackList] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getChildFeedbackByChild(child.id)
+      .then(data => setFeedbackList(data.feedback || data.feedbacks || data || []))
+      .catch(err => console.error("Failed to load feedback:", err))
+      .finally(() => setLoading(false));
+  }, [child.id]);
+
+  return (
+    <Modal title={`💬 Feedback History — ${child.name}`} onClose={onClose}>
+      {loading ? (
+        <div style={{ textAlign: "center", padding: "40px 0", color: "#9ca3af" }}>Loading feedback...</div>
+      ) : feedbackList.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "40px 0", color: "#9ca3af" }}>
+          <div style={{ fontSize: 32, marginBottom: 10 }}>🧒</div>
+          No feedback submitted for this child yet.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, maxHeight: "60vh", overflowY: "auto" }}>
+          {feedbackList.map(fb => (
+            <div key={fb._id} style={{ border: "1px solid #eee", borderRadius: 12, padding: "14px 16px", background: "#fafafa" }}>
+              <div style={{ fontSize: 12, color: "#888", marginBottom: 10 }}>
+                By {fb.teacher?.name || fb.teacher?.fullName || fb.teacherName || "Unknown Teacher"} · {new Date(fb.submittedAt).toLocaleDateString()}
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#166534" }}>✅ Strengths Observed</div>
+                <div style={{ fontSize: 13, color: "#333" }}>{fb.finalFeedback?.strengths || fb.strengths || "—"}</div>
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#92400e" }}>⚠️ Areas Needing Support</div>
+                <div style={{ fontSize: 13, color: "#333" }}>{fb.finalFeedback?.areasNeedingSupport || fb.areasNeedingSupport || "—"}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#1d4ed8" }}>💡 Recommendation</div>
+                <div style={{ fontSize: 13, color: "#333" }}>{fb.finalFeedback?.recommendation || fb.recommendation || "—"}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 /* ══════════════════════════════════════════
     MAIN CHILDREN MANAGEMENT TAB
    ══════════════════════════════════════════ */
@@ -279,6 +327,7 @@ export default function ChildrenManagementTab({ setToast }) {
   const [formModal, setFormModal] = useState(false);
   const [editChild, setEditChild] = useState(null);
   const [detailChild, setDetailChild] = useState(null);
+  const [feedbackChild, setFeedbackChild] = useState(null);
   const [loading, setLoading] = useState(true);
   const [localToast, setLocalToast] = useState({ msg: "", type: "" });
 
@@ -419,6 +468,14 @@ export default function ChildrenManagementTab({ setToast }) {
           centers={centers}
           classes={classes}
           onClose={() => setDetailChild(null)}
+        />
+      )}
+
+      {/* Feedback Modal (NEW) */}
+      {feedbackChild && (
+        <ChildFeedbackModal
+          child={feedbackChild}
+          onClose={() => setFeedbackChild(null)}
         />
       )}
 
@@ -596,6 +653,9 @@ export default function ChildrenManagementTab({ setToast }) {
                 <button onClick={() => setDetailChild(c)} style={{ ...S.tblBtn, flex: 1, color: "#4f46e5", borderColor: "#c4b5fd" }}>
                   👁 History
                 </button>
+                <button onClick={() => setFeedbackChild(c)} style={{ ...S.tblBtn, flex: 1, color: "#059669", borderColor: "#6ee7b7" }}>
+                  💬 Feedback
+                </button>
                 <button onClick={() => openEdit(c)} style={{ ...S.tblBtn, flex: 1 }}>
                   ✏️ Edit
                 </button>
@@ -616,7 +676,7 @@ export default function ChildrenManagementTab({ setToast }) {
             {search ? "No child matches your search." : "No children enrolled yet. Teachers add children from their dashboard."}
           </div>
         </div>
-      )}
+      )}  
     </div>
   );
 }

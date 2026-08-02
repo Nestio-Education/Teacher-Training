@@ -12,6 +12,8 @@ import ReportsTab from "../admin/ReportsTab";
 import NotificationsTab from "../admin/NotificationsTab";
 import SettingsTab from "../admin/SettingsTab";
 import FeedbackManagementTab from "../admin/FeedbackManagementTab";
+import LessonPlannerTab from "./LessonPlannerTab";
+import ChildFeedbackTab from "../admin/ChildFeedbackTab";
 // Start: Snehal change
 import ParentModulesManagementTab from "../admin/ParentModulesManagementTab";
 // End: Snehal change
@@ -97,6 +99,7 @@ export default function AdminDashboard({ user, onLogout }) {
     { key:"attendance",   label:t("Attendance"),        icon:"\uD83D\uDCC5" },
     { key:"reports",      label:t("Reports & Analytics"),icon:"\uD83D\uDCC8" },
     { key:"feedback",     label:t("Feedback"),              icon:"\uD83D\uDCAC" },
+    { key: "childfeedback", label: "Child Feedback", icon: "💬" },
   ];
   const persistTeachers = (updater) => {
   setTeachers(prev => {
@@ -134,6 +137,7 @@ export default function AdminDashboard({ user, onLogout }) {
       case "parentModules": return <ParentModulesManagementTab setToast={setToast}/>;
       // End: Snehal change
       //case "automation":   return <AutomationTab user={user} setToast={setToast}/>;
+      case "childfeedback": return <ChildFeedbackTab/>;
       default:             return null;
     }
   };

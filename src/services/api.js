@@ -1441,6 +1441,21 @@ export function generateAILessonPlan(data) {
   return request(`/api/courses/${courseId}/assessment`);
 }
 
+// Child Feedback (AI-structured teacher feedback) APIs
+export function getAllChildFeedback() {
+  return request("/api/child-feedback");
+}
+
+export function getChildFeedbackByChild(childId) {
+  return request(`/api/child-feedback/child/${childId}`);
+}
+
+export function submitChildFeedback(payload) {
+  return request("/api/child-feedback", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
 // Start: Dnyaneshwari Thorat
 export function getChildAssessments(childId) {
   return request(`/api/teacher/children/${childId}/assessments`);
