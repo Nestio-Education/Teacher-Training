@@ -774,6 +774,18 @@ export function saveTeacherAttendance(payload) {
   });
 }
 
+export function getSelfMentorAttendance(params = {}) {
+  const searchParams = new URLSearchParams(params);
+  return request(`/api/attendance/mentors?${searchParams.toString()}`);
+}
+
+export function saveSelfMentorAttendance(payload) {
+  return request("/api/attendance/mentors", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 // Trainer APIs
 export function getTrainers() {
   return request("/api/trainers");
@@ -1336,6 +1348,10 @@ export function getAdminMentors() {
   return request("/api/admin/mentors");
 }
 
+export function getAdminMentorTracking() {
+  return request("/api/admin/mentor-tracking");
+}
+
 export function getMyCenter() {
   return request("/api/mentor/center");
 }
@@ -1371,14 +1387,18 @@ export function recordMenteeObservation(menteeId, observation) {
   });
 }
 
+export function getMentorStats() {
+  return request("/api/mentor/stats");
+}
+
 export function getCapstoneSubmissions() {
   return request("/api/mentor/tracking/capstone");
 }
 
-export function submitCapstoneMilestone(milestone, notes, fileUrl) {
-  return request("/api/mentor/tracking/capstone", {
+export function submitCapstoneMilestone(milestone, notes, fileUrl, evidenceLink = "") {
+  return request(`/api/mentor/tracking/capstone/milestones/${milestone}/submit`, {
     method: "POST",
-    body: JSON.stringify({ milestone, notes, fileUrl })
+    body: JSON.stringify({ milestone, notes, fileUrl, evidenceLink })
   });
 }
 
@@ -1455,3 +1475,54 @@ export function saveChildAssessment(childId, payload) {
   });
 }
 // End: Dnyaneshwari Thorat
+
+// Teacher Schedule Task Persistence APIs
+export function getTeacherTasks() {
+  return request("/api/teacher-tasks");
+}
+
+export function createTeacherTask(payload) {
+  return request("/api/teacher-tasks", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateTeacherTask(id, payload) {
+  return request(`/api/teacher-tasks/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function toggleTeacherTask(id) {
+  return request(`/api/teacher-tasks/${id}/toggle`, {
+    method: "PATCH"
+  });
+}
+
+export function deleteTeacherTask(id) {
+  return request(`/api/teacher-tasks/${id}`, {
+    method: "DELETE"
+  });
+}
+
+export function assignTeacherTaskByAdmin(teacherId, payload) {
+  return request("/api/teacher-tasks/admin-assign", {
+    method: "POST",
+    body: JSON.stringify({ teacherId, ...payload })
+  });
+export function getMentorAttendance(params = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.date) searchParams.append("date", params.date);
+  if (params.mentorId) searchParams.append("mentorId", params.mentorId);
+  return request(`/api/attendance/mentors?${searchParams.toString()}`);
+}
+
+export function getMentorFellowsAttendance(params = {}) {
+  const searchParams = new URLSearchParams();
+  if (params.from) searchParams.append("from", params.from);
+  if (params.to) searchParams.append("to", params.to);
+  if (params.date) searchParams.append("date", params.date);
+  return request(`/api/mentor/fellows/attendance?${searchParams.toString()}`);
+}

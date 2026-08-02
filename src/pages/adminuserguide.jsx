@@ -93,15 +93,6 @@ const ADMIN_GUIDE_SECTIONS = [
     ],
   },
   {
-    icon: "🎓",
-    title: "Trainer Management",
-    summary: "Manage the trainers who conduct teacher-training sessions.",
-    steps: [
-      "Add a trainer profile and link them to the courses or sessions they lead.",
-      "View a trainer's session history and upcoming schedule.",
-    ],
-  },
-  {
     icon: "📝",
     title: "Assignment Review",
     summary: "Review assessment submissions and scores awaiting approval.",

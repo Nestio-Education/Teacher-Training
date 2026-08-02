@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { AttendanceBar, Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
-import { getAdminTeachers, updateTeacherStatus, updateTeacherProfile, registerTeacher, getCenters, getClasses, sendDirectMessageToTeacher, blockTeacher, unblockTeacher, deleteTeacher } from "../services/api";
+import { getAdminTeachers, updateTeacherStatus, updateTeacherProfile, registerTeacher, getCenters, getClasses, sendDirectMessageToTeacher, blockTeacher, unblockTeacher, deleteTeacher, assignTeacherTaskByAdmin, getMentorFellows, claimFellow, unclaimFellow, updateFellowStatus, deleteMentorFellow } from "../services/api";
 import { t } from "../services/i18n";
 import MentorManagementTab from "../mentor/MentorManagementTab";
 
@@ -48,6 +48,9 @@ const mapTeacherFromApi = (tr) => ({
     tr.photo ||
     null
   ),
+  assignedMentor: tr.assignedMentor || null,
+  assignedMentorId: tr.assignedMentor?._id || tr.assignedMentor || null,
+  assignedMentorName: tr.assignedMentor?.name || null,
   bio: tr.teacherProfile?.bio || tr.bio || "",
   dob: tr.teacherProfile?.dob ? new Date(tr.teacherProfile.dob).toLocaleDateString("en-IN") : "",
   gender: tr.teacherProfile?.gender || "",
@@ -126,7 +129,7 @@ function BlockModal({ teacher, onConfirm, onClose }) {
 
 /* ── Direct Message Modal ── */
 function DirectMessageModal({ teacher, onClose, setToast }) {
-  const [msg, setMsg]         = useState("");
+  const [msg, setMsg] = useState("");
   const [subject, setSubject] = useState("");
   const [channel, setChannel] = useState("in_app");
   const [sending, setSending] = useState(false);
@@ -154,9 +157,11 @@ function DirectMessageModal({ teacher, onClose, setToast }) {
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         {[{ val: "in_app", label: "📱 In-App" }, { val: "email", label: "📧 Email" }].map(c => (
           <button key={c.val} onClick={() => setChannel(c.val)}
-            style={{ flex: 1, padding: "8px", borderRadius: 8, border: `1.5px solid ${channel === c.val ? "#f59e0b" : "#e5e7eb"}`,
+            style={{
+              flex: 1, padding: "8px", borderRadius: 8, border: `1.5px solid ${channel === c.val ? "#f59e0b" : "#e5e7eb"}`,
               background: channel === c.val ? "#fef3c7" : "white", color: channel === c.val ? "#92400e" : "#6b7280",
-              fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+              fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit"
+            }}>
             {c.label}
           </button>
         ))}
@@ -357,18 +362,18 @@ function ChangeCenterModal({ teacher, centers = [], classes = [], onSave, onClos
 /* ── Teacher Full Profile View ── */
 function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpdate, setToast }) {
   const [activeSection, setActiveSection] = useState("overview");
-  const [showReject,   setShowReject]   = useState(false);
-  const [showBlock,    setShowBlock]    = useState(false);
-  const [showMsg,      setShowMsg]      = useState(false);
-  const [showCourses,  setShowCourses]  = useState(false);
-  const [showEdit,     setShowEdit]     = useState(false);
+  const [showReject, setShowReject] = useState(false);
+  const [showBlock, setShowBlock] = useState(false);
+  const [showMsg, setShowMsg] = useState(false);
+  const [showCourses, setShowCourses] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   // NEW: lightbox to view full-size profile photo
   const [photoLightbox, setPhotoLightbox] = useState(false);
 
-  const isPending  = teacher.status === "pending";
+  const isPending = teacher.status === "pending";
   const isApproved = teacher.status === "approved";
   const isRejected = teacher.status === "rejected";
-  const isBlocked  = teacher.status === "blocked";
+  const isBlocked = teacher.status === "blocked";
 
   const doApprove = () =>
     updateTeacherStatus(teacher.id, "approved")
@@ -402,41 +407,53 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
       .then(() => { onUpdate(); setToast({ msg: "Center & classes assignment updated!", type: "success" }); setShowCourses(false); })
       .catch(err => setToast({ msg: err.message, type: "error" }));
 
+  const [showAssignTask, setShowAssignTask] = useState(false);
+
   const quickActions = [
-    { icon: "💬", label: "Send Message",   onClick: () => setShowMsg(true),     color: "#8b5cf6", bg: "#ede9fe" },
-    { icon: "🏫", label: "Change Center",  onClick: () => setShowCourses(true), color: "#f59e0b", bg: "#fef3c7" },
-    { icon: "✏️", label: "Edit Profile",   onClick: () => setShowEdit(true),    color: "#2563eb", bg: "#dbeafe" },
+    { icon: "📌", label: "Assign Task", onClick: () => setShowAssignTask(true), color: "#059669", bg: "#d1fae5" },
+    { icon: "💬", label: "Send Message", onClick: () => setShowMsg(true), color: "#8b5cf6", bg: "#ede9fe" },
+    { icon: "🏫", label: "Change Center", onClick: () => setShowCourses(true), color: "#f59e0b", bg: "#fef3c7" },
+    { icon: "✏️", label: "Edit Profile", onClick: () => setShowEdit(true), color: "#2563eb", bg: "#dbeafe" },
   ];
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
-      {showReject   && <RejectModal  teacher={teacher} onClose={() => setShowReject(false)}  onConfirm={doReject} />}
-      {showBlock    && <BlockModal   teacher={teacher} onClose={() => setShowBlock(false)}   onConfirm={doBlock} />}
-      {showMsg      && <DirectMessageModal teacher={teacher} onClose={() => setShowMsg(false)} setToast={setToast} />}
-      {showCourses  && <ChangeCenterModal  teacher={teacher} centers={centers} classes={classes} onClose={() => setShowCourses(false)} onSave={doChangeCenter} />}
-      {showEdit     && <EditTeacherModal  teacher={teacher} onClose={() => setShowEdit(false)} onSave={() => { onUpdate(); }} setToast={setToast} />}
+      {showReject && <RejectModal teacher={teacher} onClose={() => setShowReject(false)} onConfirm={doReject} />}
+      {showBlock && <BlockModal teacher={teacher} onClose={() => setShowBlock(false)} onConfirm={doBlock} />}
+      {showMsg && <DirectMessageModal teacher={teacher} onClose={() => setShowMsg(false)} setToast={setToast} />}
+      {showCourses && <ChangeCenterModal teacher={teacher} centers={centers} classes={classes} onClose={() => setShowCourses(false)} onSave={doChangeCenter} />}
+      {showEdit && <EditTeacherModal teacher={teacher} onClose={() => setShowEdit(false)} onSave={() => { onUpdate(); }} setToast={setToast} />}
+      {showAssignTask && <AssignTaskModal teacher={teacher} onClose={() => setShowAssignTask(false)} setToast={setToast} />}
 
       {/* NEW: full-size photo lightbox */}
       {photoLightbox && teacher.photoUrl && (
         <div
           onClick={() => setPhotoLightbox(false)}
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 1100,
-            display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out", padding: 24 }}>
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 1100,
+            display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out", padding: 24
+          }}>
           <img src={teacher.photoUrl} alt={teacher.name}
-            style={{ maxWidth: "80vw", maxHeight: "80vh", objectFit: "contain", borderRadius: 16,
-              boxShadow: "0 10px 40px rgba(0,0,0,0.5)", border: "3px solid #f59e0b" }} />
+            style={{
+              maxWidth: "80vw", maxHeight: "80vh", objectFit: "contain", borderRadius: 16,
+              boxShadow: "0 10px 40px rgba(0,0,0,0.5)", border: "3px solid #f59e0b"
+            }} />
           <button onClick={() => setPhotoLightbox(false)}
-            style={{ position: "absolute", top: 20, right: 24, background: "rgba(255,255,255,0.15)",
+            style={{
+              position: "absolute", top: 20, right: 24, background: "rgba(255,255,255,0.15)",
               border: "none", color: "white", fontSize: 22, width: 40, height: 40,
-              borderRadius: "50%", cursor: "pointer" }}>✕</button>
+              borderRadius: "50%", cursor: "pointer"
+            }}>✕</button>
         </div>
       )}
 
       <button onClick={onBack} style={S.backBtn}>← Back to Teachers</button>
 
       {/* Profile Header — now shows real photo with click-to-enlarge */}
-      <div style={{ background: "white", borderRadius: 20, padding: 24, border: "1px solid #f1f5f9",
-        boxShadow: "0 2px 10px rgba(0,0,0,0.03)", display: "flex", gap: 20, alignItems: "center", marginBottom: 20 }}>
+      <div style={{
+        background: "white", borderRadius: 20, padding: 24, border: "1px solid #f1f5f9",
+        boxShadow: "0 2px 10px rgba(0,0,0,0.03)", display: "flex", gap: 20, alignItems: "center", marginBottom: 20
+      }}>
 
         {/* Avatar / photo — clickable if a real photo exists */}
         <div
@@ -446,13 +463,17 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
           <TeacherAvatar teacher={teacher} size={80} borderColor="#f59e0b" borderWidth={2.5} />
           {/* Badge indicating it's a real photo vs generated avatar */}
           {teacher.photoUrl ? (
-            <span style={{ position: "absolute", bottom: 2, right: 2, background: "#10b981",
+            <span style={{
+              position: "absolute", bottom: 2, right: 2, background: "#10b981",
               borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center",
-              justifyContent: "center", fontSize: 9, border: "2px solid white" }} title="Profile photo uploaded">📷</span>
+              justifyContent: "center", fontSize: 9, border: "2px solid white"
+            }} title="Profile photo uploaded">📷</span>
           ) : (
-            <span style={{ position: "absolute", bottom: 2, right: 2, background: "#9ca3af",
+            <span style={{
+              position: "absolute", bottom: 2, right: 2, background: "#9ca3af",
               borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center",
-              justifyContent: "center", fontSize: 9, border: "2px solid white" }} title="Auto-generated avatar">🤖</span>
+              justifyContent: "center", fontSize: 9, border: "2px solid white"
+            }} title="Auto-generated avatar">🤖</span>
           )}
         </div>
 
@@ -461,10 +482,12 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
             <h2 style={{ fontSize: 20, fontWeight: 900, color: "#1c1917", margin: 0 }}>{teacher.name}</h2>
             <StatusBadge status={teacher.status} />
             {/* NEW: subtle label so admin knows photo source */}
-            <span style={{ fontSize: 10, color: teacher.photoUrl ? "#10b981" : "#9ca3af",
+            <span style={{
+              fontSize: 10, color: teacher.photoUrl ? "#10b981" : "#9ca3af",
               background: teacher.photoUrl ? "#d1fae5" : "#f3f4f6",
               border: `1px solid ${teacher.photoUrl ? "#86efac" : "#e5e7eb"}`,
-              borderRadius: 20, padding: "2px 8px", fontWeight: 700 }}>
+              borderRadius: 20, padding: "2px 8px", fontWeight: 700
+            }}>
               {teacher.photoUrl ? "📷 Photo uploaded" : "🤖 Auto avatar"}
             </span>
           </div>
@@ -473,22 +496,24 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
             <span>📧 {teacher.email}</span>
             <span>📱 {teacher.phone}</span>
             {teacher.gender && <span>⚧ {teacher.gender}</span>}
-            {teacher.dob   && <span>🎂 {teacher.dob}</span>}
+            {teacher.dob && <span>🎂 {teacher.dob}</span>}
           </div>
           {/* NEW: show bio if teacher filled it in */}
           {teacher.bio && (
-            <p style={{ fontSize: 12, color: "#475569", margin: "8px 0 0", fontStyle: "italic",
+            <p style={{
+              fontSize: 12, color: "#475569", margin: "8px 0 0", fontStyle: "italic",
               background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8,
-              padding: "6px 10px", maxWidth: 480 }}>
+              padding: "6px 10px", maxWidth: 480
+            }}>
               "{teacher.bio}"
             </p>
           )}
         </div>
 
         <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-          {isPending  && <><button onClick={doApprove} style={S.primaryBtn}>✓ Approve</button><button onClick={() => setShowReject(true)} style={S.btnRed}>✕ Reject</button></>}
+          {isPending && <><button onClick={doApprove} style={S.primaryBtn}>✓ Approve</button><button onClick={() => setShowReject(true)} style={S.btnRed}>✕ Reject</button></>}
           {isApproved && <button onClick={() => setShowBlock(true)} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5" }}>🚫 Block</button>}
-          {isBlocked  && <button onClick={doUnblock} style={S.primaryBtn}>✓ Unblock</button>}
+          {isBlocked && <button onClick={doUnblock} style={S.primaryBtn}>✓ Unblock</button>}
           {isRejected && <button onClick={doApprove} style={S.primaryBtn}>✓ Reactivate</button>}
           <button onClick={() => setShowEdit(true)} style={{ ...S.tblBtn, color: "#2563eb", borderColor: "#93c5fd" }}>✏️ Edit</button>
           <button onClick={doDelete} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5" }}>🗑️ Delete</button>
@@ -499,9 +524,11 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: 10, marginBottom: 20 }}>
         {quickActions.map((act, i) => (
           <button key={i} onClick={act.onClick}
-            style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: 12,
+            style={{
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: 12,
               borderRadius: 12, border: "1px solid #f1f5f9", background: act.bg, color: act.color,
-              fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+              fontSize: 11, fontWeight: 700, cursor: "pointer"
+            }}>
             <span style={{ fontSize: 20 }}>{act.icon}</span>
             <span>{act.label}</span>
           </button>
@@ -512,10 +539,12 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
       <div style={{ display: "flex", gap: 10, borderBottom: "1px solid #e5e7eb", marginBottom: 20 }}>
         {["overview", "activity"].map(sec => (
           <button key={sec} onClick={() => setActiveSection(sec)}
-            style={{ padding: "10px 16px", background: "none", border: "none",
+            style={{
+              padding: "10px 16px", background: "none", border: "none",
               borderBottom: activeSection === sec ? "2.5px solid #f59e0b" : "2.5px solid transparent",
               color: activeSection === sec ? "#d97706" : "#6b7280",
-              fontSize: 13, fontWeight: 700, cursor: "pointer", textTransform: "capitalize" }}>
+              fontSize: 13, fontWeight: 700, cursor: "pointer", textTransform: "capitalize"
+            }}>
             {sec}
           </button>
         ))}
@@ -530,8 +559,10 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
                 <div style={{ fontSize: 10, color: "#9ca3af", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>Profile Photo</div>
                 <div
                   onClick={() => setPhotoLightbox(true)}
-                  style={{ width: 80, height: 80, borderRadius: 12, overflow: "hidden", cursor: "zoom-in",
-                    border: "2px solid #f59e0b", boxShadow: "0 2px 8px rgba(245,158,11,0.25)" }}
+                  style={{
+                    width: 80, height: 80, borderRadius: 12, overflow: "hidden", cursor: "zoom-in",
+                    border: "2px solid #f59e0b", boxShadow: "0 2px 8px rgba(245,158,11,0.25)"
+                  }}
                   title="Click to enlarge">
                   <img src={teacher.photoUrl} alt={teacher.name}
                     style={{ width: "100%", height: "100%", objectFit: "cover" }} />
@@ -540,15 +571,15 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
             )}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {[
-                { icon: "🎓", label: "Qualification",    val: teacher.qualification },
-                { icon: "🏢", label: "Assigned Center",  val: teacher.assignedCenter },
-                { icon: "💼", label: "Experience",       val: teacher.experience },
-                { icon: "📅", label: "Joined",           val: teacher.joined },
-                { icon: "📍", label: "Address",          val: teacher.address },
-                { icon: "🗂️", label: "Class Assigned",   val: teacher.batch },
+                { icon: "🎓", label: "Qualification", val: teacher.qualification },
+                { icon: "🏢", label: "Assigned Center", val: teacher.assignedCenter },
+                { icon: "💼", label: "Experience", val: teacher.experience },
+                { icon: "📅", label: "Joined", val: teacher.joined },
+                { icon: "📍", label: "Address", val: teacher.address },
+                { icon: "🗂️", label: "Class Assigned", val: teacher.batch },
                 ...(teacher.classNames?.length ? [{ icon: "📚", label: "Assigned Classes", val: teacher.classNames.join(", ") }] : []),
-                ...(teacher.gender    ? [{ icon: "⚧",  label: "Gender",    val: teacher.gender }] : []),
-                ...(teacher.dob       ? [{ icon: "🎂",  label: "DOB",       val: teacher.dob }]    : []),
+                ...(teacher.gender ? [{ icon: "⚧", label: "Gender", val: teacher.gender }] : []),
+                ...(teacher.dob ? [{ icon: "🎂", label: "DOB", val: teacher.dob }] : []),
                 ...(teacher.languages?.length ? [{ icon: "🗣️", label: "Languages", val: teacher.languages.join(", ") }] : []),
               ].map((r, i) => (
                 <div key={i} style={{ background: "#f9fafb", borderRadius: 10, padding: "10px 14px", border: "1px solid #f3f4f6" }}>
@@ -593,9 +624,11 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
             { action: `Assigned to center: ${teacher.assignedCenter}`, time: "—", icon: "🏫", type: "success" },
           ].map((a, i) => (
             <div key={i} style={{ display: "flex", gap: 12, padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
-              <div style={{ width: 32, height: 32, borderRadius: 8,
+              <div style={{
+                width: 32, height: 32, borderRadius: 8,
                 background: a.type === "success" ? "#d1fae5" : "#dbeafe",
-                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>{a.icon}</div>
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0
+              }}>{a.icon}</div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#1c1917" }}>{a.action}</div>
                 <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 1 }}>{a.time}</div>
@@ -611,15 +644,17 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
 /* ══════════════════════════════════════════
    MAIN TEACHER MANAGEMENT TAB
    ══════════════════════════════════════════ */
-export function TeacherManagementList({ setToast }) {
+export function TeacherManagementList({ setToast, role = "admin", user = null, onUserUpdate }) {
   const [teachers, setTeachers]   = useState([]);
   const [centers, setCenters]     = useState([]);
   const [classes, setClasses]     = useState([]);
   const [search, setSearch]       = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [centerFilter, setCenterFilter] = useState("all");
+  const [assignmentFilter, setAssignmentFilter] = useState("all");
   const [selected, setSelected]   = useState(null);
   const [addModal, setAddModal]   = useState(false);
+  const [assigningTaskTeacher, setAssigningTaskTeacher] = useState(null);
   const [loading, setLoading]     = useState(true);
   const [toast, setLocalToast]    = useState({ msg: "", type: "" });
   const [newT, setNewT] = useState({
@@ -632,12 +667,20 @@ export function TeacherManagementList({ setToast }) {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [teachersRes, centersRes, classesRes] = await Promise.all([
-        getAdminTeachers(),
+      let teachersRes;
+      if (role === "mentor") {
+        const res = await getMentorFellows();
+        teachersRes = { fellows: res.fellows || [] };
+      } else {
+        const res = await getAdminTeachers();
+        teachersRes = { teachers: res.teachers || [] };
+      }
+      const [centersRes, classesRes] = await Promise.all([
         getCenters(),
         getClasses()
       ]);
-      setTeachers((teachersRes.teachers || []).map(mapTeacherFromApi));
+      const rawTeachers = role === "mentor" ? teachersRes.fellows : teachersRes.teachers;
+      setTeachers((rawTeachers || []).map(mapTeacherFromApi));
       setCenters(centersRes.centers || []);
       setClasses(classesRes.classes || []);
     } catch (err) {
@@ -647,14 +690,18 @@ export function TeacherManagementList({ setToast }) {
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); }, [role]);
 
   const filtered = teachers.filter(tr => {
     const q = search.toLowerCase();
-    return (tr.name.toLowerCase().includes(q) || tr.email.toLowerCase().includes(q) ||
-      tr.phone.includes(q) || (tr.subject || "").toLowerCase().includes(q))
-      && (statusFilter === "all" || tr.status === statusFilter)
-      && (centerFilter === "all" || tr.centerId === centerFilter);
+    const matchesSearch = (tr.name.toLowerCase().includes(q) || tr.email.toLowerCase().includes(q) ||
+      tr.phone.includes(q) || (tr.subject || "").toLowerCase().includes(q));
+    if (!matchesSearch) return false;
+
+    if (statusFilter !== "all" && tr.status !== statusFilter) return false;
+    if (centerFilter !== "all" && tr.centerId !== centerFilter) return false;
+
+    return true;
   });
 
   const handleAdd = async (e) => {
@@ -721,9 +768,11 @@ export function TeacherManagementList({ setToast }) {
         <div style={{ position: "absolute", top: -30, right: -30, width: 160, height: 160, borderRadius: "50%", background: "rgba(255,255,255,0.12)" }} />
         <div style={{ position: "relative", zIndex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#fffbeb", letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 6 }}>{t("User Management")}</div>
-            <h1 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 4px" }}>{t("All Users")}</h1>
-            <p style={{ fontSize: 12, margin: 0, color: "rgba(255,255,255,0.85)" }}>{teachers.filter(t=>t.status==="approved").length} {t("approved")} · {pending} {t("pending")} · {teachers.length} {t("total")}</p>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#fffbeb", letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 6 }}>{role === "mentor" ? t("Teacher Management") : t("User Management")}</div>
+            <h1 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 6px" }}>{role === "mentor" ? t("All Teachers") : t("All Users")}</h1>
+            <p style={{ fontSize: 12, margin: 0, color: "rgba(255,255,255,0.85)" }}>
+              {`${teachers.filter(t=>t.status==="approved").length} approved · ${pending} pending · ${teachers.length} total`}
+            </p>
           </div>
           <button onClick={() => setAddModal(true)} style={S.primaryBtn}>+ {t("Add Teacher")}</button>
         </div>
@@ -731,12 +780,12 @@ export function TeacherManagementList({ setToast }) {
 
       {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 14, marginBottom: 20 }}>
-        <StatCard icon="👩‍🏫" label={t("Total Registered")} val={teachers.length}  color="#3b82f6" bg="#dbeafe" />
-        <StatCard icon="✅" label={t("Approved")}            val={teachers.filter(t=>t.status==="approved").length} color="#10b981" bg="#d1fae5" />
-        <StatCard icon="⏳" label={t("Pending Approval")}   val={pending}          color="#f59e0b" bg="#fef3c7" />
-        <StatCard icon="🚫" label={t("Rejected/Blocked")}   val={teachers.filter(t=>t.status==="rejected"||t.status==="blocked").length} color="#ef4444" bg="#fee2e2" />
+        <StatCard icon="👩‍🏫" label={t("Total Registered")} val={teachers.length} color="#3b82f6" bg="#dbeafe" />
+        <StatCard icon="✅" label={t("Approved")} val={teachers.filter(t => t.status === "approved").length} color="#10b981" bg="#d1fae5" />
+        <StatCard icon="⏳" label={t("Pending Approval")} val={pending} color="#f59e0b" bg="#fef3c7" />
+        <StatCard icon="🚫" label={t("Rejected/Blocked")} val={teachers.filter(t => t.status === "rejected" || t.status === "blocked").length} color="#ef4444" bg="#fee2e2" />
         {/* NEW: how many have uploaded a real photo */}
-        <StatCard icon="📷" label={t("Photos Uploaded")}    val={teachers.filter(t=>t.photoUrl).length} color="#8b5cf6" bg="#ede9fe" />
+        <StatCard icon="📷" label={t("Photos Uploaded")} val={teachers.filter(t => t.photoUrl).length} color="#8b5cf6" bg="#ede9fe" />
       </div>
 
       {/* Filters */}
@@ -753,7 +802,7 @@ export function TeacherManagementList({ setToast }) {
         </select>
         <select style={{ ...S.input, width: 180, padding: "8px 12px", marginBottom: 0 }} value={centerFilter} onChange={e => setCenterFilter(e.target.value)}>
           <option value="all">All Centers</option>
-          {centers.map(c => <option key={c._id||c.id} value={c._id||c.id}>{c.name}</option>)}
+          {centers.map(c => <option key={c._id || c.id} value={c._id || c.id}>{c.name}</option>)}
         </select>
       </div>
 
@@ -774,17 +823,22 @@ export function TeacherManagementList({ setToast }) {
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     {/* NEW: uses real photo when available */}
                     <div style={{ position: "relative", flexShrink: 0 }}>
-                      <TeacherAvatar teacher={t} size={38} borderColor={tr.photoUrl ? "#f59e0b" : "#e2e8f0"} borderWidth={tr.photoUrl ? 2 : 1} />
+                      <TeacherAvatar teacher={tr} size={38} borderColor={tr.photoUrl ? "#f59e0b" : "#e2e8f0"} borderWidth={tr.photoUrl ? 2 : 1} />
                       {/* tiny camera badge if real photo */}
                       {tr.photoUrl && (
-                        <span style={{ position: "absolute", bottom: -1, right: -1, background: "#10b981",
+                        <span style={{
+                          position: "absolute", bottom: -1, right: -1, background: "#10b981",
                           borderRadius: "50%", width: 13, height: 13, display: "flex", alignItems: "center",
-                          justifyContent: "center", fontSize: 7, border: "1.5px solid white" }}>📷</span>
+                          justifyContent: "center", fontSize: 7, border: "1.5px solid white"
+                        }}>📷</span>
                       )}
                     </div>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: "#1c1917" }}>{tr.name}</div>
-                      <div style={{ fontSize: 11, color: "#9ca3af" }}>{tr.email}</div>
+                      <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 2 }}>{tr.email}</div>
+                      <div style={{ fontSize: 10, color: tr.assignedMentorName ? "#0284c7" : "#64748b", fontWeight: 700 }}>
+                        👤 {tr.assignedMentorName ? `Monitored by: ${tr.assignedMentorName}` : "Unassigned / Unclaimed"}
+                      </div>
                     </div>
                   </div>
                 </td>
@@ -805,31 +859,134 @@ export function TeacherManagementList({ setToast }) {
                 <td style={{ padding: "12px 14px" }}><StatusBadge status={tr.status} /></td>
                 <td style={{ padding: "12px 14px" }}>
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                    <button onClick={() => setSelected(tr)}
+                    <button onClick={() => setAssigningTaskTeacher(t)}
+                      style={{ ...S.tblBtn, color: "#059669", borderColor: "#a7f3d0", background: "#ecfdf5" }}
+                      title="Assign task to teacher">📌 Task</button>
+                    <button onClick={() => setSelected(t)}
                       style={{ ...S.tblBtn, color: "#3b82f6", borderColor: "#93c5fd" }}>👁 View</button>
-                    {tr.status === "pending" && (
-                      <button onClick={async () => {
-                        try { await updateTeacherStatus(tr.id, "approved"); await loadData(); showToast({ msg: `${tr.name} approved!`, type: "success" }); }
-                        catch (err) { showToast({ msg: err.message, type: "error" }); }
-                      }} style={{ ...S.btnGreen }}>✓ Approve</button>
+                    {role === "mentor" ? (
+                      <>
+                        {String(tr.assignedMentorId) === String(user?._id || user?.id) ? (
+                          <>
+                            {tr.status === "pending" && (
+                              <button onClick={async () => {
+                                try { await updateFellowStatus(tr.id, "approved"); await loadData(); showToast({ msg: `${tr.name} approved!`, type: "success" }); }
+                                catch (err) { showToast({ msg: err.message, type: "error" }); }
+                              }} style={{ ...S.btnGreen }}>✓ Approve</button>
+                            )}
+                            {tr.status === "approved" && (
+                              <button onClick={async () => {
+                                try { await updateFellowStatus(tr.id, "rejected"); await loadData(); showToast({ msg: `${tr.name} rejected.`, type: "error" }); }
+                                catch (err) { showToast({ msg: err.message, type: "error" }); }
+                              }} style={{ ...S.btnRed }}>🚫 Reject</button>
+                            )}
+                            {tr.status === "rejected" && (
+                              <button onClick={async () => {
+                                try { await updateFellowStatus(tr.id, "approved"); await loadData(); showToast({ msg: `${tr.name} approved!`, type: "success" }); }
+                                catch (err) { showToast({ msg: err.message, type: "error" }); }
+                              }} style={{ ...S.btnGreen }}>✓ Approve</button>
+                            )}
+                            <button onClick={async () => {
+                              try {
+                                await unclaimFellow(tr.id);
+                                await loadData();
+                                if (onUserUpdate) {
+                                  const updatedMentees = (user?.mentorProfile?.assignedTeachers || []).filter(m => String(m._id || m) !== String(tr.id));
+                                  onUserUpdate({
+                                    ...user,
+                                    mentorProfile: {
+                                      ...(user?.mentorProfile || {}),
+                                      assignedTeachers: updatedMentees
+                                    }
+                                  });
+                                }
+                                showToast({ msg: `Unclaimed ${tr.name} successfully.`, type: "success" });
+                              } catch (err) {
+                                showToast({ msg: err.message, type: "error" });
+                              }
+                            }} style={{ ...S.tblBtn, color: "#ef4444", borderColor: "#fca5a5" }}>Unclaim</button>
+                            <button onClick={async () => {
+                              if (!window.confirm(`Delete ${tr.name} permanently?`)) return;
+                              try { await deleteMentorFellow(tr.id); await loadData(); showToast({ msg: `${tr.name} deleted.`, type: "success" }); }
+                              catch (err) { showToast({ msg: err.message, type: "error" }); }
+                            }} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5" }} title="Delete fellow">🗑️</button>
+                          </>
+                        ) : !tr.assignedMentorId ? (
+                          <>
+                            <button onClick={async () => {
+                              try {
+                                await claimFellow(tr.id);
+                                await loadData();
+                                if (onUserUpdate) {
+                                  const updatedMentees = [...(user?.mentorProfile?.assignedTeachers || []), { _id: tr.id, name: tr.name, email: tr.email }];
+                                  onUserUpdate({
+                                    ...user,
+                                    mentorProfile: {
+                                      ...(user?.mentorProfile || {}),
+                                      assignedTeachers: updatedMentees
+                                    }
+                                  });
+                                }
+                                showToast({ msg: `Claimed ${tr.name} successfully!`, type: "success" });
+                              } catch (err) {
+                                showToast({ msg: err.message, type: "error" });
+                              }
+                            }} style={{ ...S.tblBtn, color: "#10b981", borderColor: "#6ee7b7" }}>Claim</button>
+                            {tr.status === "pending" && (
+                              <button onClick={async () => {
+                                try { await updateFellowStatus(tr.id, "approved"); await loadData(); showToast({ msg: `${tr.name} approved!`, type: "success" }); }
+                                catch (err) { showToast({ msg: err.message, type: "error" }); }
+                              }} style={{ ...S.btnGreen }}>✓ Approve</button>
+                            )}
+                            {tr.status === "approved" && (
+                              <button onClick={async () => {
+                                try { await updateFellowStatus(tr.id, "rejected"); await loadData(); showToast({ msg: `${tr.name} rejected.`, type: "error" }); }
+                                catch (err) { showToast({ msg: err.message, type: "error" }); }
+                              }} style={{ ...S.btnRed }}>🚫 Reject</button>
+                            )}
+                            {tr.status === "rejected" && (
+                              <button onClick={async () => {
+                                try { await updateFellowStatus(tr.id, "approved"); await loadData(); showToast({ msg: `${tr.name} approved!`, type: "success" }); }
+                                catch (err) { showToast({ msg: err.message, type: "error" }); }
+                              }} style={{ ...S.btnGreen }}>✓ Approve</button>
+                            )}
+                            <button onClick={async () => {
+                              if (!window.confirm(`Delete ${tr.name} permanently?`)) return;
+                              try { await deleteMentorFellow(tr.id); await loadData(); showToast({ msg: `${tr.name} deleted.`, type: "success" }); }
+                              catch (err) { showToast({ msg: err.message, type: "error" }); }
+                            }} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5" }} title="Delete fellow">🗑️</button>
+                          </>
+                        ) : (
+                          <span style={{ fontSize: 11, color: "#64748b", fontStyle: "italic", alignSelf: "center" }}>Claimed</span>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        {tr.status === "pending" && (
+                          <button onClick={async () => {
+                            try { await updateTeacherStatus(tr.id, "approved"); await loadData(); showToast({ msg: `${tr.name} approved!`, type: "success" }); }
+                            catch (err) { showToast({ msg: err.message, type: "error" }); }
+                          }} style={{ ...S.btnGreen }}>✓ Approve</button>
+                        )}
+                        {tr.status === "approved" && (
+                          <button onClick={async () => {
+                            try { await blockTeacher(tr.id); await loadData(); showToast({ msg: `${tr.name} blocked.`, type: "error" }); }
+                            catch (err) { showToast({ msg: err.message, type: "error" }); }
+                          }} style={{ ...S.btnRed }}>🚫 Block</button>
+                        )}
+                        {tr.status === "blocked" && (
+                          <button onClick={async () => {
+                            try { await unblockTeacher(tr.id); await loadData(); showToast({ msg: `${tr.name} unblocked!`, type: "success" }); }
+                            catch (err) { showToast({ msg: err.message, type: "error" }); }
+                          }} style={{ ...S.btnGreen }}>✓ Unblock</button>
+                        )}
+                        <button onClick={async () => {
+                          if (!window.confirm(`Delete ${tr.name} permanently?`)) return;
+                          try { await deleteTeacher(tr.id); await loadData(); showToast({ msg: `${tr.name} deleted.`, type: "success" }); }
+                          catch (err) { showToast({ msg: err.message, type: "error" }); }
+                        }} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5" }} title="Delete teacher">🗑️</button>
+                      </>
                     )}
-                    {tr.status === "approved" && (
-                      <button onClick={async () => {
-                        try { await blockTeacher(tr.id); await loadData(); showToast({ msg: `${tr.name} blocked.`, type: "error" }); }
-                        catch (err) { showToast({ msg: err.message, type: "error" }); }
-                      }} style={{ ...S.btnRed }}>🚫 Block</button>
-                    )}
-                    {tr.status === "blocked" && (
-                      <button onClick={async () => {
-                        try { await unblockTeacher(tr.id); await loadData(); showToast({ msg: `${tr.name} unblocked!`, type: "success" }); }
-                        catch (err) { showToast({ msg: err.message, type: "error" }); }
-                      }} style={{ ...S.btnGreen }}>✓ Unblock</button>
-                    )}
-                    <button onClick={async () => {
-                      if (!window.confirm(`Delete ${tr.name} permanently?`)) return;
-                      try { await deleteTeacher(tr.id); await loadData(); showToast({ msg: `${tr.name} deleted.`, type: "success" }); }
-                      catch (err) { showToast({ msg: err.message, type: "error" }); }
-                    }} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5" }} title="Delete teacher">🗑️</button>
                   </div>
                 </td>
               </tr>
@@ -845,16 +1002,21 @@ export function TeacherManagementList({ setToast }) {
         )}
       </div>
 
+      {/* Assign Task Modal from Table Row */}
+      {assigningTaskTeacher && (
+        <AssignTaskModal teacher={assigningTaskTeacher} onClose={() => setAssigningTaskTeacher(null)} setToast={showToast} />
+      )}
+
       {/* Add Teacher Modal */}
       {addModal && (
         <Modal title="👩‍🏫 Add New Teacher" onClose={() => setAddModal(false)}>
           <form onSubmit={handleAdd}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 4 }}>
               {[
-                { key: "name",    label: "Full Name *",   icon: "👤", ph: "Priya Sharma" },
-                { key: "subject", label: "Subject *",     icon: "📘", ph: "Early Childhood" },
-                { key: "email",   label: "Email *",       icon: "📧", ph: "teacher@school.edu", type: "email" },
-                { key: "phone",   label: "Phone *",       icon: "📱", ph: "+91 98765 43210" },
+                { key: "name", label: "Full Name *", icon: "👤", ph: "Priya Sharma" },
+                { key: "subject", label: "Subject *", icon: "📘", ph: "Early Childhood" },
+                { key: "email", label: "Email *", icon: "📧", ph: "teacher@school.edu", type: "email" },
+                { key: "phone", label: "Phone *", icon: "📱", ph: "+91 98765 43210" },
               ].map(f => (
                 <div key={f.key}>
                   <label style={S.label}>{f.label}</label>
@@ -893,7 +1055,7 @@ export function TeacherManagementList({ setToast }) {
                 });
               }}>
                 <option value="">Select Center (optional)</option>
-                {centers.map(c => <option key={c._id||c.id} value={c._id||c.id}>{c.name}</option>)}
+                {centers.map(c => <option key={c._id || c.id} value={c._id || c.id}>{c.name}</option>)}
               </select>
             </div>
             {newT.assignedCenter && (() => {
@@ -954,47 +1116,137 @@ export function TeacherManagementList({ setToast }) {
   );
 }
 
+/* ── AssignTaskModal ── */
+function AssignTaskModal({ teacher, onClose, setToast }) {
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState("admin_assigned");
+  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [startTime, setStartTime] = useState("11:30");
+  const [endTime, setEndTime] = useState("12:30");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!title.trim()) {
+      setToast({ msg: "Please enter a task title.", type: "error" });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await assignTeacherTaskByAdmin(teacher.id, {
+        title: title.trim(),
+        category,
+        date,
+        startTime,
+        endTime,
+        time: `${startTime} - ${endTime}`
+      });
+      setToast({ msg: `Task assigned to ${teacher.name}! 📌`, type: "success" });
+      onClose();
+    } catch (err) {
+      setToast({ msg: err.message || "Failed to assign task.", type: "error" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal title={`📌 Assign Task to ${teacher.name}`} onClose={onClose}>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div>
+          <label style={S.label}>Task Title *</label>
+          <input
+            style={S.input}
+            placeholder="e.g. Conduct Parent-Teacher Review Session"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+          />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <label style={S.label}>Category</label>
+            <select style={S.input} value={category} onChange={(e) => setCategory(e.target.value)}>
+              <option value="admin_assigned">Admin Assigned</option>
+              <option value="homework">Homework</option>
+              <option value="class">Class</option>
+              <option value="exam">Exam / Assessment</option>
+              <option value="workshop">Workshop</option>
+              <option value="tech">Technology</option>
+            </select>
+          </div>
+          <div>
+            <label style={S.label}>Scheduled Date</label>
+            <input type="date" style={S.input} value={date} onChange={(e) => setDate(e.target.value)} required />
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <label style={S.label}>Start Time</label>
+            <input type="time" style={S.input} value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+          </div>
+          <div>
+            <label style={S.label}>End Time</label>
+            <input type="time" style={S.input} value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 10 }}>
+          <button type="button" onClick={onClose} style={S.exportBtn}>Cancel</button>
+          <button type="submit" disabled={submitting} style={S.primaryBtn}>
+            {submitting ? "Assigning..." : "Assign Task →"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 /* ══════════════════════════════════════════
    UNIFIED USER MANAGEMENT TAB
    ══════════════════════════════════════════ */
-export default function TeacherManagementTab({ setToast }) {
+export default function TeacherManagementTab({ setToast, role = "admin", user = null, onUserUpdate }) {
   const [activeRole, setActiveRole] = useState("Teacher");
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, borderBottom: "1px solid #e2e8f0", paddingBottom: 16 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 900, color: "#0f172a", margin: "0 0 4px" }}>{t("User Management")}</h1>
-          <p style={{ margin: 0, color: "#64748b", fontSize: 13 }}>{t("Manage platform users, roles, and access.")}</p>
+          <h1 style={{ fontSize: 24, fontWeight: 900, color: "#0f172a", margin: "0 0 4px" }}>{role === "mentor" ? t("Teacher Management") : t("User Management")}</h1>
+          <p style={{ margin: 0, color: "#64748b", fontSize: 13 }}>{role === "mentor" ? t("Manage teachers, courses, and access.") : t("Manage platform users, roles, and access.")}</p>
         </div>
-        <div style={{ display: "flex", background: "#f1f5f9", padding: 4, borderRadius: 12 }}>
-          {["Teacher", "Mentor"].map(role => (
-            <button
-              key={role}
-              onClick={() => setActiveRole(role)}
-              style={{
-                padding: "8px 24px",
-                borderRadius: 8,
-                background: activeRole === role ? "white" : "transparent",
-                color: activeRole === role ? "#0f172a" : "#64748b",
-                fontWeight: activeRole === role ? 700 : 600,
-                fontSize: 13,
-                border: "none",
-                boxShadow: activeRole === role ? "0 2px 4px rgba(0,0,0,0.05)" : "none",
-                cursor: "pointer",
-                transition: "all 0.2s"
-              }}
-            >
-              {t(role + "s")}
-            </button>
-          ))}
-        </div>
+        {role !== "mentor" && (
+          <div style={{ display: "flex", background: "#f1f5f9", padding: 4, borderRadius: 12 }}>
+            {["Teacher", "Mentor"].map(roleKey => (
+              <button
+                key={roleKey}
+                onClick={() => setActiveRole(roleKey)}
+                style={{
+                  padding: "8px 24px",
+                  borderRadius: 8,
+                  background: activeRole === roleKey ? "white" : "transparent",
+                  color: activeRole === roleKey ? "#0f172a" : "#64748b",
+                  fontWeight: activeRole === roleKey ? 700 : 600,
+                  fontSize: 13,
+                  border: "none",
+                  boxShadow: activeRole === roleKey ? "0 2px 4px rgba(0,0,0,0.05)" : "none",
+                  cursor: "pointer",
+                  transition: "all 0.2s"
+                }}
+              >
+                {t(roleKey + "s")}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {activeRole === "Teacher" ? (
-        <TeacherManagementList setToast={setToast} />
+      {role === "mentor" || activeRole === "Teacher" ? (
+        <TeacherManagementList setToast={setToast} role={role} user={user} onUserUpdate={onUserUpdate} />
       ) : (
-        <MentorManagementTab setToast={setToast} />
+        <MentorManagementTab setToast={setToast} role={role} />
       )}
     </div>
   );

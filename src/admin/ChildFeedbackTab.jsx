@@ -10,6 +10,7 @@ export default function ChildFeedbackTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [updatingId, setUpdatingId] = useState(null);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     getAllChildFeedback()
@@ -124,6 +125,12 @@ export default function ChildFeedbackTab() {
     childAreaMap[childId].count += 1;
   });
   const childrenNeedingAttention = Object.values(childAreaMap).filter(c => c.count >= 2);
+  const filteredFeedbacks = feedbacks.filter((fb) => {
+    const q = search.toLowerCase();
+    const childName = (fb.childName || fb.child?.fullName || "").toLowerCase();
+    const teacherName = (fb.teacherName || fb.teacher?.name || "").toLowerCase();
+    return !q || childName.includes(q) || teacherName.includes(q);
+  });
 
   return (
     <div style={styles.container}>

@@ -60,13 +60,11 @@ export function disconnectSocket() {
  * Returns unsubscribe function
  */
 export function onSocketEvent(event, handler) {
-  if (!socket) {
-    console.warn("[socket] Not connected, cannot listen:", event);
-    return () => {};
-  }
-
-  socket.on(event, handler);
   listeners.set(event, handler);
+
+  if (socket) {
+    socket.on(event, handler);
+  }
 
   return () => {
     if (socket) {

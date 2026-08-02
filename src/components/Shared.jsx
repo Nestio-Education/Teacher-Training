@@ -5,8 +5,8 @@ import logo from "../assets/logo.png";
 /* ── Logo ── */
 export function Logo({ size = 130 }) {
   return (
-    <div style={{ display:"flex", justifyContent:"center", marginBottom:4 }}>
-      <img src={logo} alt="SpacECE" style={{ width:size, objectFit:"contain" }}/>
+    <div style={{ display: "flex", justifyContent: "center", marginBottom: 4 }}>
+      <img src={logo} alt="SpacECE" style={{ width: size, objectFit: "contain" }} />
     </div>
   );
 }
@@ -21,25 +21,27 @@ export function Toast({ msg, type, onClose }) {
   if (!msg) return null;
   return (
     <div style={{
-      position:"fixed", top:20, left:"50%", transform:"translateX(-50%)",
-      padding:"11px 20px", borderRadius:10, fontSize:13, fontWeight:600, color:"white",
-      background: type==="success" ? "#10b981" : "#ef4444",
-      display:"flex", alignItems:"center", gap:10, zIndex:9999,
-      minWidth:280, boxShadow:"0 4px 20px rgba(0,0,0,0.15)",
-      fontFamily:"inherit", animation:"fadeIn 0.3s ease",
+      position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)",
+      padding: "11px 20px", borderRadius: 10, fontSize: 13, fontWeight: 600, color: "white",
+      background: type === "success" ? "#10b981" : "#ef4444",
+      display: "flex", alignItems: "center", gap: 10, zIndex: 9999,
+      minWidth: 280, boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+      fontFamily: "inherit", animation: "fadeIn 0.3s ease",
     }}>
-      <span>{type==="success" ? "✓" : "!"}</span>
+      <span>{type === "success" ? "✓" : "!"}</span>
       {msg}
-      <button onClick={onClose} style={{ background:"none", border:"none", color:"white", cursor:"pointer", marginLeft:"auto", fontSize:13, fontWeight:700 }}>✕</button>
+      <button onClick={onClose} style={{ background: "none", border: "none", color: "white", cursor: "pointer", marginLeft: "auto", fontSize: 13, fontWeight: 700 }}>✕</button>
     </div>
   );
 }
 
 /* ── Badge ── */
-export function Badge({ children, color="#f59e0b", bg="#fef3c7" }) {
+export function Badge({ children, color = "#f59e0b", bg = "#fef3c7" }) {
   return (
-    <span style={{ padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:700,
-      color, background:bg, border:`1px solid ${color}40`, letterSpacing:"0.3px" }}>
+    <span style={{
+      padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+      color, background: bg, border: `1px solid ${color}40`, letterSpacing: "0.3px"
+    }}>
       {children}
     </span>
   );
@@ -48,50 +50,80 @@ export function Badge({ children, color="#f59e0b", bg="#fef3c7" }) {
 /* ── StatusBadge ── */
 export function StatusBadge({ status }) {
   const map = {
-    approved:    { label:"Active",       color:"#059669", bg:"#d1fae5" },
-    pending:     { label:"Pending",      color:"#d97706", bg:"#fef3c7" },
-    rejected:    { label:"Rejected",     color:"#dc2626", bg:"#fee2e2" },
-    blocked:     { label:"Blocked",      color:"#991b1b", bg:"#fecaca" },
-    published:   { label:"Published",    color:"#059669", bg:"#d1fae5" },
-    draft:       { label:"Draft",        color:"#6b7280", bg:"#f3f4f6" },
-    coming_soon: { label:"Coming Soon",  color:"#2563eb", bg:"#dbeafe" },
-    archived:    { label:"Archived",     color:"#9ca3af", bg:"#f9fafb" },
-    active:      { label:"Active",       color:"#059669", bg:"#d1fae5" },
-    upcoming:    { label:"Upcoming",     color:"#2563eb", bg:"#dbeafe" },
-    completed:   { label:"Completed",    color:"#7c3aed", bg:"#ede9fe" },
-    inactive:    { label:"Inactive",     color:"#6b7280", bg:"#f3f4f6" },
-    reviewed:    { label:"Reviewed",     color:"#059669", bg:"#d1fae5" },
-    revision:    { label:"Revision",     color:"#d97706", bg:"#fef3c7" },
-    issued:      { label:"Issued",       color:"#059669", bg:"#d1fae5" },
-    queued:      { label:"Queued",       color:"#d97706", bg:"#fef3c7" },
-    verified:    { label:"Verified",     color:"#2563eb", bg:"#dbeafe" },
-    open:        { label:"Open",         color:"#d97706", bg:"#fef3c7" },
-    resolved:    { label:"Resolved",     color:"#059669", bg:"#d1fae5" },
-    flagged:     { label:"Flagged",      color:"#dc2626", bg:"#fee2e2" },
-    sent:        { label:"Sent",         color:"#2563eb", bg:"#dbeafe" },
-    delivered:   { label:"Delivered",    color:"#059669", bg:"#d1fae5" },
-    failed:      { label:"Failed",       color:"#dc2626", bg:"#fee2e2" },
+    approved: { label: "Active", color: "#059669", bg: "#d1fae5" },
+    pending: { label: "Pending", color: "#d97706", bg: "#fef3c7" },
+    rejected: { label: "Rejected", color: "#dc2626", bg: "#fee2e2" },
+    blocked: { label: "Blocked", color: "#991b1b", bg: "#fecaca" },
+    published: { label: "Published", color: "#059669", bg: "#d1fae5" },
+    draft: { label: "Draft", color: "#6b7280", bg: "#f3f4f6" },
+    coming_soon: { label: "Coming Soon", color: "#2563eb", bg: "#dbeafe" },
+    archived: { label: "Archived", color: "#9ca3af", bg: "#f9fafb" },
+    active: { label: "Active", color: "#059669", bg: "#d1fae5" },
+    upcoming: { label: "Upcoming", color: "#2563eb", bg: "#dbeafe" },
+    completed: { label: "Completed", color: "#7c3aed", bg: "#ede9fe" },
+    inactive: { label: "Inactive", color: "#6b7280", bg: "#f3f4f6" },
+    reviewed: { label: "Reviewed", color: "#059669", bg: "#d1fae5" },
+    revision: { label: "Revision", color: "#d97706", bg: "#fef3c7" },
+    issued: { label: "Issued", color: "#059669", bg: "#d1fae5" },
+    queued: { label: "Queued", color: "#d97706", bg: "#fef3c7" },
+    verified: { label: "Verified", color: "#2563eb", bg: "#dbeafe" },
+    open: { label: "Open", color: "#d97706", bg: "#fef3c7" },
+    resolved: { label: "Resolved", color: "#059669", bg: "#d1fae5" },
+    flagged: { label: "Flagged", color: "#dc2626", bg: "#fee2e2" },
+    sent: { label: "Sent", color: "#2563eb", bg: "#dbeafe" },
+    delivered: { label: "Delivered", color: "#059669", bg: "#d1fae5" },
+    failed: { label: "Failed", color: "#dc2626", bg: "#fee2e2" },
   };
-  const s = map[status] || { label:status, color:"#6b7280", bg:"#f3f4f6" };
+  const s = map[status] || { label: status, color: "#6b7280", bg: "#f3f4f6" };
   return (
-    <span style={{ padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:700,
-      color:s.color, background:s.bg, border:`1px solid ${s.color}30`, letterSpacing:"0.3px", whiteSpace:"nowrap" }}>
+    <span style={{
+      padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+      color: s.color, background: s.bg, border: `1px solid ${s.color}30`, letterSpacing: "0.3px", whiteSpace: "nowrap"
+    }}>
       {s.label}
     </span>
   );
 }
 
 /* ── StatCard ── */
-export function StatCard({ icon, label, val, sub, color="#f59e0b", bg="#fef3c7", onClick }) {
+export function StatCard({ label, val, sub, color = "#f59e0b", onClick }) {
   return (
-    <div onClick={onClick} style={{ background:"white", borderRadius:16, padding:"20px",
-      border:"1px solid #f1f5f9", boxShadow:"0 2px 8px rgba(0,0,0,0.04)",
-      borderTop:`3px solid ${color}`, cursor:onClick?"pointer":"default" }}>
-      <div style={{ width:44, height:44, borderRadius:12, background:bg,
-        display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, marginBottom:12 }}>{icon}</div>
-      <div style={{ fontSize:26, fontWeight:800, color:"#1c1917", letterSpacing:"-1px" }}>{val}</div>
-      <div style={{ fontSize:12, color:"#6b7280", fontWeight:500, marginTop:2 }}>{label}</div>
-      {sub && <div style={{ fontSize:11, color, fontWeight:600, marginTop:4 }}>{sub}</div>}
+    <div
+      onClick={onClick}
+      style={{
+        background: "white",
+        borderRadius: 14,
+        padding: "12px 16px",
+        border: "1px solid #e2e8f0",
+        boxShadow: "0 2px 6px rgba(0,0,0,0.03)",
+        position: "relative",
+        overflow: "hidden",
+        cursor: onClick ? "pointer" : "default",
+        transition: "all 0.2s ease"
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = "translateY(-2px)";
+        e.currentTarget.style.boxShadow = `0 6px 16px ${color}20`;
+        e.currentTarget.style.borderColor = `${color}60`;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = "translateY(0px)";
+        e.currentTarget.style.boxShadow = "0 2px 6px rgba(0,0,0,0.03)";
+        e.currentTarget.style.borderColor = "#e2e8f0";
+      }}
+    >
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: color }} />
+      <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 6 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 18, fontWeight: 600, color: "#14171cff", letterSpacing: "-0.5px", lineHeight: 1.1 }}>
+        {val}
+      </div>
+      {sub && (
+        <div style={{ fontSize: 11, color: color, fontWeight: 600, marginTop: 4 }}>
+          {sub}
+        </div>
+      )}
     </div>
   );
 }
@@ -99,10 +131,12 @@ export function StatCard({ icon, label, val, sub, color="#f59e0b", bg="#fef3c7",
 /* ── SectionCard ── */
 export function SectionCard({ title, children, action }) {
   return (
-    <div style={{ background:"white", borderRadius:16, padding:"20px 24px",
-      border:"1px solid #f1f5f9", boxShadow:"0 2px 8px rgba(0,0,0,0.04)", marginBottom:20 }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-        <h2 style={{ fontSize:15, fontWeight:800, color:"#1c1917", margin:0 }}>{title}</h2>
+    <div style={{
+      background: "white", borderRadius: 16, padding: "20px 24px",
+      border: "1px solid #f1f5f9", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", marginBottom: 20
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <h2 style={{ fontSize: 15, fontWeight: 800, color: "#1c1917", margin: 0 }}>{title}</h2>
         {action}
       </div>
       {children}
@@ -113,13 +147,17 @@ export function SectionCard({ title, children, action }) {
 /* ── Modal ── */
 export function Modal({ title, onClose, children }) {
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)",
-      display:"flex", alignItems:"center", justifyContent:"center", zIndex:999, backdropFilter:"blur(4px)" }}>
-      <div style={{ background:"white", borderRadius:20, padding:"28px", width:"100%",
-        maxWidth:520, boxShadow:"0 20px 60px rgba(0,0,0,0.2)", maxHeight:"90vh", overflowY:"auto" }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
-          <h3 style={{ fontSize:17, fontWeight:800, color:"#1c1917", margin:0 }}>{title}</h3>
-          <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20, cursor:"pointer", color:"#9ca3af" }}>✕</button>
+    <div style={{
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
+      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999, backdropFilter: "blur(4px)"
+    }}>
+      <div style={{
+        background: "white", borderRadius: 20, padding: "28px", width: "100%",
+        maxWidth: 520, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto"
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h3 style={{ fontSize: 17, fontWeight: 800, color: "#1c1917", margin: 0 }}>{title}</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af" }}>✕</button>
         </div>
         {children}
       </div>
@@ -130,30 +168,34 @@ export function Modal({ title, onClose, children }) {
 /* ── SearchBar ── */
 export function SearchBar({ value, onChange, placeholder }) {
   return (
-    <div style={{ position:"relative", marginBottom:16, flex:1 }}>
-      <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", fontSize:14 }}>🔍</span>
-      <input value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder||"Search..."}
-        style={{ width:"100%", padding:"9px 12px 9px 34px", background:"white",
-          border:"1.5px solid #e5e7eb", borderRadius:10, fontSize:13, fontFamily:"inherit",
-          outline:"none", boxSizing:"border-box", color:"#111827" }}/>
+    <div style={{ position: "relative", marginBottom: 16, flex: 1 }}>
+      <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 14 }}>🔍</span>
+      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder || "Search..."}
+        style={{
+          width: "100%", padding: "9px 12px 9px 34px", background: "white",
+          border: "1.5px solid #e5e7eb", borderRadius: 10, fontSize: 13, fontFamily: "inherit",
+          outline: "none", boxSizing: "border-box", color: "#111827"
+        }} />
     </div>
   );
 }
 
 /* ── BarChart ── */
-export function BarChart({ data, color="#f59e0b", height=100, formatVal }) {
-  const max = Math.max(...data.map(d=>d.val));
+export function BarChart({ data, color = "#f59e0b", height = 100, formatVal }) {
+  const max = Math.max(...data.map(d => d.val));
   return (
-    <div style={{ display:"flex", alignItems:"flex-end", gap:6, height:height+30 }}>
-      {data.map((d,i)=>(
-        <div key={i} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
-          <span style={{ fontSize:9, fontWeight:700, color:"#9ca3af", textAlign:"center" }}>
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: height + 30 }}>
+      {data.map((d, i) => (
+        <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+          <span style={{ fontSize: 9, fontWeight: 700, color: "#9ca3af", textAlign: "center" }}>
             {formatVal ? formatVal(d.val) : d.val}
           </span>
-          <div style={{ width:"100%", background:color, borderRadius:"4px 4px 0 0",
-            height:`${(d.val/max)*height}px`, opacity:0.85, minHeight:4 }}/>
-          <span style={{ fontSize:9, color:"#9ca3af", fontWeight:600, textAlign:"center", whiteSpace:"nowrap" }}>
-            {d.month||d.label}
+          <div style={{
+            width: "100%", background: color, borderRadius: "4px 4px 0 0",
+            height: `${(d.val / max) * height}px`, opacity: 0.85, minHeight: 4
+          }} />
+          <span style={{ fontSize: 9, color: "#9ca3af", fontWeight: 600, textAlign: "center", whiteSpace: "nowrap" }}>
+            {d.month || d.label}
           </span>
         </div>
       ))}
@@ -163,15 +205,15 @@ export function BarChart({ data, color="#f59e0b", height=100, formatVal }) {
 
 /* ── AttendanceBar ── */
 export function AttendanceBar({ val, name }) {
-  const c = val>=85 ? "#10b981" : val>=70 ? "#f59e0b" : "#ef4444";
+  const c = val >= 85 ? "#10b981" : val >= 70 ? "#f59e0b" : "#ef4444";
   return (
-    <div style={{ marginBottom:10 }}>
-      <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
-        <span style={{ fontSize:12, color:"#374151", fontWeight:600 }}>{name}</span>
-        <span style={{ fontSize:12, fontWeight:700, color:c }}>{val}%</span>
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
+        <span style={{ fontSize: 12, color: "#374151", fontWeight: 600 }}>{name}</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: c }}>{val}%</span>
       </div>
-      <div style={{ height:6, background:"#f3f4f6", borderRadius:4, overflow:"hidden" }}>
-        <div style={{ height:"100%", width:`${val}%`, background:c, borderRadius:4, transition:"width 1s" }}/>
+      <div style={{ height: 6, background: "#f3f4f6", borderRadius: 4, overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${val}%`, background: c, borderRadius: 4, transition: "width 1s" }} />
       </div>
     </div>
   );
@@ -179,23 +221,23 @@ export function AttendanceBar({ val, name }) {
 
 /* ── Particles Background ── */
 export function Particles() {
-  const shapes = Array.from({ length:18 }, (_,i) => ({
-    id:i, size:8+(i*7)%18, left:(i*17)%100, delay:(i*0.6)%8, dur:10+(i*1.3)%10,
-    type:i%3, color:["#f59e0b","#d97706","#0f172a","#10b981","#059669"][i%5],
-    opacity:0.07+(i%3)*0.04,
+  const shapes = Array.from({ length: 18 }, (_, i) => ({
+    id: i, size: 8 + (i * 7) % 18, left: (i * 17) % 100, delay: (i * 0.6) % 8, dur: 10 + (i * 1.3) % 10,
+    type: i % 3, color: ["#f59e0b", "#d97706", "#0f172a", "#10b981", "#059669"][i % 5],
+    opacity: 0.07 + (i % 3) * 0.04,
   }));
   return (
-    <div style={{ position:"absolute", inset:0, pointerEvents:"none", overflow:"hidden" }}>
-      {shapes.map(p=>(
+    <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
+      {shapes.map(p => (
         <div key={p.id} style={{
-          position:"absolute", bottom:"-40px", left:`${p.left}%`,
-          width:p.size, height:p.size, opacity:p.opacity,
-          borderRadius:p.type===0?"50%":p.type===1?"3px":"0",
-          background:p.type===2?"none":p.color,
-          border:p.type===2?`2px solid ${p.color}`:"none",
-          transform:p.type===2?"rotate(45deg)":"none",
-          animation:`riseUp ${p.dur}s ${p.delay}s linear infinite`,
-        }}/>
+          position: "absolute", bottom: "-40px", left: `${p.left}%`,
+          width: p.size, height: p.size, opacity: p.opacity,
+          borderRadius: p.type === 0 ? "50%" : p.type === 1 ? "3px" : "0",
+          background: p.type === 2 ? "none" : p.color,
+          border: p.type === 2 ? `2px solid ${p.color}` : "none",
+          transform: p.type === 2 ? "rotate(45deg)" : "none",
+          animation: `riseUp ${p.dur}s ${p.delay}s linear infinite`,
+        }} />
       ))}
     </div>
   );
@@ -203,18 +245,18 @@ export function Particles() {
 
 /* ── Shared Styles ── */
 export const S = {
-  pageTitle: { fontSize:24, fontWeight:900, color:"#0f172a", margin:"0 0 4px", letterSpacing:"-0.5px" },
-  pageSub:   { fontSize:13, color:"#64748b", margin:"0 0 24px", fontWeight:500 },
-  backBtn:   { background:"none", border:"none", cursor:"pointer", fontSize:13, fontWeight:700, color:"#d97706", marginBottom:20, padding:0, display:"flex", alignItems:"center", gap:6, transition:"all 0.2s ease" },
-  primaryBtn:{ padding:"10px 20px", background:"linear-gradient(135deg,#f59e0b,#d97706)", color:"white", border:"none", borderRadius:10, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit", boxShadow:"0 4px 12px rgba(217,119,6,0.25)", whiteSpace:"nowrap", transition:"all 0.2s ease" },
-  exportBtn: { padding:"7px 14px", background:"white", color:"#475569", border:"1.5px solid #e2e8f0", borderRadius:8, fontSize:12, fontWeight:600, cursor:"pointer", fontFamily:"inherit", transition:"all 0.2s ease" },
-  btnGreen:  { padding:"7px 14px", background:"#d1fae5", color:"#065f46", border:"1px solid #6ee7b7", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit", transition:"all 0.2s ease" },
-  btnRed:    { padding:"7px 14px", background:"#fee2e2", color:"#991b1b", border:"1px solid #fca5a5", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit", transition:"all 0.2s ease" },
-  btnOrange: { padding:"7px 14px", background:"#fef3c7", color:"#92400e", border:"1px solid #fbbf24", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit", transition:"all 0.2s ease" },
-  tblBtn:    { padding:"5px 10px", background:"white", color:"#475569", border:"1px solid #e2e8f0", borderRadius:6, fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"inherit", whiteSpace:"nowrap", transition:"all 0.2s ease" },
-  label:     { display:"block", fontSize:12, color:"#334155", marginBottom:5, fontWeight:600, letterSpacing:"0.3px" },
-  input:     { width:"100%", padding:"10px 14px", background:"#f8fafc", border:"1.5px solid #e2e8f0", borderRadius:10, color:"#0f172a", fontSize:13, fontFamily:"inherit", outline:"none", boxSizing:"border-box", transition:"all 0.2s ease" },
-  fieldIcon: { position:"absolute", left:10, top:"50%", transform:"translateY(-50%)", fontSize:14, pointerEvents:"none" },
+  pageTitle: { fontSize: 24, fontWeight: 900, color: "#0f172a", margin: "0 0 4px", letterSpacing: "-0.5px" },
+  pageSub: { fontSize: 13, color: "#64748b", margin: "0 0 24px", fontWeight: 500 },
+  backBtn: { background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#d97706", marginBottom: 20, padding: 0, display: "flex", alignItems: "center", gap: 6, transition: "all 0.2s ease" },
+  primaryBtn: { padding: "10px 20px", background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "white", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 4px 12px rgba(217,119,6,0.25)", whiteSpace: "nowrap", transition: "all 0.2s ease" },
+  exportBtn: { padding: "7px 14px", background: "white", color: "#475569", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "all 0.2s ease" },
+  btnGreen: { padding: "7px 14px", background: "#d1fae5", color: "#065f46", border: "1px solid #6ee7b7", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", transition: "all 0.2s ease" },
+  btnRed: { padding: "7px 14px", background: "#fee2e2", color: "#991b1b", border: "1px solid #fca5a5", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", transition: "all 0.2s ease" },
+  btnOrange: { padding: "7px 14px", background: "#fef3c7", color: "#92400e", border: "1px solid #fbbf24", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", transition: "all 0.2s ease" },
+  tblBtn: { padding: "5px 10px", background: "white", color: "#475569", border: "1px solid #e2e8f0", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap", transition: "all 0.2s ease" },
+  label: { display: "block", fontSize: 12, color: "#334155", marginBottom: 5, fontWeight: 600, letterSpacing: "0.3px" },
+  input: { width: "100%", padding: "10px 14px", background: "#f8fafc", border: "1.5px solid #e2e8f0", borderRadius: 10, color: "#0f172a", fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box", transition: "all 0.2s ease" },
+  fieldIcon: { position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 14, pointerEvents: "none" },
 };
 
 /* ── Global CSS ── */
@@ -332,3 +374,54 @@ export const globalCSS = `
     animation: micPulse 1.4s infinite ease-in-out !important;
   }
 `;
+
+/* ── DonutChart ── */
+export function DonutChart({ value, max, color, size = 64 }) {
+  const pct = max > 0 ? Math.min(Math.round((value / max) * 100), 100) : 0;
+  const r = 24, cx = size / 2, cy = size / 2;
+  const circ = 2 * Math.PI * r;
+  const dash = (pct / 100) * circ;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f3f4f6" strokeWidth={6} />
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={6}
+        strokeDasharray={`${dash} ${circ - dash}`}
+        strokeLinecap="round"
+        transform={`rotate(-90 ${cx} ${cy})`} />
+      <text x={cx} y={cy + 5} textAnchor="middle" fontSize="11" fontWeight="800" fill={color}>{pct}%</text>
+    </svg>
+  );
+}
+
+/* ── ActivityItem ── */
+export function ActivityItem({ icon, text, time, color }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid #f8fafc" }}>
+      <div style={{ width: 34, height: 34, borderRadius: 10, background: `${color}15`,
+        display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}>{icon}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "#1c1917", lineHeight: 1.4 }}>{text}</div>
+        <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 2 }}>{time}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ── ProgressCard ── */
+export function ProgressCard({ title, val, color = "#f59e0b", bg = "#fef3c7", icon }) {
+  return (
+    <div style={{ background: "white", borderRadius: 16, padding: "18px 20px", border: "1px solid #f1f5f9", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+        {icon && <div style={{ width: 34, height: 34, borderRadius: 10, background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>{icon}</div>}
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#1c1917" }}>{title}</div>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <span style={{ fontSize: 18, fontWeight: 800, color: "#1c1917" }}>{val}%</span>
+      </div>
+      <div style={{ height: 6, background: "#f3f4f6", borderRadius: 4, overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${val}%`, background: color, borderRadius: 4, transition: "width 0.8s" }} />
+      </div>
+    </div>
+  );
+}
+

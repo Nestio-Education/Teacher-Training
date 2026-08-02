@@ -81,8 +81,10 @@ import { autoSeed } from "./auto-seed.js";
 import { generateAICourse } from "./services/aiCourseGenerator.js";
 import { generateAILessonPlan } from "./services/aiLessonPlanner.js";
 import dailyTaskAutomationRoutes from "./routes/dailyTaskAutomationRoutes.js";
+import teacherTasksRouter from "./routes/teacherTasks.js";
 import { startDailyTaskAutomationCron } from "./cron/dailyTaskCron.js";
 import { User } from "./models/User.js";
+import { TeacherTask } from "./models/TeacherTask.js";
 import { Center } from "./models/Center.js";
 import { ClassModel } from "./models/Class.js";
 import { ClassLog } from "./models/ClassLog.js";
@@ -107,6 +109,7 @@ import { ChildAttendanceSession, TeacherAttendanceRecord, MentorAttendanceRecord
 import { Certificate } from "./models/Certificate.js";
 import { Notification } from "./models/Notification.js";
 import { ReportJob } from "./models/ReportJob.js";
+import { PDCACycle, CapstoneSubmission, MenteeObservation } from "./models/MentorTracking.js";
 import ActivityBank from "./models/ActivityBank.js";
 import AIActivity from "./models/AIActivity.js";
 import AutomationTeacher from "./models/AutomationTeacher.js";
@@ -138,6 +141,7 @@ const databaseModels = [
    AIActivity,
    Center,
    ChildAttendanceSession,
+   TeacherTask,
    // Start: Dnyaneshwari Thorat
    ChildAssessment,
    ActivityCompletion,
@@ -1217,12 +1221,19 @@ app.post("/api/teacher/change-password", requireAuth, async (req, res, next) => 
   }
 });
 
-app.get("/api/admin/dashboard", requireAuth, requireRole("admin"), async (_req, res, next) => {
+app.get("/api/admin/dashboard", requireAuth, requireRole("admin", "mentor"), async (_req, res, next) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const weekStart = new Date(today);
     weekStart.setDate(today.getDate() - 6);
+
+    let mentorFilter = {};
+    let courseMentorFilter = {};
+    if (_req.user.role === "mentor") {
+      mentorFilter = { assignedMentor: _req.user.id };
+      courseMentorFilter = { assignedBy: _req.user.id };
+    }
 
     const [
       totalCenters,
@@ -1234,16 +1245,20 @@ app.get("/api/admin/dashboard", requireAuth, requireRole("admin"), async (_req, 
       assignedCourses,
       completedCourses,
       pendingLessons,
+      totalMentors,
+      pendingMentors,
     ] = await Promise.all([
       Center.countDocuments({ status: "active" }),
-      User.countDocuments({ role: "teacher" }),
+      User.countDocuments({ role: "teacher", ...mentorFilter }),
       Child.countDocuments({ status: "active" }),
-      ActivitySubmission.countDocuments({ status: "pending" }),
-      TeacherAttendanceRecord.countDocuments({ attendanceDate: today, status: { $in: ["present", "late"] } }),
+      ActivitySubmission.countDocuments({ status: "pending", ...courseMentorFilter }),
+      TeacherAttendanceRecord.countDocuments({ attendanceDate: today, status: { $in: ["present", "late"] } }), // we can refine this later if needed
       ChildAttendanceSession.countDocuments({ attendanceDate: { $gte: weekStart, $lte: new Date() } }),
-      CourseAssignment.countDocuments(),
-      CourseAssignment.countDocuments({ status: "completed" }),
+      CourseAssignment.countDocuments(courseMentorFilter),
+      CourseAssignment.countDocuments({ status: "completed", ...courseMentorFilter }),
       LessonPlanAssignment.countDocuments({ status: "pending" }),
+      User.countDocuments({ role: "mentor" }),
+      User.countDocuments({ role: "mentor", status: "pending" }),
     ]);
 
     res.json({
@@ -1256,6 +1271,8 @@ app.get("/api/admin/dashboard", requireAuth, requireRole("admin"), async (_req, 
       assignedCourses,
       completedCourses,
       pendingLessons,
+      totalMentors,
+      pendingMentors,
       courseCompletionPercent: assignedCourses ? Math.round((completedCourses / assignedCourses) * 100) : 0,
     });
   } catch (error) {
@@ -1263,7 +1280,7 @@ app.get("/api/admin/dashboard", requireAuth, requireRole("admin"), async (_req, 
   }
 });
 
-app.get("/api/centers", requireAuth, requireRole("admin"), async (_req, res, next) => {
+app.get("/api/centers", requireAuth, requireRole("admin", "mentor"), async (_req, res, next) => {
   try {
     const rawCenters = await Center.find().sort({ createdAt: -1 }).populate("mentor", "name email phone photoUrl");
     const centers = await Promise.all(rawCenters.map(async (center) => {
@@ -1375,6 +1392,13 @@ app.post("/api/centers", requireAuth, requireRole("admin"), async (req, res, nex
               "teacherProfile.classes": mergedClassIds,
             },
           });
+
+          await createAndEmitNotification({
+            recipientId: teacherId,
+            title: "Class Assigned",
+            body: "You have been assigned to new classes.",
+            type: "class_assigned"
+          });
         }
         // For teachers without specific class assignments, only set the center
         const teachersWithClasses = Object.keys(teacherClassMap);
@@ -1384,6 +1408,14 @@ app.post("/api/centers", requireAuth, requireRole("admin"), async (req, res, nex
             { _id: { $in: teachersWithoutClasses }, role: "teacher" },
             { $set: { "teacherProfile.center": center._id } }
           );
+          for (const teacherId of teachersWithoutClasses) {
+            await createAndEmitNotification({
+              recipientId: teacherId,
+              title: "Center Assigned",
+              body: "You have been assigned to a new center.",
+              type: "class_assigned"
+            });
+          }
         }
       } else {
         // No specific class assignments - only set the center
@@ -1391,6 +1423,14 @@ app.post("/api/centers", requireAuth, requireRole("admin"), async (req, res, nex
           { _id: { $in: teachers }, role: "teacher" },
           { $set: { "teacherProfile.center": center._id } }
         );
+        for (const teacherId of teachers) {
+          await createAndEmitNotification({
+            recipientId: teacherId,
+            title: "Center Assigned",
+            body: "You have been assigned to a new center.",
+            type: "class_assigned"
+          });
+        }
       }
     }
 
@@ -1411,17 +1451,64 @@ app.post("/api/centers", requireAuth, requireRole("admin"), async (req, res, nex
   }
 });
 
-app.get("/api/admin/teachers", requireAuth, requireRole("admin"), async (_req, res, next) => {
+app.get("/api/admin/teachers", requireAuth, requireRole("admin", "mentor"), async (_req, res, next) => {
   try {
-    const teachers = await User.find({ role: "teacher" })
+    const query = { role: "teacher" };
+    if (_req.user.role === "mentor") {
+      query.assignedMentor = _req.user.id;
+    }
+    const teachers = await User.find(query)
       .select("-passwordHash")
       .populate("teacherProfile.center", "name city")
       .populate("teacherProfile.classes", "name ageGroup curriculumLevel schedule")
+      .populate("assignedMentor", "name email")
       .sort({ createdAt: -1 });
 
-    res.json({ teachers });
+    const enrichedTeachers = await Promise.all(
+      teachers.map(async (teacherDoc) => {
+        const teacher = teacherDoc.toObject();
+        const tId = teacher._id;
+
+        // Run all 6 DB count queries in parallel (1 round-trip instead of 6)
+        const [
+          totalAttRecords,
+          presentAttRecords,
+          totalCourseAssignments,
+          completedCourseAssignments,
+          totalTasks,
+          completedTasks
+        ] = await Promise.all([
+          // 1. Attendance Rate from TeacherAttendanceRecord
+          TeacherAttendanceRecord.countDocuments({ teacher: tId }),
+          TeacherAttendanceRecord.countDocuments({ teacher: tId, $or: [{ checkedIn: true }, { status: "present" }] }),
+          // 2. Course Completion Rate from CourseAssignment
+          CourseAssignment.countDocuments({ teacher: tId }),
+          CourseAssignment.countDocuments({ teacher: tId, status: { $in: ["completed", "approved"] } }),
+          // 3. Task Completion Rate from TeacherTask
+          TeacherTask.countDocuments({ teacher: tId }),
+          TeacherTask.countDocuments({ teacher: tId, completed: true })
+        ]);
+
+        // Calculate rates (neutral 50% fallback for teachers with no records yet)
+        const attRate = totalAttRecords > 0 ? (presentAttRecords / totalAttRecords) * 100 : 50;
+        const courseRate = totalCourseAssignments > 0 ? (completedCourseAssignments / totalCourseAssignments) * 100 : 50;
+        const taskRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 50;
+
+        // 4. Dynamic Weighted Formula: 40% Attendance + 30% Course + 30% Tasks
+        const performancePercentage = Math.round((0.40 * attRate) + (0.30 * courseRate) + (0.30 * taskRate));
+        const performanceRating = Math.min(5, Math.max(1, +(performancePercentage / 20).toFixed(1)));
+
+        if (!teacher.teacherProfile) teacher.teacherProfile = {};
+        teacher.teacherProfile.performanceRating = performanceRating;
+        teacher.teacherProfile.completionRate = Math.round(courseRate);
+
+        return teacher;
+      })
+    );
+
+    res.json({ teachers: enrichedTeachers });
   } catch (error) {
-    res.status(500).json({ message: error.message, stack: error.stack });
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -1449,7 +1536,7 @@ app.patch("/api/admin/teachers/:id/status", requireAuth, requireRole("admin"), a
   }
 });
 
-app.get("/api/admin/mentors", requireAuth, requireRole("admin"), async (_req, res, next) => {
+app.get("/api/admin/mentors", requireAuth, requireRole("admin", "mentor"), async (_req, res, next) => {
   try {
     const mentors = await User.find({ role: "mentor" })
       .select("-passwordHash")
@@ -1458,6 +1545,19 @@ app.get("/api/admin/mentors", requireAuth, requireRole("admin"), async (_req, re
       .sort({ createdAt: -1 });
 
     res.json({ mentors });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+app.get("/api/admin/mentor-tracking", requireAuth, requireRole("admin"), async (req, res, next) => {
+  try {
+    const [pdca, capstone, observations] = await Promise.all([
+      PDCACycle.find().lean(),
+      CapstoneSubmission.find().lean(),
+      MenteeObservation.find().lean()
+    ]);
+    res.json({ pdca, capstone, observations });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
   }
@@ -1568,13 +1668,15 @@ app.post("/api/admin/mentors/:id/message", requireAuth, requireRole("admin"), as
   }
 });
 
-app.get("/api/admin/children", requireAuth, requireRole("admin"), async (req, res, next) => {
+app.get("/api/admin/children", requireAuth, requireRole("admin", "mentor"), async (req, res, next) => {
   try {
     const filter = {};
     const centerId = objectIdFilter(req.query.centerId, "centerId");
     const classId = objectIdFilter(req.query.classId, "classId");
     if (centerId) filter.center = centerId;
     if (classId) filter.class = classId;
+
+
 
     const children = await Child.find(filter)
       .populate("center", "name city")
@@ -1906,18 +2008,22 @@ app.post("/api/mentor/change-password", requireAuth, requireRole("mentor"), asyn
 // ── Mentor Fellow Approval APIs ──
 app.get("/api/mentor/fellows", requireAuth, requireRole("mentor"), async (req, res, next) => {
   try {
-    const fellows = await User.find({ 
-      role: "fellow",
+    const mentorUser = await User.findById(req.user.id).select("mentorProfile.assignedTeachers");
+    const assignedInProfile = mentorUser?.mentorProfile?.assignedTeachers || [];
+
+    const fellows = await User.find({
       $or: [
-        { assignedMentor: { $exists: false } },
-        { assignedMentor: null },
-        { assignedMentor: req.user.id }
+        { role: { $in: ["teacher", "fellow"] } },
+        { assignedMentor: req.user.id },
+        { _id: { $in: assignedInProfile } }
       ]
     })
       .select("-passwordHash")
       .populate("teacherProfile.center", "name city")
       .populate("teacherProfile.classes", "name")
+      .populate("assignedMentor", "name email")
       .sort({ createdAt: -1 });
+
     res.json({ fellows });
   } catch (error) {
     next(error);
@@ -1926,17 +2032,32 @@ app.get("/api/mentor/fellows", requireAuth, requireRole("mentor"), async (req, r
 
 app.get("/api/mentor/fellows/attendance", requireAuth, requireRole("mentor"), async (req, res, next) => {
   try {
-    const { from, to } = req.query;
-    const fellows = await User.find({ role: "fellow", assignedMentor: req.user.id }).select("_id");
+    const { from, to, date } = req.query;
+    const mentorUser = await User.findById(req.user.id).select("mentorProfile.assignedTeachers");
+    const assignedInProfile = mentorUser?.mentorProfile?.assignedTeachers || [];
+
+    const fellows = await User.find({
+      role: "teacher",
+      $or: [
+        { assignedMentor: req.user.id },
+        { _id: { $in: assignedInProfile } }
+      ]
+    }).select("_id");
     const fellowIds = fellows.map(f => f._id);
     
     let dateFilter = {};
     if (from && to) {
       dateFilter = { $gte: new Date(from), $lte: new Date(to) };
+    } else if (date) {
+      const d = new Date(date);
+      dateFilter = {
+        $gte: new Date(d.setHours(0,0,0,0)),
+        $lte: new Date(d.setHours(23,59,59,999))
+      };
     }
 
     const query = { teacher: { $in: fellowIds } };
-    if (from && to) query.attendanceDate = dateFilter;
+    if ((from && to) || date) query.attendanceDate = dateFilter;
 
     const attendanceRecords = await TeacherAttendanceRecord.find(query)
       .populate("teacher", "name email")
@@ -1948,25 +2069,86 @@ app.get("/api/mentor/fellows/attendance", requireAuth, requireRole("mentor"), as
   }
 });
 
+app.get("/api/mentor/stats", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const mentorUser = await User.findById(req.user.id).select("mentorProfile.assignedTeachers");
+    const assignedInProfile = mentorUser?.mentorProfile?.assignedTeachers || [];
+
+    const fellows = await User.find({
+      role: "teacher",
+      $or: [
+        { assignedMentor: req.user.id },
+        { _id: { $in: assignedInProfile } }
+      ]
+    }).select("_id");
+
+    const capstoneSubmissions = await CapstoneSubmission.find({ mentorId: req.user.id });
+    const completedSubmissions = capstoneSubmissions.filter(s => s.status === "approved" || s.status === "submitted");
+    const milestone = Math.min(completedSubmissions.length + 1, 4);
+
+    res.json({
+      success: true,
+      impactScore: "A+",
+      teachersGuided: fellows.length,
+      capstoneMilestone: milestone,
+      capstoneCompleted: completedSubmissions.length >= 4,
+      totalSubmissions: capstoneSubmissions.length
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/admin/capstone/milestones/:id/review", requireAuth, requireRole("admin"), async (req, res, next) => {
+  try {
+    const { status, reviewNotes } = req.body;
+    if (!["approved", "rejected", "submitted"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+
+    const submission = await CapstoneSubmission.findByIdAndUpdate(
+      req.params.id,
+      {
+        $set: {
+          status,
+          reviewNotes: reviewNotes || "",
+          reviewedBy: req.user.id,
+          reviewedAt: new Date()
+        }
+      },
+      { new: true }
+    );
+
+    if (!submission) {
+      return res.status(404).json({ message: "Submission not found" });
+    }
+
+    res.json({ success: true, submission });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.patch("/api/mentor/fellows/:id/status", requireAuth, requireRole("mentor"), async (req, res, next) => {
   try {
     const { status } = req.body;
-    if (!["approved", "rejected", "pending", "inactive"].includes(status)) {
-      return res.status(400).json({ message: "Invalid status specified" });
+    const allowedStatuses = ["approved", "rejected", "pending", "inactive", "blocked", "active"];
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ message: `Invalid status specified. Allowed: ${allowedStatuses.join(", ")}` });
     }
 
     const fellow = await User.findOneAndUpdate(
-      { _id: req.params.id, role: "fellow" },
-      { status },
+      { _id: req.params.id, role: { $in: ["teacher", "fellow"] } },
+      { status: status === "active" ? "approved" : status },
       { new: true }
     ).select("-passwordHash");
 
     if (!fellow) {
-      return res.status(404).json({ message: "Fellow not found" });
+      return res.status(404).json({ message: "Teacher not found" });
     }
 
     const mentor = await User.findById(req.user.id);
-    if (mentor && status === "approved") {
+    if (mentor && (status === "approved" || status === "active")) {
       // Add fellow to mentor's assignedTeachers
       if (mentor.mentorProfile && !mentor.mentorProfile.assignedTeachers.includes(fellow._id)) {
         mentor.mentorProfile.assignedTeachers.push(fellow._id);
@@ -1980,25 +2162,53 @@ app.patch("/api/mentor/fellows/:id/status", requireAuth, requireRole("mentor"), 
         fellow.teacherProfile.center = mentor.mentorProfile.center;
         await fellow.save();
       }
-
-      await createAndEmitNotification({
-        recipientId: fellow._id,
-        title: "Account Approved by Mentor! 🎉",
-        body: "Your fellow account has been approved by your mentor. All ECCE training features are now unlocked.",
-        type: "approval",
-      });
     }
 
     // Trigger notification to the fellow
     await createAndEmitNotification({
       recipientId: fellow._id,
-      title: "Status Update",
-      message: `Your fellow application has been ${status}.`,
-      type: "status_update",
-      link: "/dashboard"
+      title: "Account Status Update",
+      body: `Your teacher account status has been updated to: ${status.toUpperCase()}.`,
+      type: "in_app"
     });
 
-    res.json({ message: `Fellow status updated to ${status}` });
+    res.json({ success: true, message: `Teacher status updated to ${status}`, fellow });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Notify Pending Approvals Endpoint
+app.post("/api/mentor/tracking/notify-pending", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const mentorUser = await User.findById(req.user.id).select("mentorProfile.assignedTeachers");
+    const assignedTeachers = mentorUser?.mentorProfile?.assignedTeachers || [];
+
+    const pendingActivities = await ActivitySubmission.countDocuments({
+      $or: [
+        { mentor: req.user.id },
+        { teacher: { $in: assignedTeachers } }
+      ],
+      status: "pending"
+    });
+
+    const pendingCapstones = await CapstoneSubmission.countDocuments({
+      $or: [
+        { mentor: req.user.id },
+        { fellow: { $in: assignedTeachers } }
+      ],
+      status: "pending"
+    });
+
+    const totalPending = pendingActivities + pendingCapstones;
+
+    res.json({
+      success: true,
+      pendingCount: totalPending,
+      pendingActivities,
+      pendingCapstones,
+      message: totalPending > 0 ? `You have ${totalPending} pending approvals waiting for review.` : "All approvals up to date!"
+    });
   } catch (error) {
     next(error);
   }
@@ -2007,8 +2217,8 @@ app.patch("/api/mentor/fellows/:id/status", requireAuth, requireRole("mentor"), 
 // start dnyaneshwari thorat
 app.delete("/api/mentor/fellows/:id", requireAuth, requireRole("mentor"), async (req, res, next) => {
   try {
-    const fellow = await User.findOneAndDelete({ _id: req.params.id, role: "fellow" });
-    if (!fellow) return res.status(404).json({ message: "Fellow not found" });
+    const fellow = await User.findOneAndDelete({ _id: req.params.id, role: "teacher" });
+    if (!fellow) return res.status(404).json({ message: "Teacher not found" });
     
     // Remove fellow from any mentor's assignedTeachers list
     await User.updateMany(
@@ -2016,7 +2226,7 @@ app.delete("/api/mentor/fellows/:id", requireAuth, requireRole("mentor"), async 
       { $pull: { "mentorProfile.assignedTeachers": fellow._id } }
     );
     
-    res.json({ message: "Fellow deleted successfully" });
+    res.json({ message: "Teacher deleted successfully" });
   } catch (error) {
     next(error);
   }
@@ -2041,7 +2251,7 @@ app.post("/api/mentor/fellows/:id/claim", requireAuth, requireRole("mentor"), as
     const updatedFellow = await User.findOneAndUpdate(
       { 
         _id: fellowId, 
-        role: "fellow",
+        role: "teacher",
         $or: [
           { assignedMentor: { $exists: false } },
           { assignedMentor: null }
@@ -2053,11 +2263,11 @@ app.post("/api/mentor/fellows/:id/claim", requireAuth, requireRole("mentor"), as
 
     if (!updatedFellow) {
       // It means the fellow doesn't exist OR was already claimed by someone else
-      const existingFellow = await User.findOne({ _id: fellowId, role: "fellow" });
+      const existingFellow = await User.findOne({ _id: fellowId, role: "teacher" });
       if (!existingFellow) {
-        return res.status(404).json({ message: "Fellow not found." });
+        return res.status(404).json({ message: "Teacher not found." });
       } else {
-        return res.status(409).json({ message: "Conflict: This fellow has already been claimed by another mentor." });
+        return res.status(409).json({ message: "Conflict: This teacher has already been claimed by another mentor." });
       }
     }
 
@@ -2076,7 +2286,7 @@ app.post("/api/mentor/fellows/:id/claim", requireAuth, requireRole("mentor"), as
       metadata: { mentorId: mentor._id }
     });
 
-    res.json({ success: true, message: "Fellow claimed successfully.", fellow: updatedFellow });
+    res.json({ success: true, message: "Teacher claimed successfully.", fellow: updatedFellow });
   } catch (error) {
     next(error);
   }
@@ -2086,9 +2296,9 @@ app.post("/api/mentor/fellows/:id/claim", requireAuth, requireRole("mentor"), as
 app.post("/api/mentor/fellows/:id/unclaim", requireAuth, requireRole("mentor"), async (req, res, next) => {
   try {
     const fellowId = req.params.id;
-    const fellow = await User.findOne({ _id: fellowId, role: "fellow" });
+    const fellow = await User.findOne({ _id: fellowId, role: "teacher" });
     if (!fellow) {
-      return res.status(404).json({ message: "Fellow not found." });
+      return res.status(404).json({ message: "Teacher not found." });
     }
 
     const mentor = await User.findById(req.user.id);
@@ -2118,7 +2328,7 @@ app.post("/api/mentor/fellows/:id/unclaim", requireAuth, requireRole("mentor"), 
       metadata: { previousMentorId: mentor._id }
     });
 
-    res.json({ success: true, message: "Fellow unclaimed successfully.", fellow: updatedFellow });
+    res.json({ success: true, message: "Teacher unclaimed successfully.", fellow: updatedFellow });
   } catch (error) {
     next(error);
   }
@@ -2128,13 +2338,165 @@ app.post("/api/mentor/fellows/:id/unclaim", requireAuth, requireRole("mentor"), 
 // ── Mentor Fellow Activities APIs ──
 app.get("/api/mentor/activities", requireAuth, requireRole("mentor"), async (req, res, next) => {
   try {
-    const activities = await ActivitySubmission.find({ mentor: req.user.id })
-      .populate("teacher", "name email")
+    // Find all assigned fellows for this mentor
+    const mentorUser = await User.findById(req.user.id);
+    const assignedTeachersInProfile = mentorUser?.mentorProfile?.assignedTeachers || [];
+    
+    const fellowOrQuery = [
+      { mentor: req.user.id },
+      { teacher: { $in: assignedTeachersInProfile } }
+    ];
+
+    const activities = await ActivitySubmission.find({ $or: fellowOrQuery })
+      .populate("teacher", "name email photoUrl role")
       .populate("center", "name")
       .populate("class", "name")
       .populate("lessonPlan", "title")
       .sort({ createdAt: -1 });
+
     res.json({ activities });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Seed realistic sample fellow submissions if queue is sparse
+app.post("/api/mentor/activities/seed-samples", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const mentorUser = await User.findById(req.user.id);
+    const assignedTeacherIds = mentorUser?.mentorProfile?.assignedTeachers || [];
+
+    let fellows = await User.find({
+      $or: [
+        { assignedMentor: req.user.id },
+        { _id: { $in: assignedTeacherIds } }
+      ]
+    });
+
+    if (fellows.length === 0) {
+      fellows = await User.find({ role: "teacher" }).limit(3);
+    }
+
+    if (fellows.length === 0) {
+      return res.status(400).json({ message: "No fellows found to assign sample submissions to." });
+    }
+
+    const SAMPLE_SUBMISSIONS = [
+      {
+        activityName: "Child Observation Sheet (Semester 1, Module 2)",
+        description: "Recorded 3-day observational log focusing on motor skills and social interactions of a 4-year-old child during free play.",
+        curriculumModule: "Semester 1 · Understanding Child Development",
+        activityType: "document",
+        files: [
+          { name: "Child_Observation_Log_Priya.pdf", url: "/resources/Semester 4 Handbook.pdf", type: "pdf" },
+          { name: "Milestone_Scoring_Rubric.pdf", url: "/resources/Impact Measurement Guidelines.pdf", type: "pdf" }
+        ],
+        status: "pending"
+      },
+      {
+        activityName: "TLM Exhibition & Low-Cost Materials (Semester 2, Module 3)",
+        description: "Created 5 zero-cost teaching-learning materials using cardboard, bottle caps, and natural seeds for early numeracy.",
+        curriculumModule: "Semester 2 · TLM Creation & Low-Cost Resources",
+        activityType: "photo",
+        files: [
+          { name: "TLM_Counting_Board.jpg", url: "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=600", type: "image" },
+          { name: "Alphabet_Matching_Cards.jpg", url: "https://images.unsplash.com/photo-1588072432836-e10032774350?w=600", type: "image" }
+        ],
+        status: "pending"
+      },
+      {
+        activityName: "Home Environment Scorecard (Semester 2, Module 2)",
+        description: "Visited 8 student households in Ward 4 to evaluate home learning spaces, parent availability, and storybook access.",
+        curriculumModule: "Semester 2 · Home as a Learning Space",
+        activityType: "text_reflection",
+        files: [],
+        status: "pending"
+      },
+      {
+        activityName: "Anganwadi Stakeholder Map (Semester 3, Module 2)",
+        description: "Mapped key community influencers, AWW workers, and primary health workers for early intervention support.",
+        curriculumModule: "Semester 3 · ICDS & Stakeholder Mapping",
+        activityType: "document",
+        files: [
+          { name: "Stakeholder_Matrix_Ward12.pdf", url: "/resources/Example Capstone Reports.zip", type: "pdf" }
+        ],
+        status: "pending"
+      },
+      {
+        activityName: "Weekly ECCE Session Plan (Semester 1, Module 4)",
+        description: "Structured lesson plan for story circles and phonics songs designed for Anganwadi age 3-5 group.",
+        curriculumModule: "Semester 1 · Lesson Planning & Session Design",
+        activityType: "document",
+        files: [
+          { name: "Weekly_Lesson_Plan_Week4.pdf", url: "/resources/Semester 4 Handbook.pdf", type: "pdf" }
+        ],
+        status: "approved",
+        adminComments: "Excellent structured layout and clear age-appropriate activity sequence!",
+        reviewedAt: new Date(Date.now() - 86400000)
+      },
+      {
+        activityName: "Policy Equity Audit Note (Semester 3, Module 4)",
+        description: "Draft analysis on inclusion of children with special needs in local ECCE centers.",
+        curriculumModule: "Semester 3 · Working in Marginalized Contexts",
+        activityType: "text_reflection",
+        files: [],
+        status: "flagged",
+        adminComments: "Please expand on specific accessibility accommodations for wheelchair access.",
+        reviewedAt: new Date(Date.now() - 172800000)
+      }
+    ];
+
+    const created = [];
+    for (let i = 0; i < SAMPLE_SUBMISSIONS.length; i++) {
+      const sample = SAMPLE_SUBMISSIONS[i];
+      const fellow = fellows[i % fellows.length];
+
+      const sub = new ActivitySubmission({
+        teacher: fellow._id,
+        mentor: req.user.id,
+        activityName: sample.activityName,
+        description: `${sample.description}\n\n[Linked Curriculum Module: ${sample.curriculumModule}]`,
+        activityDate: new Date(Date.now() - (i * 3600000 * 6)),
+        status: sample.status || "pending",
+        adminComments: sample.adminComments || "",
+        reviewedAt: sample.reviewedAt || null,
+        reviewedBy: sample.adminComments ? req.user.id : null,
+        files: sample.files || []
+      });
+      await sub.save();
+      created.push(sub);
+    }
+
+    res.status(201).json({ message: `Seeded ${created.length} sample fellow activity submissions!`, count: created.length });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Bulk Review Submissions (Bulk Approve / Bulk Flag)
+app.post("/api/mentor/activities/bulk-review", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const { submissionIds, status, adminComments } = req.body;
+    if (!Array.isArray(submissionIds) || submissionIds.length === 0) {
+      return res.status(400).json({ message: "submissionIds array is required" });
+    }
+    if (!["approved", "rejected", "flagged"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+
+    const result = await ActivitySubmission.updateMany(
+      { _id: { $in: submissionIds }, mentor: req.user.id },
+      {
+        $set: {
+          status,
+          adminComments: adminComments || `Bulk ${status} by mentor`,
+          reviewedBy: req.user.id,
+          reviewedAt: new Date()
+        }
+      }
+    );
+
+    res.json({ success: true, modifiedCount: result.modifiedCount });
   } catch (error) {
     next(error);
   }
@@ -2142,20 +2504,20 @@ app.get("/api/mentor/activities", requireAuth, requireRole("mentor"), async (req
 
 app.patch("/api/mentor/activities/:id", requireAuth, requireRole("mentor"), async (req, res, next) => {
   try {
-    const { status, adminComments } = req.body;
+    const { status, adminComments, rating } = req.body;
     
     if (!["approved", "rejected", "flagged"].includes(status)) {
       return res.status(400).json({ message: "Invalid status" });
     }
 
     const activity = await ActivitySubmission.findOneAndUpdate(
-      { _id: req.params.id, mentor: req.user.id },
-      { status, adminComments, reviewedBy: req.user.id, reviewedAt: new Date() },
+      { _id: req.params.id },
+      { status, adminComments, rating: rating || 5, reviewedBy: req.user.id, reviewedAt: new Date() },
       { new: true }
     ).populate("teacher", "name email");
 
     if (!activity) {
-      return res.status(404).json({ message: "Activity not found or not assigned to you" });
+      return res.status(404).json({ message: "Activity submission not found" });
     }
 
     // Trigger Notification to Fellow
@@ -2163,7 +2525,7 @@ app.patch("/api/mentor/activities/:id", requireAuth, requireRole("mentor"), asyn
       await createAndEmitNotification({
         recipientId: activity.teacher._id,
         title: "Activity Reviewed",
-        body: `Your activity submission was reviewed by your mentor. Status: ${status}.`,
+        body: `Your activity submission "${activity.activityName}" was reviewed by your mentor. Status: ${status.toUpperCase()}.\nRemarks: ${adminComments || 'No remarks.'}`,
         type: "in_app",
         metadata: { activityId: activity._id }
       });
@@ -2344,11 +2706,10 @@ app.get("/api/teacher/children", requireAuth, requireRole("teacher", "fellow"), 
     const requestedClassId = req.query.classId;
     const filter = { status: "active" };
 
+    // Fellows only see children they created themselves
+    // Teachers see ALL children enrolled in their assigned classes (regardless of who created them)
     if (req.user.role === "fellow") {
       filter.createdBy = req.user.id;
-    } else if (req.user.role === "teacher") {
-      const fellowUsers = await User.find({ role: "fellow" }).select("_id");
-      filter.createdBy = { $nin: fellowUsers.map(u => u._id) };
     }
 
     if (allClassIds.length > 0) {
@@ -2772,6 +3133,27 @@ app.get("/api/teacher/progress", requireAuth, requireRole("teacher", "fellow"), 
     const completedLessons = lessons.filter((item) => item.status === "completed" || item.status === "reviewed").length;
     const attendancePresent = attendance.filter((item) => ["present", "late"].includes(item.status)).length;
 
+    // Build monthly attendance breakdown for last 6 months
+    const monthlyAttendance = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const mDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const mYear = mDate.getFullYear();
+      const mMonth = mDate.getMonth();
+      const monthRecords = attendance.filter(r => {
+        const d = new Date(r.attendanceDate);
+        return d.getFullYear() === mYear && d.getMonth() === mMonth;
+      });
+      const monthPresent = monthRecords.filter(r => ["present", "late"].includes(r.status)).length;
+      monthlyAttendance.push({
+        month: mDate.toLocaleString("en-IN", { month: "short" }),
+        year: mYear,
+        total: monthRecords.length,
+        present: monthPresent,
+        rate: monthRecords.length ? Math.round((monthPresent / monthRecords.length) * 100) : null,
+      });
+    }
+
     res.json({
       courses: normalizedCourses,
       lessons,
@@ -2789,6 +3171,7 @@ app.get("/api/teacher/progress", requireAuth, requireRole("teacher", "fellow"), 
         submittedActivities: activities.length,
         approvedActivities: activities.filter((item) => item.status === "approved").length,
         attendanceRate: attendance.length ? Math.round((attendancePresent / attendance.length) * 100) : 0,
+        monthlyAttendance,
       },
     });
     // End: Dnyaneshwari Thorat
@@ -2978,6 +3361,13 @@ app.patch("/api/centers/:id", requireAuth, requireRole("admin"), async (req, res
                 "teacherProfile.classes": mergedClassIds,
               },
             });
+
+            await createAndEmitNotification({
+              recipientId: teacherId,
+              title: "Class Assigned",
+              body: "You have been assigned to new classes.",
+              type: "class_assigned"
+            });
           }
           // For teachers without specific class assignments, only set the center
           const teachersWithClasses = Object.keys(teacherClassMap);
@@ -2987,6 +3377,14 @@ app.patch("/api/centers/:id", requireAuth, requireRole("admin"), async (req, res
               { _id: { $in: teachersWithoutClasses }, role: "teacher" },
               { $set: { "teacherProfile.center": req.params.id } }
             );
+            for (const teacherId of teachersWithoutClasses) {
+              await createAndEmitNotification({
+                recipientId: teacherId,
+                title: "Center Assigned",
+                body: "You have been assigned to a new center.",
+                type: "class_assigned"
+              });
+            }
           }
         } else {
           // No specific class assignments - only set the center
@@ -2994,6 +3392,14 @@ app.patch("/api/centers/:id", requireAuth, requireRole("admin"), async (req, res
             { _id: { $in: teachers }, role: "teacher" },
             { $set: { "teacherProfile.center": req.params.id } }
           );
+          for (const teacherId of teachers) {
+            await createAndEmitNotification({
+              recipientId: teacherId,
+              title: "Center Assigned",
+              body: "You have been assigned to a new center.",
+              type: "class_assigned"
+            });
+          }
         }
       } else if (teachers.length) {
         // No classes payload - only set the center
@@ -3001,6 +3407,14 @@ app.patch("/api/centers/:id", requireAuth, requireRole("admin"), async (req, res
           { _id: { $in: teachers }, role: "teacher" },
           { $set: { "teacherProfile.center": req.params.id } }
         );
+        for (const teacherId of teachers) {
+          await createAndEmitNotification({
+            recipientId: teacherId,
+            title: "Center Assigned",
+            body: "You have been assigned to a new center.",
+            type: "class_assigned"
+          });
+        }
       }
 
       // Return with any cross-center warnings (non-blocking)
@@ -3198,7 +3612,7 @@ async function logClassAction(action, classId, className, centerId, performedBy,
   }
 }
 
-app.get("/api/admin/classes", requireAuth, requireRole("admin"), async (req, res, next) => {
+app.get("/api/admin/classes", requireAuth, requireRole("admin", "mentor"), async (req, res, next) => {
   try {
     const centerId = objectIdFilter(req.query.centerId, "centerId");
     const filter = centerId ? { center: centerId } : {};
@@ -3327,6 +3741,16 @@ app.patch("/api/admin/teachers/:id", requireAuth, requireRole("admin"), async (r
       .select("-passwordHash")
       .populate("teacherProfile.center", "name city")
       .populate("teacherProfile.classes", "name ageGroup curriculumLevel schedule");
+
+    if (teacher && teacherProfile) {
+      await createAndEmitNotification({
+        recipientId: teacher._id,
+        title: "Class Assigned",
+        body: "Your class assignments have been updated.",
+        type: "class_assigned"
+      });
+    }
+
     res.json({ teacher });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
@@ -3386,6 +3810,14 @@ app.patch("/api/admin/teachers/:id/assign-center", requireAuth, requireRole("adm
       .populate("teacherProfile.center", "name address city pincode contactPerson phone email")
       .populate("teacherProfile.classes", "name ageGroup curriculumLevel schedule");
     if (!teacher) return res.status(404).json({ message: "Teacher not found." });
+
+    await createAndEmitNotification({
+      recipientId: teacher._id,
+      title: "Class Assigned",
+      body: "You have been assigned to new classes.",
+      type: "class_assigned"
+    });
+
     res.json({ teacher });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
@@ -3466,9 +3898,11 @@ app.post("/api/courses/:id/assign", requireAuth, requireRole("admin"), async (re
   }
 });
 
-app.get("/api/admin/courses/assignments", requireAuth, requireRole("admin"), async (req, res, next) => {
+app.get("/api/admin/courses/assignments", requireAuth, requireRole("admin", "mentor"), async (req, res, next) => {
   try {
-    const assignments = await CourseAssignment.find()
+    const filter = {};
+
+    const assignments = await CourseAssignment.find(filter)
       .populate("course")
       .populate("teacher", "name email")
       .populate("reviewedBy", "name email");
@@ -4151,7 +4585,10 @@ app.patch("/api/admin/lesson-plans/reports/:id", requireAuth, requireRole("admin
 // ==========================================
 app.get("/api/activities", requireAuth, async (req, res, next) => {
   try {
-    const filter = req.user.role === "admin" ? {} : { teacher: req.user.id };
+    let filter = {};
+    if (req.user.role !== "admin" && req.user.role !== "mentor") {
+      filter = { teacher: req.user.id };
+    }
     const activities = await ActivitySubmission.find(filter)
       .populate("teacher", "name email")
       .populate("center", "name")
@@ -4410,6 +4847,14 @@ app.get("/api/attendance/teachers", requireAuth, async (req, res, next) => {
     const filter = {};
     if (req.user.role === "teacher") {
       filter.teacher = req.user.id;
+    } else if (req.user.role === "mentor") {
+      // If mentor is requesting and didn't specify a teacherId, restrict to their assigned teachers
+      if (req.query.teacherId && req.query.teacherId !== "undefined") {
+        filter.teacher = req.query.teacherId;
+      } else {
+        const myFellows = await User.find({ role: "teacher", assignedMentor: req.user.id }).select("_id");
+        filter.teacher = { $in: myFellows.map(f => f._id) };
+      }
     } else {
       if (req.query.teacherId && req.query.teacherId !== "undefined") filter.teacher = req.query.teacherId;
     }
@@ -4429,6 +4874,71 @@ app.get("/api/attendance/teachers", requireAuth, async (req, res, next) => {
   }
 });
 
+app.get("/api/attendance/mentors", requireAuth, requireRole("admin", "mentor"), async (req, res, next) => {
+  try {
+    const filter = {};
+    if (req.user.role === "mentor") {
+      filter.mentor = req.user.id;
+    } else {
+      if (req.query.mentorId && req.query.mentorId !== "undefined") filter.mentor = req.query.mentorId;
+    }
+    if (req.query.date) {
+      const d = new Date(req.query.date);
+      filter.attendanceDate = {
+        $gte: new Date(d.setHours(0,0,0,0)),
+        $lte: new Date(d.setHours(23,59,59,999))
+      };
+    }
+    const records = await MentorAttendanceRecord.find(filter)
+      .populate("mentor", "name email")
+      .sort({ attendanceDate: -1 });
+
+    const mapped = records.map(r => {
+      const doc = r.toObject();
+      doc.teacher = doc.mentor;
+      return doc;
+    });
+
+    res.json({ records: mapped });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+app.post("/api/attendance/mentors", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const { status, source, latitude, longitude, note, attendanceDate } = req.body;
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const recordDate = attendanceDate ? new Date(attendanceDate) : today;
+    recordDate.setHours(0,0,0,0);
+
+    const record = await MentorAttendanceRecord.findOneAndUpdate(
+      { mentor: req.user.id, attendanceDate: recordDate },
+      {
+        mentor: req.user.id,
+        attendanceDate: recordDate,
+        status: status || "present",
+        source: source || "geo",
+        latitude,
+        longitude,
+        note,
+        checkInTime: req.body.checkInTime,
+        checkOutTime: req.body.checkOutTime,
+        checkedIn: req.body.checkedIn,
+        checkedOut: req.body.checkedOut,
+        distanceOffset: req.body.distanceOffset,
+        distanceOffsetOut: req.body.distanceOffsetOut,
+        snapshot: req.body.snapshot,
+        snapshotOut: req.body.snapshotOut
+      },
+      { upsert: true, new: true }
+    );
+    res.status(201).json({ record });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
 app.post("/api/attendance/teachers", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { status, source, latitude, longitude, note, attendanceDate } = req.body;
@@ -6334,6 +6844,8 @@ ${roughNotes}`;
     next(error);
   }
 });
+
+app.use("/api/teacher-tasks", teacherTasksRouter);
 
 await connectDb();
 await ensureDatabaseReady();

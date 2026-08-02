@@ -354,7 +354,7 @@ function ChangeCenterModal({ mentor, centers = [], classes = [], onSave, onClose
 }
 
 /* ── Mentor Full Profile View ── */
-function MentorProfileView({ mentor, centers = [], classes = [], onBack, onUpdate, setToast }) {
+function MentorProfileView({ mentor, centers = [], classes = [], onBack, onUpdate, setToast, role = "admin" }) {
   const [activeSection, setActiveSection] = useState("overview");
   const [showReject,   setShowReject]   = useState(false);
   const [showBlock,    setShowBlock]    = useState(false);
@@ -401,7 +401,9 @@ function MentorProfileView({ mentor, centers = [], classes = [], onBack, onUpdat
       .then(() => { onUpdate(); setToast({ msg: "Center & classes assignment updated!", type: "success" }); setShowCourses(false); })
       .catch(err => setToast({ msg: err.message, type: "error" }));
 
-  const quickActions = [
+  const quickActions = role === "mentor" ? [
+    { icon: "💬", label: "Send Message",   onClick: () => setShowMsg(true),     color: "#8b5cf6", bg: "#ede9fe" }
+  ] : [
     { icon: "💬", label: "Send Message",   onClick: () => setShowMsg(true),     color: "#8b5cf6", bg: "#ede9fe" },
     { icon: "🏫", label: "Change Center",  onClick: () => setShowCourses(true), color: "#f59e0b", bg: "#fef3c7" },
     { icon: "✏️", label: "Edit Profile",   onClick: () => setShowEdit(true),    color: "#2563eb", bg: "#dbeafe" },
@@ -484,14 +486,16 @@ function MentorProfileView({ mentor, centers = [], classes = [], onBack, onUpdat
           )}
         </div>
 
-        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-          {isPending  && <><button onClick={doApprove} style={S.primaryBtn}>✓ Approve</button><button onClick={() => setShowReject(true)} style={S.btnRed}>✕ Reject</button></>}
-          {isApproved && <button onClick={() => setShowBlock(true)} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5" }}>🚫 Block</button>}
-          {isBlocked  && <button onClick={doUnblock} style={S.primaryBtn}>✓ Unblock</button>}
-          {isRejected && <button onClick={doApprove} style={S.primaryBtn}>✓ Reactivate</button>}
-          <button onClick={() => setShowEdit(true)} style={{ ...S.tblBtn, color: "#2563eb", borderColor: "#93c5fd" }}>✏️ Edit</button>
-          <button onClick={doDelete} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5" }}>🗑️ Delete</button>
-        </div>
+        {role !== "mentor" && (
+          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+            {isPending  && <><button onClick={doApprove} style={S.primaryBtn}>✓ Approve</button><button onClick={() => setShowReject(true)} style={S.btnRed}>✕ Reject</button></>}
+            {isApproved && <button onClick={() => setShowBlock(true)} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5" }}>🚫 Block</button>}
+            {isBlocked  && <button onClick={doUnblock} style={S.primaryBtn}>✓ Unblock</button>}
+            {isRejected && <button onClick={doApprove} style={S.primaryBtn}>✓ Reactivate</button>}
+            <button onClick={() => setShowEdit(true)} style={{ ...S.tblBtn, color: "#2563eb", borderColor: "#93c5fd" }}>✏️ Edit</button>
+            <button onClick={doDelete} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5" }}>🗑️ Delete</button>
+          </div>
+        )}
       </div>
 
       {/* Quick Actions */}
@@ -610,7 +614,7 @@ function MentorProfileView({ mentor, centers = [], classes = [], onBack, onUpdat
 /* ══════════════════════════════════════════
    MAIN MENTOR MANAGEMENT TAB
    ══════════════════════════════════════════ */
-export default function MentorManagementTab({ setToast }) {
+export default function MentorManagementTab({ setToast, role = "admin" }) {
   const [mentors, setMentors]   = useState([]);
   const [centers, setCenters]     = useState([]);
   const [classes, setClasses]     = useState([]);
@@ -705,6 +709,7 @@ export default function MentorManagementTab({ setToast }) {
         onBack={() => { setSelected(null); loadData(); }}
         onUpdate={loadData}
         setToast={showToast}
+        role={role}
       />
     );
   }
@@ -724,7 +729,7 @@ export default function MentorManagementTab({ setToast }) {
             <h1 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 4px" }}>{t("All Mentors")}</h1>
             <p style={{ fontSize: 12, margin: 0, color: "rgba(255,255,255,0.85)" }}>{mentors.filter(t=>t.status==="approved").length} {t("approved")} · {pending} {t("pending")} · {mentors.length} {t("total")}</p>
           </div>
-          <button onClick={() => setAddModal(true)} style={S.primaryBtn}>+ {t("Add Mentor")}</button>
+          {role !== "mentor" && <button onClick={() => setAddModal(true)} style={S.primaryBtn}>+ {t("Add Mentor")}</button>}
         </div>
       </div>
 
@@ -773,7 +778,7 @@ export default function MentorManagementTab({ setToast }) {
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     {/* NEW: uses real photo when available */}
                     <div style={{ position: "relative", flexShrink: 0 }}>
-                      <MentorAvatar mentor={t} size={38} borderColor={tr.photoUrl ? "#f59e0b" : "#e2e8f0"} borderWidth={tr.photoUrl ? 2 : 1} />
+                      <MentorAvatar mentor={tr} size={38} borderColor={tr.photoUrl ? "#f59e0b" : "#e2e8f0"} borderWidth={tr.photoUrl ? 2 : 1} />
                       {/* tiny camera badge if real photo */}
                       {tr.photoUrl && (
                         <span style={{ position: "absolute", bottom: -1, right: -1, background: "#10b981",
@@ -806,29 +811,33 @@ export default function MentorManagementTab({ setToast }) {
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                     <button onClick={() => setSelected(tr)}
                       style={{ ...S.tblBtn, color: "#3b82f6", borderColor: "#93c5fd" }}>👁 View</button>
-                    {tr.status === "pending" && (
-                      <button onClick={async () => {
-                        try { await updateMentorStatus(tr.id, "approved"); await loadData(); showToast({ msg: `${tr.name} approved!`, type: "success" }); }
-                        catch (err) { showToast({ msg: err.message, type: "error" }); }
-                      }} style={{ ...S.btnGreen }}>✓ Approve</button>
+                    {role !== "mentor" && (
+                      <>
+                        {tr.status === "pending" && (
+                          <button onClick={async () => {
+                            try { await updateMentorStatus(tr.id, "approved"); await loadData(); showToast({ msg: `${tr.name} approved!`, type: "success" }); }
+                            catch (err) { showToast({ msg: err.message, type: "error" }); }
+                          }} style={{ ...S.btnGreen }}>✓ Approve</button>
+                        )}
+                        {tr.status === "approved" && (
+                          <button onClick={async () => {
+                            try { await blockMentor(tr.id); await loadData(); showToast({ msg: `${tr.name} blocked.`, type: "error" }); }
+                            catch (err) { showToast({ msg: err.message, type: "error" }); }
+                          }} style={{ ...S.btnRed }}>🚫 Block</button>
+                        )}
+                        {tr.status === "blocked" && (
+                          <button onClick={async () => {
+                            try { await unblockMentor(tr.id); await loadData(); showToast({ msg: `${tr.name} unblocked!`, type: "success" }); }
+                            catch (err) { showToast({ msg: err.message, type: "error" }); }
+                          }} style={{ ...S.btnGreen }}>✓ Unblock</button>
+                        )}
+                        <button onClick={async () => {
+                          if (!window.confirm(`Delete ${tr.name} permanently?`)) return;
+                          try { await deleteMentor(tr.id); await loadData(); showToast({ msg: `${tr.name} deleted.`, type: "success" }); }
+                          catch (err) { showToast({ msg: err.message, type: "error" }); }
+                        }} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5" }} title="Delete mentor">🗑️</button>
+                      </>
                     )}
-                    {tr.status === "approved" && (
-                      <button onClick={async () => {
-                        try { await blockMentor(tr.id); await loadData(); showToast({ msg: `${tr.name} blocked.`, type: "error" }); }
-                        catch (err) { showToast({ msg: err.message, type: "error" }); }
-                      }} style={{ ...S.btnRed }}>🚫 Block</button>
-                    )}
-                    {tr.status === "blocked" && (
-                      <button onClick={async () => {
-                        try { await unblockMentor(tr.id); await loadData(); showToast({ msg: `${tr.name} unblocked!`, type: "success" }); }
-                        catch (err) { showToast({ msg: err.message, type: "error" }); }
-                      }} style={{ ...S.btnGreen }}>✓ Unblock</button>
-                    )}
-                    <button onClick={async () => {
-                      if (!window.confirm(`Delete ${tr.name} permanently?`)) return;
-                      try { await deleteMentor(tr.id); await loadData(); showToast({ msg: `${tr.name} deleted.`, type: "success" }); }
-                      catch (err) { showToast({ msg: err.message, type: "error" }); }
-                    }} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5" }} title="Delete mentor">🗑️</button>
                   </div>
                 </td>
               </tr>

@@ -34,6 +34,18 @@ function requireDbConnection(req, res, next) {
 
 router.use(requireDbConnection);
 
+// --- Mentees ---
+router.get("/mentees", async (req, res, next) => {
+  try {
+    const User = mongoose.model("User");
+    const mentees = await User.find({ role: "teacher", assignedMentor: req.user.id })
+      .select("name email phone status");
+    res.json(mentees);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // --- PDCA / Growth Cycles ---
 router.get("/pdca", async (req, res, next) => {
   try {
@@ -140,11 +152,46 @@ router.post("/pdca", async (req, res, next) => {
   }
 });
 
-// --- Capstone Submissions ---
+// --- Capstone Submissions & Milestones ---
+const MILESTONE_DEFINITIONS = [
+  { id: 1, title: "Problem Identification", desc: "Identify a core challenge in the early childhood community." },
+  { id: 2, title: "Solution Design", desc: "Design a targeted intervention & pedagogical framework." },
+  { id: 3, title: "Implementation", desc: "Execute the solution in classroom settings & collect data." },
+  { id: 4, title: "Evaluation", desc: "Analyze impact metrics, synthesize findings & finalize report." }
+];
+
 router.get("/capstone", async (req, res, next) => {
   try {
-    const submissions = await CapstoneSubmission.find({ mentorId: req.user.id }).sort({ createdAt: -1 });
-    res.json({ success: true, submissions });
+    const submissions = await CapstoneSubmission.find({ mentorId: req.user.id }).sort({ milestone: 1 });
+    const completedCount = submissions.filter(s => s.status === "approved" || s.status === "submitted").length;
+    const currentStage = Math.min(completedCount + 1, 4);
+    
+    const milestoneMap = new Map();
+    submissions.forEach(s => milestoneMap.set(s.milestone, s));
+
+    const milestones = MILESTONE_DEFINITIONS.map(m => {
+      const sub = milestoneMap.get(m.id);
+      let status = "locked";
+      if (sub) {
+        status = sub.status || "submitted";
+      } else if (m.id === currentStage && completedCount < 4) {
+        status = "in_progress";
+      }
+      return {
+        ...m,
+        status,
+        submission: sub || null
+      };
+    });
+
+    res.json({
+      success: true,
+      currentStage,
+      status: completedCount >= 4 ? "completed" : "in_progress",
+      impactScore: "A+",
+      submissions,
+      milestones
+    });
   } catch (err) {
     next(err);
   }
@@ -152,8 +199,51 @@ router.get("/capstone", async (req, res, next) => {
 
 router.post("/capstone", async (req, res, next) => {
   try {
-    const submission = await CapstoneSubmission.create({ mentorId: req.user.id, ...req.body });
+    const { milestone, notes, text, evidenceLink, fileUrl } = req.body;
+    const submissionNotes = notes || text || "";
+    const mNum = Number(milestone) || 1;
+
+    const submission = await CapstoneSubmission.findOneAndUpdate(
+      { mentorId: req.user.id, milestone: mNum },
+      {
+        $set: {
+          notes: submissionNotes,
+          evidenceLink: evidenceLink || fileUrl || "",
+          fileUrl: fileUrl || evidenceLink || "",
+          status: "submitted",
+          submittedAt: new Date()
+        }
+      },
+      { new: true, upsert: true }
+    );
+
     res.status(201).json({ success: true, submission });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/capstone/milestones/:id/submit", async (req, res, next) => {
+  try {
+    const milestoneId = Number(req.params.id);
+    const { notes, text, evidenceLink, fileUrl } = req.body;
+    const submissionNotes = notes || text || "";
+
+    const submission = await CapstoneSubmission.findOneAndUpdate(
+      { mentorId: req.user.id, milestone: milestoneId },
+      {
+        $set: {
+          notes: submissionNotes,
+          evidenceLink: evidenceLink || fileUrl || "",
+          fileUrl: fileUrl || evidenceLink || "",
+          status: "submitted",
+          submittedAt: new Date()
+        }
+      },
+      { new: true, upsert: true }
+    );
+
+    res.status(200).json({ success: true, submission });
   } catch (err) {
     next(err);
   }
