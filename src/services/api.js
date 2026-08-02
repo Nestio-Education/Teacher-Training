@@ -1512,6 +1512,8 @@ export function assignTeacherTaskByAdmin(teacherId, payload) {
     method: "POST",
     body: JSON.stringify({ teacherId, ...payload })
   });
+}
+
 export function getMentorAttendance(params = {}) {
   const searchParams = new URLSearchParams();
   if (params.date) searchParams.append("date", params.date);

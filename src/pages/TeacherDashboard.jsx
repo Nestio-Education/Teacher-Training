@@ -3185,54 +3185,6 @@ export default function TeacherDashboard({ user, onLogout }) {
 
       <div style={{ flex: 1, width: "0px", minWidth: "0px", padding: "28px 32px", overflowY: "auto", maxHeight: "100vh" }}>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginBottom: 16, position: "relative" }}>
-          <button
-            onClick={() => setShowGuide(true)}
-            title={t("User Guide")}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              padding: "6px 14px", borderRadius: 20,
-              border: "1px solid #bfdbfe", background: "white",
-              color: "#1e40af", fontSize: 12, fontWeight: 600,
-              cursor: "pointer", fontFamily: "inherit",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-              transition: "all 0.18s",
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "#eff6ff"; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "white"; }}
-          >
-            <span style={{ fontSize: 14, lineHeight: 1 }}>📖</span>
-            {t("User Guide")}
-          </button>
-
-          <div
-            onClick={() => setMenuOpen(!menuOpen)}
-            title={t("My Profile")}
-            style={{
-              display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
-              padding: "6px 12px", borderRadius: 20, background: "#fef3c7",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.1)", border: "1px solid #fbbf24",
-              transition: "all 0.2s ease", position: "relative"
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.background = "#fde68a"}
-            onMouseLeave={(e) => e.currentTarget.style.background = "#fef3c7"}
-          >
-            {unreadCount > 0 && (
-              <span style={{
-                position: "absolute", top: -4, right: -4, background: "#ef4444", color: "white",
-                borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center",
-                justifyContent: "center", fontSize: 10, fontWeight: "bold", border: "2px solid white"
-              }}>
-                {unreadCount}
-              </span>
-              <span style={{ fontSize: 11, color: "#92400e", fontWeight: 600, background: "#fef3c7", padding: "3px 10px", borderRadius: 12, border: "1px solid #fde68a", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                📍 {topCenterName}
-              </span>
-              <span style={{ fontSize: 11, color: "#1e40af", fontWeight: 600, background: "#dbeafe", padding: "3px 10px", borderRadius: 12, border: "1px solid #bfdbfe", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                📚 {topClassName}
-              </span>
-            </div>
-          </div>
-
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button
               onClick={() => setShowGuide(true)}
