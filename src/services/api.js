@@ -1469,6 +1469,42 @@ export function saveChildAssessment(childId, payload) {
 }
 // End: Dnyaneshwari Thorat
 
+// Teacher Schedule Task Persistence APIs
+export function getTeacherTasks() {
+  return request("/api/teacher-tasks");
+}
+
+export function createTeacherTask(payload) {
+  return request("/api/teacher-tasks", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateTeacherTask(id, payload) {
+  return request(`/api/teacher-tasks/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function toggleTeacherTask(id) {
+  return request(`/api/teacher-tasks/${id}/toggle`, {
+    method: "PATCH"
+  });
+}
+
+export function deleteTeacherTask(id) {
+  return request(`/api/teacher-tasks/${id}`, {
+    method: "DELETE"
+  });
+}
+
+export function assignTeacherTaskByAdmin(teacherId, payload) {
+  return request("/api/teacher-tasks/admin-assign", {
+    method: "POST",
+    body: JSON.stringify({ teacherId, ...payload })
+  });
 export function getMentorAttendance(params = {}) {
   const searchParams = new URLSearchParams();
   if (params.date) searchParams.append("date", params.date);

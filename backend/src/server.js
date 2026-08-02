@@ -81,8 +81,10 @@ import { autoSeed } from "./auto-seed.js";
 import { generateAICourse } from "./services/aiCourseGenerator.js";
 import { generateAILessonPlan } from "./services/aiLessonPlanner.js";
 import dailyTaskAutomationRoutes from "./routes/dailyTaskAutomationRoutes.js";
+import teacherTasksRouter from "./routes/teacherTasks.js";
 import { startDailyTaskAutomationCron } from "./cron/dailyTaskCron.js";
 import { User } from "./models/User.js";
+import { TeacherTask } from "./models/TeacherTask.js";
 import { Center } from "./models/Center.js";
 import { ClassModel } from "./models/Class.js";
 import { ClassLog } from "./models/ClassLog.js";
@@ -139,6 +141,7 @@ const databaseModels = [
    AIActivity,
    Center,
    ChildAttendanceSession,
+   TeacherTask,
    // Start: Dnyaneshwari Thorat
    ChildAssessment,
    ActivityCompletion,
@@ -1461,9 +1464,51 @@ app.get("/api/admin/teachers", requireAuth, requireRole("admin", "mentor"), asyn
       .populate("assignedMentor", "name email")
       .sort({ createdAt: -1 });
 
-    res.json({ teachers });
+    const enrichedTeachers = await Promise.all(
+      teachers.map(async (teacherDoc) => {
+        const teacher = teacherDoc.toObject();
+        const tId = teacher._id;
+
+        // Run all 6 DB count queries in parallel (1 round-trip instead of 6)
+        const [
+          totalAttRecords,
+          presentAttRecords,
+          totalCourseAssignments,
+          completedCourseAssignments,
+          totalTasks,
+          completedTasks
+        ] = await Promise.all([
+          // 1. Attendance Rate from TeacherAttendanceRecord
+          TeacherAttendanceRecord.countDocuments({ teacher: tId }),
+          TeacherAttendanceRecord.countDocuments({ teacher: tId, $or: [{ checkedIn: true }, { status: "present" }] }),
+          // 2. Course Completion Rate from CourseAssignment
+          CourseAssignment.countDocuments({ teacher: tId }),
+          CourseAssignment.countDocuments({ teacher: tId, status: { $in: ["completed", "approved"] } }),
+          // 3. Task Completion Rate from TeacherTask
+          TeacherTask.countDocuments({ teacher: tId }),
+          TeacherTask.countDocuments({ teacher: tId, completed: true })
+        ]);
+
+        // Calculate rates (neutral 50% fallback for teachers with no records yet)
+        const attRate = totalAttRecords > 0 ? (presentAttRecords / totalAttRecords) * 100 : 50;
+        const courseRate = totalCourseAssignments > 0 ? (completedCourseAssignments / totalCourseAssignments) * 100 : 50;
+        const taskRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 50;
+
+        // 4. Dynamic Weighted Formula: 40% Attendance + 30% Course + 30% Tasks
+        const performancePercentage = Math.round((0.40 * attRate) + (0.30 * courseRate) + (0.30 * taskRate));
+        const performanceRating = Math.min(5, Math.max(1, +(performancePercentage / 20).toFixed(1)));
+
+        if (!teacher.teacherProfile) teacher.teacherProfile = {};
+        teacher.teacherProfile.performanceRating = performanceRating;
+        teacher.teacherProfile.completionRate = Math.round(courseRate);
+
+        return teacher;
+      })
+    );
+
+    res.json({ teachers: enrichedTeachers });
   } catch (error) {
-    res.status(500).json({ message: error.message, stack: error.stack });
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -6799,6 +6844,8 @@ ${roughNotes}`;
     next(error);
   }
 });
+
+app.use("/api/teacher-tasks", teacherTasksRouter);
 
 await connectDb();
 await ensureDatabaseReady();
