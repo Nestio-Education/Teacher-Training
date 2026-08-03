@@ -1120,19 +1120,13 @@ app.post("/api/auth/forgot-password-otp", async (req, res, next) => {
       `
     }).catch(err => console.error("Non-blocking password reset OTP email failed:", err));
 
-    res.json({ success: true, message: "OTP sent to your registered email address.", devOtp: undefined });
-    // End: Dnyaneshwari Thorat
-
     console.log("[otp] generated_and_sent", JSON.stringify({
       email,
-      emailSent: emailResult.success,
       otpLength: otp.length,
     }));
 
-    res.json({
-      ...successResponse,
-      emailSent: emailResult.success,
-    });
+    res.json({ success: true, message: "OTP sent to your registered email address.", devOtp: undefined });
+    // End: Dnyaneshwari Thorat
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
   }
@@ -1163,7 +1157,7 @@ app.post("/api/auth/verify-otp", async (req, res, next) => {
       return res.status(400).json({ message: messages[result.reason] || "Invalid OTP" });
     }
 
-    // OTP verified Ã¢â‚¬â€ generate a short-lived reset token
+    // OTP verified — generate a short-lived reset token
     const resetToken = createPasswordResetToken(email);
 
     console.log("[otp] verified", JSON.stringify({ email }));
