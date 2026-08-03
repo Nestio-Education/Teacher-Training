@@ -55,11 +55,11 @@ export default function GeotagAttendance({ user }) {
         if (data && data.records) {
           const map = {};
           const logs = [];
-          
+
           data.records.forEach(record => {
             const dateObj = new Date(record.attendanceDate);
             const dateKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}-${String(dateObj.getDate()).padStart(2, "0")}`;
-            
+
             let parsedNote = {};
             try {
               if (record.note) {
@@ -68,7 +68,7 @@ export default function GeotagAttendance({ user }) {
             } catch (e) {
               parsedNote = { noteText: record.note };
             }
-            
+
             map[dateKey] = {
               checkedIn: record.checkedIn ?? (parsedNote.checkedIn || (record.status === "present")),
               checkedOut: record.checkedOut ?? (parsedNote.checkedOut || false),
@@ -77,9 +77,9 @@ export default function GeotagAttendance({ user }) {
               snapshot: record.snapshot || parsedNote.snapshot || null,
               distanceOffset: record.distanceOffset ?? (parsedNote.distanceOffset || 0)
             };
-            
+
             const dateStr = dateObj.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-            
+
             if (map[dateKey].checkInTime) {
               logs.push({
                 id: `GEO-${record._id}-in`,
@@ -104,7 +104,7 @@ export default function GeotagAttendance({ user }) {
                 distanceOffset: record.distanceOffsetOut ?? (parsedNote.distanceOffsetOut || map[dateKey].distanceOffset)
               });
             }
-            
+
             if (!map[dateKey].checkInTime && record.status === "present") {
               logs.push({
                 id: `GEO-${record._id}`,
@@ -118,7 +118,7 @@ export default function GeotagAttendance({ user }) {
               });
             }
           });
-          
+
           setAttendanceMap(map);
           setHistoryLogs(logs.sort((a, b) => b.id.localeCompare(a.id)));
         }
@@ -346,13 +346,19 @@ export default function GeotagAttendance({ user }) {
   const getDayKey = (day) =>
     `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
+  const isPresent = (rec) => !!(rec?.checkedIn || rec?.status === "present");
+
   const getDayStatus = (day) => {
-    if (isWeekend(day)) return "holiday";
-    if (day === todayDate) return "today";
+    // Weekends always show as holiday (—), past or future
+    if (isWeekend(day)) {
+      const rec = attendanceMap[getDayKey(day)];
+      return isPresent(rec) ? "present" : "holiday";
+    }
     if (day > todayDate) return "upcoming";
-    // Past weekday
+    // Weekday
     const rec = attendanceMap[getDayKey(day)];
-    if (rec?.checkedIn) return "present";
+    if (isPresent(rec)) return "present";
+    if (day === todayDate) return "today";
     return "absent";
   };
 
@@ -383,10 +389,13 @@ export default function GeotagAttendance({ user }) {
     }
   };
 
-  // Count stats
-  const presentDays = Object.values(attendanceMap).filter(r => r.checkedIn).length;
+  // Count stats — only for the current month to avoid cross-month mismatch
+  const currentMonthPrefix = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-`;
+  const presentDays = Object.entries(attendanceMap)
+    .filter(([key, r]) => key.startsWith(currentMonthPrefix) && isPresent(r))
+    .length;
   const totalWorkdays = Array.from({ length: todayDate }, (_, i) => i + 1).filter(d => !isWeekend(d)).length;
-  const absentDays = totalWorkdays - presentDays;
+  const absentDays = Math.max(0, totalWorkdays - presentDays);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
@@ -407,16 +416,16 @@ export default function GeotagAttendance({ user }) {
                 <div style={{ fontSize: "11px", fontWeight: "700", color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "8px" }}>
                   Assigned Campus Location
                 </div>
- <div style={{ fontSize: "13px", fontWeight: "800", color: "#1c1917" }}>
-                   🏫 <span style={{ color: "#d97706" }}>
-                     {(() => {
-                       const center = isMentor ? user?.mentorProfile?.center : user?.teacherProfile?.center;
-                       if (center?.name) return `${center.name}${center.city ? `, ${center.city}` : ""}`;
-                       if (user?.workingCenter) return user.workingCenter;
-                       return "Center not assigned";
-                     })()}
-                   </span>
-                 </div>
+                <div style={{ fontSize: "13px", fontWeight: "800", color: "#1c1917" }}>
+                  🏫 <span style={{ color: "#d97706" }}>
+                    {(() => {
+                      const center = isMentor ? user?.mentorProfile?.center : user?.teacherProfile?.center;
+                      if (center?.name) return `${center.name}${center.city ? `, ${center.city}` : ""}`;
+                      if (user?.workingCenter) return user.workingCenter;
+                      return "Center not assigned";
+                    })()}
+                  </span>
+                </div>
                 <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px", fontFamily: "monospace" }}>
                   Lat {CAMPUS_LAT} // Lng {CAMPUS_LNG} · 1.5km radius
                 </div>
@@ -673,14 +682,19 @@ export default function GeotagAttendance({ user }) {
                     >
                       <span style={{ fontSize: "12px", fontWeight: "800" }}>{day}</span>
                       {status === "present" && (
-                        <span style={{ alignSelf: "flex-end", fontSize: "8px", background: "#10B981", color: "white", padding: "1px 4px", borderRadius: "3px", fontWeight: "800" }}>✓</span>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                          {day === todayDate && (
+                            <span style={{ fontSize: "7px", background: "#059669", color: "white", padding: "1px 4px", borderRadius: "3px", fontWeight: "800" }}>TODAY</span>
+                          )}
+                          <span style={{ alignSelf: "flex-end", fontSize: "8px", background: "#10B981", color: "white", padding: "1px 4px", borderRadius: "3px", fontWeight: "800", marginLeft: "auto" }}>✓</span>
+                        </div>
                       )}
                       {status === "absent" && (
                         <span style={{ alignSelf: "flex-end", fontSize: "8px", background: "#FB7185", color: "white", padding: "1px 4px", borderRadius: "3px", fontWeight: "800" }}>✗</span>
                       )}
                       {status === "today" && (
                         <span style={{ alignSelf: "flex-end", fontSize: "7px", background: "#F59E0B", color: "white", padding: "1px 4px", borderRadius: "3px", fontWeight: "800", textTransform: "uppercase" }}>
-                          {todayRecord.checkedIn && todayRecord.checkedOut ? "Done" : todayRecord.checkedIn ? "In" : "Today"}
+                          Today
                         </span>
                       )}
                       {status === "holiday" && (
