@@ -873,64 +873,70 @@ function MyAttendanceSummaryCard({ attendance = 0, summary = {}, attendanceMap =
     }
   };
 
-  const pastWorkdays = Array.from({ length: Math.max(0, todayDate - 1) }, (_, i) => i + 1).filter(d => !isWeekend(d));
-  const presentDays = pastWorkdays.filter(d => attendanceMap[getDayKey(d)]?.checkedIn || attendanceMap[getDayKey(d)]?.status === "present").length + (attendanceMap[getDayKey(todayDate)]?.checkedIn ? 1 : 0);
+  // Count ALL present days including weekends (e.g. teacher checked in on Saturday)
+  const currentMonthPfx = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-`;
+  const presentDays = Object.entries(attendanceMap)
+    .filter(([key, r]) =>
+      key.startsWith(currentMonthPfx) &&
+      (r?.checkedIn || r?.status === "present")
+    ).length;
   const totalWorkdays = Array.from({ length: todayDate }, (_, i) => i + 1).filter(d => !isWeekend(d)).length;
-  const absentDays = Math.max(0, totalWorkdays - presentDays);
+  // Absent = workdays not covered by any present record (weekday-only baseline)
+  const workdayPresentDays = Array.from({ length: todayDate }, (_, i) => i + 1)
+    .filter(d => !isWeekend(d) && (attendanceMap[getDayKey(d)]?.checkedIn || attendanceMap[getDayKey(d)]?.status === "present"))
+    .length;
+  const absentDays = Math.max(0, totalWorkdays - workdayPresentDays);
 
   const todayKey = getDayKey(todayDate);
   const todayRecord = attendanceMap[todayKey] || {};
+
+  // Build 6-month trend from attendanceMap keys (format: "YYYY-MM-DD")
+  const build6MonthTrend = () => {
+    // If backend already provides monthly trend data, prefer it
+    if (summary.monthlyTrend && summary.monthlyTrend.length > 0) {
+      return summary.monthlyTrend.slice(-6).map((m, i, arr) => ({
+        ...m,
+        isCurrent: i === arr.length - 1
+      }));
+    }
+
+    const months = [];
+    for (let offset = 5; offset >= 0; offset--) {
+      const d = new Date(currentYear, currentMonth - offset, 1);
+      const yr = d.getFullYear();
+      const mo = d.getMonth();
+      const daysInMo = new Date(yr, mo + 1, 0).getDate();
+      const isCurr = offset === 0;
+      const cutoffDay = isCurr ? todayDate : daysInMo;
+
+      let workdays = 0;
+      let present = 0;
+      for (let day = 1; day <= cutoffDay; day++) {
+        const dow = new Date(yr, mo, day).getDay();
+        if (dow === 0 || dow === 6) continue; // skip weekends
+        workdays++;
+        const key = `${yr}-${String(mo + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const rec = attendanceMap[key];
+        if (rec?.checkedIn || rec?.status === "present") present++;
+      }
+
+      const rate = workdays > 0 ? Math.round((present / workdays) * 100) : (isCurr ? calculatedAttendanceRate : 0);
+      const label = new Date(yr, mo, 1).toLocaleString("en-IN", { month: "short" });
+      months.push({ month: label, val: rate, isCurrent: isCurr });
+    }
+    return months;
+  };
 
   // Exact real calculated attendance rate (e.g. 1 present / 21 workdays = 5%)
   const calculatedAttendanceRate = totalWorkdays > 0
     ? Math.round((presentDays / totalWorkdays) * 100)
     : (summary.attendanceRate !== undefined ? summary.attendanceRate : 0);
 
-  const graphTrend = (summary.monthlyTrend && summary.monthlyTrend.length > 0)
-    ? summary.monthlyTrend
-    : [
-      { month: `${currentMonthShort} (Current)`, val: calculatedAttendanceRate, isCurrent: true }
-    ];
+  const graphTrend = build6MonthTrend();
 
   return (
     <SectionCard title="My Attendance Summary">
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {/* Header Toggle & Controls */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>{monthName} {currentYear}</div>
-            <div style={{ fontSize: 11, color: "#64748b" }}>Monthly performance & compliance trend</div>
-          </div>
-
-          <div style={{ display: "flex", gap: 4, background: "#f1f5f9", padding: 3, borderRadius: 8, border: "1px solid #e2e8f0" }}>
-            <button
-              onClick={() => setViewMode("graph")}
-              style={{
-                padding: "4px 10px", border: "none", borderRadius: 6,
-                background: viewMode === "graph" ? "white" : "transparent",
-                color: viewMode === "graph" ? "#1e40af" : "#64748b",
-                fontSize: 11, fontWeight: 700, cursor: "pointer",
-                boxShadow: viewMode === "graph" ? "0 1px 4px rgba(0,0,0,0.08)" : "none"
-              }}
-            >
-              📊 Graph View
-            </button>
-            <button
-              onClick={() => setViewMode("calendar")}
-              style={{
-                padding: "4px 10px", border: "none", borderRadius: 6,
-                background: viewMode === "calendar" ? "white" : "transparent",
-                color: viewMode === "calendar" ? "#1e40af" : "#64748b",
-                fontSize: 11, fontWeight: 700, cursor: "pointer",
-                boxShadow: viewMode === "calendar" ? "0 1px 4px rgba(0,0,0,0.08)" : "none"
-              }}
-            >
-              📅 Calendar
-            </button>
-          </div>
-        </div>
-
-        {viewMode === "graph" ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {/* Top Stat Badges */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
@@ -948,161 +954,144 @@ function MyAttendanceSummaryCard({ attendance = 0, summary = {}, attendanceMap =
               </div>
             </div>
 
-            {/* Attendance Rate Graph with 85% Target Line */}
-            <div style={{ position: "relative", background: "#f8fafc", borderRadius: 12, padding: "20px 14px 14px", border: "1px solid #e2e8f0" }}>
-              <div style={{ position: "absolute", top: "10%", left: 14, right: 14, borderTop: "1px dashed #cbd5e1", zIndex: 1 }}></div>
+            {/* ── 6-Month Attendance Bar Chart ── */}
+            {(() => {
+              const CHART_H = 180;
+              const gridPcts = [0, 25, 50, 75, 100];
 
-              <div style={{ position: "absolute", top: "20%", left: 14, right: 14, borderTop: "1px dashed #cbd5e1", zIndex: 1 }}></div>
+              return (
+                <div style={{ background: "#f8fafc", borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px 12px" }}>
+                  {/* Chart body: value-labels + bars side by side with Y-axis */}
+                  <div style={{ display: "flex", alignItems: "stretch", gap: 6 }}>
 
-              <div style={{ position: "absolute", top: "30%", left: 14, right: 14, borderTop: "1px dashed #cbd5e1", zIndex: 1 }}></div>
-
-              <div style={{ position: "absolute", top: "40%", left: 14, right: 14, borderTop: "1px dashed #cbd5e1", zIndex: 1 }}></div>
-
-              <div style={{ position: "absolute", top: "50%", left: 14, right: 14, borderTop: "1px dashed #cbd5e1", zIndex: 1 }}></div>
-
-              <div style={{ position: "absolute", top: "60%", left: 14, right: 14, borderTop: "1px dashed #cbd5e1", zIndex: 1 }}></div>
-
-              <div style={{ position: "absolute", top: "70%", left: 14, right: 14, borderTop: "1px dashed #cbd5e1", zIndex: 1 }}></div>
-
-              <div style={{ position: "absolute", top: "80%", left: 14, right: 14, borderTop: "1px dashed #cbd5e1", zIndex: 1 }}></div>
-
-              <div style={{ position: "absolute", top: "90%", left: 14, right: 14, borderTop: "1px dashed #cbd5e1", zIndex: 1 }}></div>
-
-
-
-              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-around", height: 150, position: "relative", zIndex: 2 }}>
-                {graphTrend.map((d, i) => (
-                  <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1 }}>
-                    <span style={{ marginBottom: 6, fontSize: 11, fontWeight: 800, color: d.val >= 90 ? "#10b981" : d.val >= 80 ? "#f59e0b" : "#ef4444" }}>
-                      {d.val}%
-                    </span>
-                    <div
-                      style={{
-                        width: d.isCurrent ? 28 : 20,
-                        height: `${Math.max(12, d.val * 1.25)}px`,
-                        borderRadius: "8px 8px 0 0",
-                        background: d.val >= 90
-                          ? "linear-gradient(180deg,#34d399,#10b981)"
-                          : d.val >= 80
-                            ? "linear-gradient(180deg,#fbbf24,#f59e0b)"
-                            : "linear-gradient(180deg,#f87171,#ef4444)",
-                        boxShadow: d.isCurrent ? "0 4px 12px rgba(16,185,129,0.35)" : "none",
-                        border: d.isCurrent ? "2px solid #059669" : "none",
-                        transition: "all .4s ease"
-                      }}
-                    />
-                    <span style={{ marginTop: 8, fontSize: 10, fontWeight: d.isCurrent ? 900 : 600, color: d.isCurrent ? "#0f172a" : "#64748b" }}>
-                      {d.month}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Bottom Quick Action */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 2 }}>
-              <span style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>
-                Status: <b style={{ color: calculatedAttendanceRate >= 85 ? "#047857" : "#b91c1c" }}>{calculatedAttendanceRate >= 85 ? "🟢 Excellent Pacing" : "⚠️ Action Required"}</b>
-              </span>
-              <button
-                onClick={() => setActiveTab("attendance")}
-                style={{
-                  padding: "6px 12px", background: "#3b82f6", color: "white",
-                  border: "none", borderRadius: 8, fontSize: 11, fontWeight: 700,
-                  cursor: "pointer", boxShadow: "0 2px 6px rgba(59,130,246,0.25)"
-                }}
-              >
-                📍 Check In Attendance →
-              </button>
-            </div>
-          </div>
-        ) : (
-          /* Calendar View */
-          <div style={{ background: "#ffffff", padding: "10px", borderRadius: "12px" }}>
-            {/* Legend */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 10px", background: "#FFFBF0", padding: "10px", borderRadius: "10px", border: "1px solid #FDE68A", marginBottom: "14px" }}>
-              {[
-                { bg: "#EBFDF5", border: "#10B981", label: "Present" },
-                { bg: "#FFF1F2", border: "#FDA4AF", label: "Absent" },
-                { bg: "#FEF3C7", border: "#F59E0B", label: "Today", bold: true },
-                { bg: "#FDF6EC", border: "#FBBF24", label: "Weekend / Holiday" },
-                { bg: "#FFFBF0", border: "#FDE68A", label: "Upcoming" },
-              ].map(({ bg, border, label, bold }) => (
-                <div key={label} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <div style={{ width: "12px", height: "12px", borderRadius: "3px", background: bg, border: `1.5px solid ${border}`, flexShrink: 0 }} />
-                  <span style={{ fontSize: "10px", fontWeight: bold ? "800" : "700", color: "#475569" }}>{label}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Weekday Headers */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "6px", textAlign: "center", borderBottom: "1px solid #E2E8F0", paddingBottom: "6px", marginBottom: "8px" }}>
-              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => (
-                <span key={d} style={{ fontSize: "11px", fontWeight: "800", color: "#64748B" }}>{d}</span>
-              ))}
-            </div>
-
-            {/* Calendar Grid */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "6px" }}>
-              {Array.from({ length: startOffset }).map((_, i) => (
-                <div key={`empty-${i}`} style={{ height: "42px" }} />
-              ))}
-
-              {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(day => {
-                const status = getDayStatus(day);
-                const tileStyle = getCalendarTileStyles(status);
-                const isToday = day === todayDate;
-
-                return (
-                  <div
-                    key={day}
-                    style={{
-                      ...tileStyle,
-                      height: "42px",
-                      borderRadius: "8px",
+                    {/* Y-axis tick labels */}
+                    <div style={{
                       display: "flex",
                       flexDirection: "column",
                       justifyContent: "space-between",
-                      padding: "4px 6px",
-                      boxSizing: "border-box",
-                      boxShadow: isToday ? "0 0 0 2px #F59E0B" : "none"
-                    }}
-                  >
-                    <span style={{ fontSize: "11px", fontWeight: "800" }}>{day}</span>
-                    {status === "present" && (
-                      <span style={{ alignSelf: "flex-end", fontSize: "8px", background: "#10B981", color: "white", padding: "1px 3px", borderRadius: "3px", fontWeight: "800" }}>✓</span>
-                    )}
-                    {status === "absent" && (
-                      <span style={{ alignSelf: "flex-end", fontSize: "8px", background: "#FB7185", color: "white", padding: "1px 3px", borderRadius: "3px", fontWeight: "800" }}>✗</span>
-                    )}
-                    {status === "today" && (
-                      <span style={{ alignSelf: "flex-end", fontSize: "7px", background: "#F59E0B", color: "white", padding: "1px 3px", borderRadius: "3px", fontWeight: "800", textTransform: "uppercase" }}>
-                        {todayRecord.checkedIn && todayRecord.checkedOut ? "DONE" : todayRecord.checkedIn ? "IN" : "TODAY"}
-                      </span>
-                    )}
-                    {status === "holiday" && (
-                      <span style={{ alignSelf: "flex-end", fontSize: "8px", background: "#94A3B8", color: "white", padding: "1px 3px", borderRadius: "3px", fontWeight: "700" }}>—</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                      height: CHART_H,
+                      flexShrink: 0,
+                      paddingBottom: 2
+                    }}>
+                      {[...gridPcts].reverse().map(g => (
+                        <span key={g} style={{ fontSize: 8, color: "#b0bec5", fontWeight: 600, lineHeight: 1 }}>{g}%</span>
+                      ))}
+                    </div>
 
-            {/* Bottom Monthly Summary Cards */}
-            <div style={{ marginTop: "14px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
-              {[
-                { label: "Present", value: presentDays, bg: "#f0fdf4", color: "#059669", border: "#a7f3d0" },
-                { label: "Absent", value: absentDays, bg: "#fff1f2", color: "#e11d48", border: "#fecdd3" },
-                { label: "Working Days", value: totalWorkdays, bg: "#f8fafc", color: "#334155", border: "#e2e8f0" },
-              ].map(({ label, value, bg, color, border }) => (
-                <div key={label} style={{ background: bg, border: `1px solid ${border}`, borderRadius: "8px", padding: "8px 4px", textAlign: "center" }}>
-                  <div style={{ fontSize: "16px", fontWeight: "900", color }}>{value}</div>
-                  <div style={{ fontSize: "10px", fontWeight: "700", color: "#64748b", marginTop: "2px" }}>{label}</div>
+                    {/* Bar area */}
+                    <div style={{ flex: 1, position: "relative", height: CHART_H }}>
+                      {/* Horizontal grid lines (anchored bottom of this box) */}
+                      {gridPcts.map(g => (
+                        <div key={g} style={{
+                          position: "absolute",
+                          left: 0, right: 0,
+                          bottom: `${g}%`,
+                          borderTop: g === 100
+                            ? "1px solid #e2e8f0"
+                            : "1px dashed #e9eef4",
+                          zIndex: 0
+                        }} />
+                      ))}
+                      {/* Floor */}
+                      <div style={{
+                        position: "absolute", bottom: 0, left: 0, right: 0,
+                        borderTop: "2px solid #d1d9e0", zIndex: 1
+                      }} />
+
+                      {/* Bars — absolutely pinned to the bottom */}
+                      <div style={{
+                        position: "absolute", bottom: 0, left: 0, right: 0,
+                        display: "flex",
+                        alignItems: "flex-end",
+                        justifyContent: "space-around",
+                        height: "100%",
+                        zIndex: 2
+                      }}>
+                        {graphTrend.map((d, i) => {
+                          const barH = d.val > 0 ? Math.max(6, (d.val / 100) * CHART_H) : 0;
+                          const barColor = d.val >= 90
+                            ? "linear-gradient(180deg,#34d399,#10b981)"
+                            : d.val >= 80
+                              ? "linear-gradient(180deg,#fbbf24,#f59e0b)"
+                              : d.val > 0
+                                ? "linear-gradient(180deg,#f87171,#ef4444)"
+                                : "transparent";
+                          const valColor = d.val >= 90 ? "#10b981" : d.val >= 80 ? "#f59e0b" : d.val > 0 ? "#ef4444" : "#c8d0da";
+                          const barW = d.isCurrent ? 30 : 22;
+
+                          return (
+                            <div
+                              key={i}
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "center",
+                                justifyContent: "flex-end",
+                                height: "100%",
+                                flex: 1,
+                              }}
+                            >
+                              {/* Value label pinned just above bar */}
+                              <span style={{
+                                fontSize: 10,
+                                fontWeight: 800,
+                                color: valColor,
+                                marginBottom: 3,
+                                lineHeight: 1,
+                                minHeight: 12
+                              }}>
+                                {d.val > 0 ? `${d.val}%` : "0%"}
+                              </span>
+
+                              {/* Bar */}
+                              {barH > 0 ? (
+                                <div style={{
+                                  width: barW,
+                                  height: barH,
+                                  borderRadius: "5px 5px 0 0",
+                                  background: barColor,
+                                  boxShadow: d.isCurrent && d.val > 0 ? "0 3px 10px rgba(16,185,129,0.25)" : "none",
+                                  border: d.isCurrent ? "2px solid #059669" : "none",
+                                  transition: "all .4s ease",
+                                  flexShrink: 0
+                                }} />
+                              ) : (
+                                /* Ghost bar for 0% months */
+                                <div style={{
+                                  width: barW,
+                                  height: 6,
+                                  borderRadius: "3px 3px 0 0",
+                                  background: d.isCurrent ? "transparent" : "#eef0f3",
+                                  border: d.isCurrent ? "1.5px dashed #059669" : "1px solid #e2e8f0",
+                                  flexShrink: 0
+                                }} />
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Month labels row */}
+                  <div style={{ display: "flex", paddingLeft: 20, marginTop: 8 }}>
+                    {graphTrend.map((d, i) => (
+                      <span key={i} style={{
+                        flex: 1,
+                        textAlign: "center",
+                        fontSize: 10,
+                        fontWeight: d.isCurrent ? 900 : 500,
+                        color: d.isCurrent ? "#1e293b" : "#94a3b8"
+                      }}>
+                        {d.month}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
+              );
+            })()}
+
           </div>
-        )}
       </div>
     </SectionCard>
   );
@@ -1147,64 +1136,9 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
-      {/* Quick Action Bar */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <button onClick={() => setActiveTab("attendance")} style={{ padding: "8px 16px", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, fontSize: 12, fontWeight: 700, color: "#1e40af", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
-          📍 Mark Attendance
-        </button>
-        <button onClick={() => setActiveTab("planner")} style={{ padding: "8px 16px", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, fontSize: 12, fontWeight: 700, color: "#92400e", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
-          📝 Create Lesson Plan
-        </button>
-        <button onClick={() => setActiveTab("assignments")} style={{ padding: "8px 16px", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, fontSize: 12, fontWeight: 700, color: "#065f46", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
-          📤 Submit Assignments
-        </button>
-        {user.role === "fellow" && user.assignedMentor?.email && (
-          <a href={`mailto:${user.assignedMentor.email}`} style={{ padding: "8px 16px", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, fontSize: 12, fontWeight: 700, color: "#6b21a8", textDecoration: "none", display: "flex", alignItems: "center", gap: 6, boxShadow: "0 2px 6px rgba(0,0,0,0.03)" }}>
-            💬 Contact Mentor
-          </a>
-        )}
-      </div>
 
-      {/* ── My Mentor Section ── */}
-      {(user.role === 'teacher' || user.role === 'fellow') && (
-        <div style={{ marginBottom: 20, marginTop: 20 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#1c1917", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 18 }}>🎓</span> My Mentor
-          </div>
 
-          {user.assignedMentor ? (
-            <div style={{
-              background: "white", borderRadius: 14, padding: "16px",
-              border: "1px solid #e5e7eb", boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-              borderLeft: "4px solid #3b82f6", display: "flex", flexWrap: "wrap", gap: 16, alignItems: "center", justifyContent: "space-between"
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <MentorAvatarInline mentor={user.assignedMentor} />
-                <div>
-                  <h4 style={{ margin: "0 0 4px", fontSize: 16, color: "#1e293b" }}>{user.assignedMentor.name}</h4>
-                  <div style={{ fontSize: 12, color: "#64748b", display: "flex", alignItems: "center", gap: 6 }}>
-                    <span>✉️ {user.assignedMentor.email}</span>
-                  </div>
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 10 }}>
-                <a href={`mailto:${user.assignedMentor.email}`} style={{ padding: "8px 12px", background: "#f8fafc", color: "#334155", borderRadius: 8, textDecoration: "none", fontSize: 12, fontWeight: 600, border: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 6 }}>
-                  ✉️ Message
-                </a>
-              </div>
-            </div>
-          ) : (
-            <div style={{ background: "#f8fafc", padding: "16px", borderRadius: 14, border: "1px dashed #cbd5e1", display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>⏳</div>
-              <div>
-                <h4 style={{ margin: "0 0 4px", fontSize: 14, color: "#334155" }}>Pending Mentor Assignment</h4>
-                <p style={{ margin: 0, fontSize: 12, color: "#64748b" }}>An admin or mentor will review your profile and claim you as a mentee shortly.</p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
+      {/* KPI Cards Section */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 16, marginBottom: 24 }}>
         <StatCard icon="👥" label="Total Students" val={studentsCount} color="#3b82f6" bg="#dbeafe" />
         <StatCard icon="📊" label="Attendance" val={`${attendance}%`} color={attColor} bg={attendance >= 85 ? "#d1fae5" : attendance >= 70 ? "#fef3c7" : "#fee2e2"} />
@@ -1225,37 +1159,6 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
         <MyAttendanceSummaryCard attendance={attendance} summary={summary} attendanceMap={summary.attendanceMap || {}} setActiveTab={setActiveTab} />
-        <SectionCard title="My Attendance Summary">
-          {(() => {
-            const monthly = summary.monthlyAttendance || [];
-            // If backend provides monthly data, use it; otherwise fall back to overall rate
-            const bars = monthly.length > 0
-              ? monthly.map(m => ({ label: m.month, val: m.rate !== null ? m.rate : null }))
-              : [{ label: "Overall", val: attendance }];
-            const maxBarH = 160;
-            return (
-              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-around", height: 220, paddingTop: 15 }}>
-                {bars.map((d, i) => {
-                  const isNull = d.val === null;
-                  const val = isNull ? 0 : d.val;
-                  const barH = isNull ? 0 : Math.max(val * (maxBarH / 100), 6);
-                  const barColor = isNull ? "#e5e7eb" : val >= 90 ? "linear-gradient(180deg,#34d399,#10b981)" : val >= 80 ? "linear-gradient(180deg,#fbbf24,#f59e0b)" : "linear-gradient(180deg,#f87171,#ef4444)";
-                  const textColor = isNull ? "#9ca3af" : val >= 90 ? "#10b981" : val >= 80 ? "#f59e0b" : "#ef4444";
-                  return (
-                    <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1 }}>
-                      <span style={{ marginBottom: 8, fontSize: 12, fontWeight: 800, color: textColor }}>{isNull ? "—" : `${val}%`}</span>
-                      <div style={{ width: 32, height: `${barH}px`, minHeight: isNull ? 0 : 6, borderRadius: "8px 8px 0 0", background: barColor, transition: "all .6s ease" }} />
-                      <span style={{ marginTop: 10, fontSize: 10, fontWeight: 700, color: "#6b7280" }}>{d.label}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()}
-          <div style={{ textAlign: "center", marginTop: 8, fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>
-            Overall: <span style={{ color: attColor, fontWeight: 800 }}>{attendance}%</span>
-          </div>
-        </SectionCard>
 
         <SectionCard title="Course Progress">
           {courses.length === 0 ? (
@@ -3184,7 +3087,41 @@ export default function TeacherDashboard({ user, onLogout }) {
       </div>
 
       <div style={{ flex: 1, width: "0px", minWidth: "0px", padding: "28px 32px", overflowY: "auto", maxHeight: "100vh" }}>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginBottom: 16, position: "relative" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginBottom: 20, position: "relative" }}>
+          <div>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: "#1c1917", margin: 0, letterSpacing: "-0.3px" }}>
+              Hi, {currentUser.name?.split(" ")[0] || (currentUser.role === "fellow" ? "Fellow" : "Teacher")}! 👋
+            </h1>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 500, background: "#f8fafc", padding: "3px 10px", borderRadius: 12, border: "1px solid #e2e8f0" }}>
+                📅 {new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
+              </span>
+              <span style={{ fontSize: 11, color: "#92400e", fontWeight: 600, background: "#fef3c7", padding: "3px 10px", borderRadius: 12, border: "1px solid #fde68a", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                📍 {topCenterName}
+              </span>
+              <span style={{ fontSize: 11, color: "#1e40af", fontWeight: 600, background: "#dbeafe", padding: "3px 10px", borderRadius: 12, border: "1px solid #bfdbfe", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                📚 {topClassName}
+              </span>
+
+              <span
+  style={{
+    fontSize: 11,
+    color: "#1e40af",
+    fontWeight: 600,
+    background: "#dbeafe",
+    padding: "3px 10px",
+    borderRadius: 12,
+    border: "1px solid #bfdbfe",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+  }}
+>
+  Mentor: {user.assignedMentor?.name || "Not Assigned"}
+</span>
+            </div>
+          </div>
+
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button
               onClick={() => setShowGuide(true)}
