@@ -105,6 +105,28 @@ router.get("/activities/submissions", requireAuth, async (req, res) => {
   }
 });
 
+// --- PRAJWAL EDIT: START — new route to submit an Activity Bank completion report ---
+router.post("/activities/:activityId/complete", requireAuth, async (req, res) => {
+  try {
+    const activity = await ActivityBank.findById(req.params.activityId);
+    if (!activity) {
+      return res.status(404).json({ success: false, message: "Activity not found" });
+    }
+
+    const submission = await ActivitySubmission.create({
+      ...req.body,
+      teacher: req.user.id,
+      activityBank: req.params.activityId
+    });
+
+    res.status(201).json({ success: true, submission });
+  } catch (error) {
+    console.error("Activity completion submit error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+// --- PRAJWAL EDIT: END ---
+
 router.delete("/activities/:id", requireAuth, async (req, res) => {
   try {
     if (!req.params.id || req.params.id === "undefined" || req.params.id === "null") {

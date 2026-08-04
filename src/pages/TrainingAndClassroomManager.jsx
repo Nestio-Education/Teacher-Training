@@ -456,34 +456,38 @@ function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
           console.warn("File upload failed:", ue);
         }
       }
-
-      await submitActivityCompletion({
-        center: userCenter,
-        class: userClass,
-        description,
-        activityDate: new Date().toISOString(),
-        activityBank: activity._id || activity.id,
-        activityName: activity.activityName,
-        duration: activity.duration,
-        level: activity.level,
-        type: activity.type || activity.developmentalDomain,
-        ageGroup: activity.ageGroup,
-        milestone: activity.milestone,
-        developmentalDomain: activity.developmentalDomain,
-        purposeOfActivity: activity.purposeOfActivity,
-        howToConduct: activity.howToConduct,
-        facilitatorRole: activity.facilitatorRole,
-        materialsRequired: activity.materialsRequired,
-        expectedLearningOutcomes: activity.expectedLearningOutcomes,
-        dayNumber: activity.dayNumber,
-        learningObjectives: activity.learningObjectives,
-        activities: activity.activities,
-        resources: activity.resources,
-        instructions: activity.instructions,
-        expectedOutput: activity.expectedOutput,
-        notes: activity.notes,
-        files: fileIds
-      });
+      // --- PRAJWAL EDIT: START — submitActivityCompletion no longer takes assignmentId/taskId, just activityId + payload ---
+      await submitActivityCompletion(
+        activity._id || activity.id,
+        {
+          center: userCenter,
+          class: userClass,
+          description,
+          activityDate: new Date().toISOString(),
+          activityBank: activity._id || activity.id,
+          activityName: activity.activityName,
+          duration: activity.duration,
+          level: activity.level,
+          type: activity.type || activity.developmentalDomain,
+          ageGroup: activity.ageGroup,
+          milestone: activity.milestone,
+          developmentalDomain: activity.developmentalDomain,
+          purposeOfActivity: activity.purposeOfActivity,
+          howToConduct: activity.howToConduct,
+          facilitatorRole: activity.facilitatorRole,
+          materialsRequired: activity.materialsRequired,
+          expectedLearningOutcomes: activity.expectedLearningOutcomes,
+          dayNumber: activity.dayNumber,
+          learningObjectives: activity.learningObjectives,
+          activities: activity.activities,
+          resources: activity.resources,
+          instructions: activity.instructions,
+          expectedOutput: activity.expectedOutput,
+          notes: activity.notes,
+          files: fileIds
+        }
+      );
+      // --- PRAJWAL EDIT: END ---
 
       onSubmit();
       onClose();
