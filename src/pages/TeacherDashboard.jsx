@@ -153,6 +153,37 @@ function UnderConstructionTab({ label = "This page", icon = "🚧" }) {
   );
 }
 
+/* ── Colorful KPI Stat Card (Admin-dashboard style) ── */
+function TeacherStatCard({ icon, label, val, accent = "#3b82f6", subtitle, subtitleColor }) {
+  return (
+    <div style={{
+      background: "white",
+      borderRadius: 16,
+      border: "1px solid #f1f5f9",
+      borderTop: `4px solid ${accent}`,
+      padding: "18px 18px 16px",
+      boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+      transition: "transform 0.15s ease, box-shadow 0.15s ease"
+    }}>
+      <div style={{
+        width: 40, height: 40, borderRadius: 12,
+        background: `${accent}1A`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 20, marginBottom: 12
+      }}>
+        {icon}
+      </div>
+      <div style={{ fontSize: 24, fontWeight: 900, color: "#0f172a", lineHeight: 1.1 }}>{val}</div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginTop: 2 }}>{label}</div>
+      {subtitle && (
+        <div style={{ fontSize: 11, fontWeight: 700, color: subtitleColor || accent, marginTop: 6 }}>
+          {subtitle}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Helper Date Formatters ── */
 const formatLocalDateStr = (val) => {
   if (!val) return "";
@@ -1140,11 +1171,11 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
 
       {/* KPI Cards Section */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 16, marginBottom: 24 }}>
-        <StatCard icon="👥" label="Total Students" val={studentsCount} color="#3b82f6" bg="#dbeafe" />
-        <StatCard icon="📊" label="Attendance" val={`${attendance}%`} color={attColor} bg={attendance >= 85 ? "#d1fae5" : attendance >= 70 ? "#fef3c7" : "#fee2e2"} />
-        <StatCard icon="🏆" label="Avg Grade" val={gradedAssignments.length ? `${averageScore}%` : "N/A"} color="#8b5cf6" bg="#ede9fe" />
-        <StatCard icon="📜" label="Certificates" val={certificatesCount} color="#06b6d4" bg="#cffafe" />
-        <StatCard icon="📋" label="Pending Tasks" val={pendingTasksCount} color="#ef4444" bg="#fee2e2" />
+        <TeacherStatCard icon="👥" label="Total Students" val={studentsCount} accent="#3b82f6" subtitle="Active" />
+        <TeacherStatCard icon="📊" label="Attendance" val={`${attendance}%`} accent={attColor} subtitle={attendance >= 85 ? "Great ✓" : attendance >= 70 ? "Keep it up" : "Needs attention"} />
+        <TeacherStatCard icon="🏆" label="Avg Grade" val={gradedAssignments.length ? `${averageScore}%` : "N/A"} accent="#8b5cf6" subtitle={gradedAssignments.length ? `${gradedAssignments.length} graded` : "No grades yet"} />
+        <TeacherStatCard icon="📜" label="Certificates" val={certificatesCount} accent="#06b6d4" subtitle="Earned" />
+        <TeacherStatCard icon="📋" label="Pending Tasks" val={pendingTasksCount} accent="#ef4444" subtitle={pendingTasksCount === 0 ? "All clear ✓" : "Awaiting submission"} />
       </div>
 
       {/* ── Weekly Course Schedule & Task Planner Widget ── */}
@@ -2956,22 +2987,22 @@ export default function TeacherDashboard({ user, onLogout }) {
   const pendingAssignmentsCount = courses.filter(a => a.status === "assigned" || a.status === "revision").length;
 
   const navItems = [
-    { key: "overview", label: currentUser?.role === "fellow" ? "Fellow's Dashboard" : "Teacher's Dashboard", icon: "📊" },
-    { key: "children_att", label: "Daily Attendance", icon: "📋" },
-    { key: "geotag", label: "Geotag Attendance", icon: "📍" },
-    { key: "training", label: "Training & Lessons", icon: "🎓" },
-    { key: "planner", label: "AI Lesson Planner", icon: "✏️" },
-    { key: "courses", label: "My Courses", icon: "📚" },
-    { key: "parent_capacity", label: "Parent Capacity Building", icon: "👪" },
-    { key: "assessment", label: "Assessments", icon: "📝" },
-    { key: "certificates", label: "Certificates", icon: "🏆" },
-    { key: "feedback", label: "Feedback", icon: "💬" },
+    { key: "overview", label: currentUser?.role === "fellow" ? "Fellow's Dashboard" : "Teacher's Dashboard", icon: "📊", color: "#3b82f6" },
+    { key: "children_att", label: "Daily Attendance", icon: "📋", color: "#22c55e" },
+    { key: "geotag", label: "Geotag Attendance", icon: "📍", color: "#ec4899" },
+    { key: "training", label: "Training & Lessons", icon: "🎓", color: "#8b5cf6" },
+    { key: "planner", label: "AI Lesson Planner", icon: "✏️", color: "#f59e0b" },
+    { key: "courses", label: "My Courses", icon: "📚", color: "#06b6d4" },
+    { key: "parent_capacity", label: "Parent Capacity Building", icon: "👪", color: "#f97316" },
+    { key: "assessment", label: "Assessments", icon: "📝", color: "#ef4444" },
+    { key: "certificates", label: "Certificates", icon: "🏆", color: "#eab308" },
+    { key: "feedback", label: "Feedback", icon: "💬", color: "#6366f1" },
   ];
 
   // Start: Fellow-only tabs
   if (currentUser?.role === "fellow") {
     navItems.splice(navItems.length - 1, 0,
-      { key: "curriculum", label: t("Curriculum"), icon: "📖" }
+      { key: "curriculum", label: t("Curriculum"), icon: "📖", color: "#14b8a6" }
     );
   }
   // End: Fellow-only tabs
@@ -3055,13 +3086,38 @@ export default function TeacherDashboard({ user, onLogout }) {
           </div>
         </div>
         <nav style={{ padding: "4px 10px", flex: 1, overflowY: "auto", marginBottom: 80 }}>
-          {navItems.map(item => (
-            <button key={item.key} onClick={() => setActiveTab(item.key)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", border: "none", borderRadius: 10, background: activeTab === item.key ? "#dbeafe" : "transparent", color: activeTab === item.key ? "#1e40af" : "#6b7280", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", textAlign: "left", marginBottom: 2, transition: "all 0.18s" }}>
-              <span style={{ fontSize: 15 }}>{item.icon}</span>
-              <span style={{ flex: 1 }}>{t(item.label)}</span>
-              {item.badge > 0 && <span style={{ background: "#ef4444", color: "white", borderRadius: 20, fontSize: 10, fontWeight: 800, padding: "1px 7px" }}>{item.badge}</span>}
-            </button>
-          ))}
+          {navItems.map(item => {
+            const isActive = activeTab === item.key;
+            const accent = item.color || "#3b82f6";
+            return (
+              <button
+                key={item.key}
+                onClick={() => setActiveTab(item.key)}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: 10,
+                  padding: "8px 10px", border: "none",
+                  borderLeft: isActive ? `3px solid ${accent}` : "3px solid transparent",
+                  borderRadius: 10,
+                  background: isActive ? `${accent}14` : "transparent",
+                  color: isActive ? accent : "#6b7280",
+                  fontSize: 12, fontWeight: isActive ? 800 : 600, cursor: "pointer",
+                  fontFamily: "inherit", textAlign: "left", marginBottom: 2, transition: "all 0.18s"
+                }}
+              >
+                <span style={{
+                  width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+                  background: isActive ? accent : `${accent}1A`,
+                  color: isActive ? "white" : accent,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 13, transition: "all 0.18s"
+                }}>
+                  {item.icon}
+                </span>
+                <span style={{ flex: 1 }}>{t(item.label)}</span>
+                {item.badge > 0 && <span style={{ background: "#ef4444", color: "white", borderRadius: 20, fontSize: 10, fontWeight: 800, padding: "1px 7px" }}>{item.badge}</span>}
+              </button>
+            );
+          })}
         </nav>
         <div style={{
           position: "fixed", bottom: 0, left: 0, width: 240,
