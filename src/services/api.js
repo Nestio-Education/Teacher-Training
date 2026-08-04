@@ -1263,12 +1263,14 @@ export function getActivitySubmissions(params = {}) {
   return request(`/api/daily-task-automation/activities/submissions?${searchParams.toString()}`);
 }
 
-export function submitActivityCompletion(assignmentId, taskId, payload) {
-  return request(`/api/daily-task-automation/assignments/${assignmentId}/tasks/${taskId}/complete`, {
+// --- PRAJWAL EDIT: START — removed assignmentId/taskId params, Activity Bank items have no assignment wrapper ---
+export function submitActivityCompletion(activityId, payload) {
+  return request(`/api/daily-task-automation/activities/${activityId}/complete`, {
     method: "POST",
     body: JSON.stringify(payload)
   });
 }
+// --- PRAJWAL EDIT: END ---
 
 export function deleteActivity(id) {
   return request(`/api/daily-task-automation/activities/${id}`, {
