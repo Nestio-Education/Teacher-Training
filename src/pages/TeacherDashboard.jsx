@@ -2583,7 +2583,24 @@ function ParentCapacityBuildingTab({ user, setToast }) {
                   {sess.homePractice && (
                     <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 8 }}>Home Practice: {sess.homePractice}</div>
                   )}
+                {sess.content?.length > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", marginBottom: 6 }}>Content</div>
+                      {sess.content.map((block, ci) => (
+                        <div key={ci} style={{ marginBottom: 8 }}>
+                          {block.heading && <div style={{ fontSize: 12, fontWeight: 700, color: "#1c1917" }}>{block.heading}</div>}
+                          <div style={{ fontSize: 12, color: "#374151", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{block.body}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
+                  {sess.reflection && (
+                    <div style={{ marginTop: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "#1c1917", marginBottom: 6 }}>Reflection</div>
+                      <div style={{ fontSize: 12, color: "#374151", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{sess.reflection}</div>
+                    </div>
+                  )}
                   {/* Snehal change: Mark as Completed / Start Session button */}
                   <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
                     {status === "Completed" ? (
