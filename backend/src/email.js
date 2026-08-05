@@ -48,12 +48,25 @@ export async function sendEmail({ to, subject, html }) {
       return { success: false, error: "SMTP not configured. Set SMTP settings in Settings & Roles > Email." };
     }
 
-    const transporter = nodemailer.createTransport({
+    const transportOpts = {
       host: config.host,
       port: config.port,
       secure: config.port === 465,
       auth: { user: config.user, pass: config.pass },
-    });
+      family: 4, // Force IPv4 to prevent ENETUNREACH / IPv6 errors on cloud servers like Render
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 20000,
+      tls: {
+        rejectUnauthorized: false,
+      },
+    };
+
+    if (config.host && config.host.toLowerCase().includes("gmail")) {
+      transportOpts.service = "gmail";
+    }
+
+    const transporter = nodemailer.createTransport(transportOpts);
 
     const info = await transporter.sendMail({
       from: `"${config.fromName}" <${config.fromEmail}>`,
