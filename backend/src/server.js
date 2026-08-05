@@ -1081,15 +1081,9 @@ app.post("/api/auth/forgot-password-otp", async (req, res, next) => {
     }
 
     const user = await User.findOne({ email }).select("_id email name");
-    // Always return success to prevent email enumeration
-    const successResponse = {
-      success: true,
-      message: "If the account exists, a 6-digit OTP has been sent to your email.",
-      otpExpiryMinutes: OTP_TTL_MINUTES,
-    };
 
     if (!user) {
-      return res.json(successResponse);
+      return res.status(404).json({ message: "No registered account found with this email address. Please check your email or register." });
     }
 
     // Generate 6-digit OTP
@@ -1098,35 +1092,48 @@ app.post("/api/auth/forgot-password-otp", async (req, res, next) => {
     storeOtp(email, otp);
 
     // Send OTP via email
-    // Start: Dnyaneshwari Thorat
-    sendEmail({
-      to: user.email,
-      subject: "SpacECE Portal - Password Reset OTP",
-      html: `
-        <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
-          <div style="text-align:center;margin-bottom:24px;">
-            <h2 style="color:#f59e0b;margin:0;">🔒 Password Reset</h2>
-            <p style="color:#6b7280;font-size:14px;margin-top:8px;">SpacECE Teacher Training Portal</p>
+    let emailSent = false;
+    try {
+      const emailResult = await sendEmail({
+        to: user.email,
+        subject: "SpacECE Portal - Password Reset OTP",
+        html: `
+          <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px;background:#f8fafc;border-radius:16px;">
+            <div style="text-align:center;margin-bottom:24px;">
+              <h2 style="color:#f59e0b;margin:0;">🔒 Password Reset</h2>
+              <p style="color:#6b7280;font-size:14px;margin-top:8px;">SpacECE Teacher Training Portal</p>
+            </div>
+            <div style="background:white;border-radius:12px;padding:24px;text-align:center;border:2px dashed #fbbf24;">
+              <p style="color:#374151;font-size:14px;margin:0 0 12px;">Hello <strong>${user.name || "User"}</strong>,</p>
+              <p style="color:#6b7280;font-size:13px;margin:0 0 20px;">Your 6-digit One-Time Password (OTP) is:</p>
+              <div style="font-size:36px;font-weight:900;color:#f59e0b;letter-spacing:12px;margin:16px 0;background:#fef3c7;padding:16px;border-radius:10px;">${otp}</div>
+              <p style="color:#9ca3af;font-size:12px;margin:16px 0 0;">This OTP expires in <strong>${OTP_TTL_MINUTES} minutes</strong>.</p>
+              <p style="color:#9ca3af;font-size:12px;margin:4px 0 0;">Do not share this code with anyone.</p>
+            </div>
+            <p style="color:#9ca3af;font-size:11px;text-align:center;margin-top:24px;">If you didn't request a password reset, you can safely ignore this email.</p>
           </div>
-          <div style="background:white;border-radius:12px;padding:24px;text-align:center;border:2px dashed #fbbf24;">
-            <p style="color:#374151;font-size:14px;margin:0 0 12px;">Hello <strong>${user.name || "User"}</strong>,</p>
-            <p style="color:#6b7280;font-size:13px;margin:0 0 20px;">Your 6-digit One-Time Password (OTP) is:</p>
-            <div style="font-size:36px;font-weight:900;color:#f59e0b;letter-spacing:12px;margin:16px 0;background:#fef3c7;padding:16px;border-radius:10px;">${otp}</div>
-            <p style="color:#9ca3af;font-size:12px;margin:16px 0 0;">This OTP expires in <strong>${OTP_TTL_MINUTES} minutes</strong>.</p>
-            <p style="color:#9ca3af;font-size:12px;margin:4px 0 0;">Do not share this code with anyone.</p>
-          </div>
-          <p style="color:#9ca3af;font-size:11px;text-align:center;margin-top:24px;">If you didn't request a password reset, you can safely ignore this email.</p>
-        </div>
-      `
-    }).catch(err => console.error("Non-blocking password reset OTP email failed:", err));
+        `
+      });
+      emailSent = !!emailResult?.success;
+    } catch (err) {
+      console.error("[password-reset-otp] Email send exception:", err);
+    }
 
-    console.log("[otp] generated_and_sent", JSON.stringify({
-      email,
-      otpLength: otp.length,
-    }));
+    console.log(`[password-reset-otp] Generated OTP for email ${email}: ${otp} (emailSent: ${emailSent})`);
 
-    res.json({ success: true, message: "OTP sent to your registered email address.", devOtp: undefined });
-    // End: Dnyaneshwari Thorat
+    const mailConf = await PortalSetting.find({ key: { $in: ["smtpHost", "smtpUser"] } });
+    const isMailConfigured = mailConf && mailConf.length >= 2 && mailConf.every(c => c.value);
+    const devOtp = (!emailSent || !isMailConfigured || process.env.NODE_ENV !== "production") ? otp : undefined;
+
+    res.json({
+      success: true,
+      emailSent,
+      otpExpiryMinutes: OTP_TTL_MINUTES,
+      message: emailSent
+        ? "OTP sent to your registered email address."
+        : "OTP generated successfully.",
+      devOtp,
+    });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
   }
