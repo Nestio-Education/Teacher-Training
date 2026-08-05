@@ -1,4 +1,5 @@
 import puppeteer from "puppeteer";
+import PDFDocument from "pdfkit";
 import express from "express";
 import fs from "fs";
 import path from "path";
@@ -403,14 +404,123 @@ router.get("/:id/pdf", requireAuth, async (req, res, next) => {
     </html>`;
     // End: Prajwal edit
 
-    const browser = await puppeteer.launch({ args: ["--no-sandbox"] });
-    const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle0" });
-    const pdfUint8 = await page.pdf({ format: "A4", landscape: true, printBackground: true });
-    const pdfBuffer = Buffer.from(pdfUint8);
-    await browser.close();
+    // Helper for PDFKit vector certificate generation (fallback for cloud/Render where Puppeteer is missing Chrome OS libraries)
+    function generatePdfKitCertificate(certData, formattedDate) {
+      return new Promise((resolve, reject) => {
+        try {
+          const doc = new PDFDocument({
+            size: "A4",
+            layout: "landscape",
+            margin: 0,
+          });
 
-    // Start: Dnyaneshwari Thorat
+          const buffers = [];
+          doc.on("data", (chunk) => buffers.push(chunk));
+          doc.on("end", () => resolve(Buffer.concat(buffers)));
+          doc.on("error", (err) => reject(err));
+
+          const width = 841.89;
+          const height = 595.28;
+
+          // Background fill
+          doc.rect(0, 0, width, height).fill("#faf6ed");
+
+          // Outer & Inner Borders
+          doc.rect(20, 20, width - 40, height - 40).strokeColor("#b8860b").lineWidth(3).stroke();
+          doc.rect(30, 30, width - 60, height - 60).strokeColor("#d4af37").lineWidth(1.5).stroke();
+
+          // Corners
+          doc.moveTo(30, 60).lineTo(30, 30).lineTo(60, 30).strokeColor("#b8860b").lineWidth(3.5).stroke();
+          doc.moveTo(width - 60, 30).lineTo(width - 30, 30).lineTo(width - 30, 60).strokeColor("#b8860b").lineWidth(3.5).stroke();
+          doc.moveTo(width - 30, height - 60).lineTo(width - 30, height - 30).lineTo(width - 60, height - 30).strokeColor("#b8860b").lineWidth(3.5).stroke();
+          doc.moveTo(60, height - 30).lineTo(30, height - 30).lineTo(30, height - 60).strokeColor("#b8860b").lineWidth(3.5).stroke();
+
+          // Logo if exists
+          const logoPath = path.join(__dirname, "../assets/logo.png");
+          if (fs.existsSync(logoPath)) {
+            doc.image(logoPath, width / 2 - 25, 45, { width: 50 });
+          }
+
+          // Header
+          doc.font("Helvetica-Bold").fontSize(18).fillColor("#78350f").text("SpacECE Teacher Training Portal", 0, 105, { align: "center" });
+          doc.font("Helvetica-Bold").fontSize(9).fillColor("#a16207").text("EARLY CHILDHOOD EDUCATION", 0, 128, { align: "center" });
+
+          // Divider
+          doc.moveTo(width / 2 - 70, 145).lineTo(width / 2 + 70, 145).strokeColor("#d4af37").lineWidth(1).stroke();
+
+          // Certificate Title
+          doc.font("Times-Bold").fontSize(34).fillColor("#92400e").text("Certificate of Completion", 0, 160, { align: "center" });
+          doc.font("Helvetica-Bold").fontSize(10).fillColor("#a16207").text("AWARDED IN RECOGNITION OF ACHIEVEMENT", 0, 202, { align: "center" });
+
+          // Recipient
+          doc.font("Times-Italic").fontSize(14).fillColor("#57534e").text("This certificate is proudly presented to", 0, 230, { align: "center" });
+          const teacherName = certData.teacher?.name || "Teacher";
+          doc.font("Times-BoldItalic").fontSize(36).fillColor("#78350f").text(teacherName, 0, 255, { align: "center" });
+
+          // Underline
+          doc.moveTo(width / 2 - 140, 302).lineTo(width / 2 + 140, 302).strokeColor("#d4af37").lineWidth(1.5).stroke();
+
+          // Course
+          doc.font("Times-Italic").fontSize(13).fillColor("#57534e").text("for successfully completing the course", 0, 318, { align: "center" });
+          const courseTitle = certData.course?.title || "Course";
+          doc.font("Helvetica-Bold").fontSize(20).fillColor("#1c1917").text(courseTitle, 60, 340, { align: "center", width: width - 120 });
+
+          // Metadata
+          const certNum = certData.certificateNumber || "SPC-00000";
+          const grade = certData.grade || "Pass";
+
+          doc.font("Helvetica-Bold").fontSize(9).fillColor("#a8a29e").text("CERTIFICATE NO.", 150, 420, { width: 150, align: "center" });
+          doc.font("Helvetica-Bold").fontSize(13).fillColor("#1c1917").text(certNum, 150, 435, { width: 150, align: "center" });
+
+          doc.font("Helvetica-Bold").fontSize(9).fillColor("#a8a29e").text("GRADE", 346, 420, { width: 150, align: "center" });
+          doc.font("Helvetica-Bold").fontSize(13).fillColor("#1c1917").text(grade, 346, 435, { width: 150, align: "center" });
+
+          doc.font("Helvetica-Bold").fontSize(9).fillColor("#a8a29e").text("DATE ISSUED", 542, 420, { width: 150, align: "center" });
+          doc.font("Helvetica-Bold").fontSize(13).fillColor("#1c1917").text(formattedDate, 542, 435, { width: 150, align: "center" });
+
+          // Signature
+          doc.moveTo(180, 520).lineTo(360, 520).strokeColor("#78350f").lineWidth(1).stroke();
+          doc.font("Helvetica-Bold").fontSize(10).fillColor("#57534e").text("Authorized Signatory", 180, 526, { width: 180, align: "center" });
+
+          // Seal
+          doc.circle(600, 510, 32).fillAndStroke("#d97706", "#fde68a");
+          doc.font("Helvetica-Bold").fontSize(9).fillColor("#ffffff").text("SPACECE\nVERIFIED", 570, 501, { width: 60, align: "center" });
+
+          doc.end();
+        } catch (err) {
+          reject(err);
+        }
+      });
+    }
+
+    let pdfBuffer;
+    try {
+      const launchArgs = [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-accelerated-2d-canvas",
+        "--no-first-run",
+        "--no-zygote",
+        "--single-process",
+        "--disable-gpu"
+      ];
+      const launchOptions = { args: launchArgs };
+      if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+        launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+      }
+
+      const browser = await puppeteer.launch(launchOptions);
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: "networkidle0" });
+      const pdfUint8 = await page.pdf({ format: "A4", landscape: true, printBackground: true });
+      pdfBuffer = Buffer.from(pdfUint8);
+      await browser.close();
+    } catch (puppeteerErr) {
+      console.warn("[Certificates] Puppeteer browser launch failed (common on cloud hosting like Render). Falling back to PDFKit:", puppeteerErr.message);
+      pdfBuffer = await generatePdfKitCertificate(cert, dateStr);
+    }
+
     const isView = req.query.view === "true";
     res.set({
       "Content-Type": "application/pdf",
@@ -418,7 +528,6 @@ router.get("/:id/pdf", requireAuth, async (req, res, next) => {
         ? "inline"
         : `attachment; filename="Certificate-${cert.certificateNumber}.pdf"`,
     });
-    // End: Dnyaneshwari Thorat
     res.send(pdfBuffer);
   } catch (err) {
     next(err);

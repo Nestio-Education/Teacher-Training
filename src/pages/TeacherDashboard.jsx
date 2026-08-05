@@ -1130,7 +1130,27 @@ function MyAttendanceSummaryCard({ attendance = 0, summary = {}, attendanceMap =
 
 /* ── OverviewTab ── */
 function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lessons = [], activities = [], summary = {} }) {
-  const attendance = summary.attendanceRate !== undefined ? summary.attendanceRate : 0;
+  const attendanceMap = summary.attendanceMap || {};
+const today = new Date();
+const todayDate = today.getDate();
+const currentMonth = today.getMonth();
+const currentYear = today.getFullYear();
+
+const isWeekend = (day) => {
+  const d = new Date(currentYear, currentMonth, day).getDay();
+  return d === 0 || d === 6;
+};
+const getDayKey = (day) =>
+  `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+
+const totalWorkdays = Array.from({ length: todayDate }, (_, i) => i + 1).filter(d => !isWeekend(d)).length;
+const presentWorkdays = Array.from({ length: todayDate }, (_, i) => i + 1)
+  .filter(d => !isWeekend(d) && (attendanceMap[getDayKey(d)]?.checkedIn || attendanceMap[getDayKey(d)]?.status === "present"))
+  .length;
+
+const attendance = totalWorkdays > 0
+  ? Math.round((presentWorkdays / totalWorkdays) * 100)
+  : (summary.attendanceRate !== undefined ? summary.attendanceRate : 0);
   const attColor = attendance >= 85 ? "#10b981" : attendance >= 70 ? "#f59e0b" : "#ef4444";
   const photoUrl = getTeacherPhotoUrl(user);
 
@@ -1584,13 +1604,25 @@ function CertificatesTab({ assignments = [], certificates: certs = [] }) {
               {isRealCert && (
                 <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                   <button
-                    onClick={() => viewCertificatePdf(item._id)}
+                    onClick={async () => {
+                      try {
+                        await viewCertificatePdf(item._id);
+                      } catch (err) {
+                        alert(err.message || "Failed to view certificate. Please try again.");
+                      }
+                    }}
                     style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "1px solid #d97706", background: "white", color: "#d97706", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
                   >
                     👁️ View Certificate
                   </button>
                   <button
-                    onClick={() => downloadCertificatePdf(item._id, `Certificate-${item.certificateNumber}.pdf`)}
+                    onClick={async () => {
+                      try {
+                        await downloadCertificatePdf(item._id, `Certificate-${item.certificateNumber}.pdf`);
+                      } catch (err) {
+                        alert(err.message || "Failed to download certificate. Please try again.");
+                      }
+                    }}
                     style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "white", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
                   >
                     ⬇️ Download
