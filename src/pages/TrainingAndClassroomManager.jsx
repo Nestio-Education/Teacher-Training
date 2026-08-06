@@ -489,7 +489,12 @@ function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
       );
       // --- PRAJWAL EDIT: END ---
 
-      onSubmit();
+      onSubmit(res?.submission || {
+        _id: Date.now().toString(),
+        activityBank: activity._id || activity.id,
+        activityName: activity.activityName,
+        dayNumber: activity.dayNumber
+      });
       onClose();
     } catch (err) {
       setError(err.message || "Failed to submit completion report.");
@@ -1027,7 +1032,7 @@ export default function TrainingAndClassroomManager({ user }) {
       setActivityCards(bankActivities);
 
       // Already submitted completions (to mark cards as done)
-      const subs = submissionRes.activities || [];
+      const subs = submissionRes.submissions || submissionRes.activities || [];
       setSubmissions(subs);
     } catch (err) {
       console.error("Failed to load data:", err);
@@ -1095,11 +1100,16 @@ export default function TrainingAndClassroomManager({ user }) {
 
   // Check if a specific activity has been submitted as completed
   const isActivityCompleted = (activity) => {
-    const activityId = String(activity._id || activity.activityId || "");
+    const activityId = String(activity._id || activity.activityId || activity.id || "");
     return submissions.some(sub => {
-      const subBankId = String(sub.activityBank || "");
-      return (subBankId && subBankId === activityId) ||
-        (sub.activityName === activity.activityName && sub.dayNumber === activity.dayNumber);
+      const subBankId = String(sub.activityBank?._id || sub.activityBank?.id || sub.activityBank || "");
+      const subActName = String(sub.activityName || sub.title || "").trim().toLowerCase();
+      const actName = String(activity.activityName || activity.title || "").trim().toLowerCase();
+
+      const matchId = Boolean(subBankId && activityId && subBankId === activityId);
+      const matchName = Boolean(actName && subActName && actName === subActName);
+
+      return matchId || matchName;
     });
   };
 
@@ -1151,6 +1161,7 @@ export default function TrainingAndClassroomManager({ user }) {
 
   const handleCompleteSubmit = async (assignmentId, payload) => {
     await submitLessonCompletion(assignmentId, payload);
+    setLessonAssignments(prev => prev.map(l => (l._id === assignmentId || l.id === assignmentId ? { ...l, status: "completed" } : l)));
     setToast({ msg: "Completion report submitted for admin review!", type: "success" });
     loadData();
   };
@@ -1214,8 +1225,11 @@ export default function TrainingAndClassroomManager({ user }) {
         <MarkCompleteModal
           activity={completeActivity}
           user={user}
-          onSubmit={() => {
+          onSubmit={(newSub) => {
             setToast({ msg: "Activity completion report submitted for admin review!", type: "success" });
+            if (newSub) {
+              setSubmissions(prev => [newSub, ...prev]);
+            }
             setCompleteActivity(null);
             loadData();
           }}

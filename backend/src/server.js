@@ -1125,6 +1125,8 @@ app.post("/api/auth/forgot-password-otp", async (req, res, next) => {
     const isMailConfigured = mailConf && mailConf.length >= 2 && mailConf.every(c => c.value);
     const devOtp = (!emailSent || !isMailConfigured || process.env.NODE_ENV !== "production") ? otp : undefined;
 
+    const resetToken = createPasswordResetToken(user.email);
+
     res.json({
       success: true,
       emailSent,
@@ -1133,6 +1135,7 @@ app.post("/api/auth/forgot-password-otp", async (req, res, next) => {
         ? "OTP sent to your registered email address."
         : "OTP generated successfully.",
       devOtp,
+      resetToken,
     });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });

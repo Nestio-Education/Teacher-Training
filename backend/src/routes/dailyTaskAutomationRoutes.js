@@ -71,11 +71,11 @@ router.post("/activities/upload", requireAuth, upload.single("file"), async (req
 
     const result = await importActivitiesFromExcel(req.file.path, req.user.id);
     console.log("==> IMPORT SUCCESS:", result);
-    fs.unlink(req.file.path, () => {});
+    fs.unlink(req.file.path, () => { });
     res.json({ success: true, ...result });
   } catch (error) {
     console.error("==> IMPORT ERROR:", error);
-    if (req.file?.path) fs.unlink(req.file.path, () => {});
+    if (req.file?.path) fs.unlink(req.file.path, () => { });
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -177,7 +177,7 @@ router.get("/activities", async (req, res) => {
 router.post("/activities", requireAuth, async (req, res) => {
   try {
     const { activityName, ageGroup, developmentalDomain, materialsRequired, expectedLearningOutcomes, duration, level, className, type, milestone, purposeOfActivity, howToConduct, facilitatorRole, dayNumber, learningObjectives, activities, resources, instructions, expectedOutput, notes } = req.body;
-    
+
     if (!activityName) {
       return res.status(400).json({ success: false, message: "Activity Name is required" });
     }
