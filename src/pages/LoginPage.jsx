@@ -4,7 +4,7 @@ import { isValidPhoneNumber } from "libphonenumber-js";
 // End: Dnyaneshwari Thorat
 import { Logo, Toast, Particles, S, globalCSS } from "../components/Shared";
 // Start: Dnyaneshwari Thorat
-import { loginUser, registerTeacher, registerMentor, requestPasswordReset, resetPassword, verifyPasswordResetToken, requestPasswordResetOtp, verifyPasswordOtp, sendSignupOtp, verifySignupOtp } from "../services/api";
+import { loginUser, registerTeacher, registerMentor, requestPasswordReset, resetPassword, verifyPasswordResetToken, requestPasswordResetOtp, verifyPasswordOtp, sendSignupOtp, verifySignupOtp, getPublicCenters } from "../services/api";
 // End: Dnyaneshwari Thorat
 
 /* ── Animated illustration (UNCHANGED — original animation kept as-is) ── */
@@ -668,6 +668,18 @@ function RegisterForm({ onBack }) {
   const [emailOtp, setEmailOtp] = useState("");
   const [emailOtpDev, setEmailOtpDev] = useState("");
   const [verifying, setVerifying] = useState(false);
+   // Start: Prajwal edit — fetch centers from DB for the dropdown
+  const [centers, setCenters] = useState([]);
+  const [centersLoading, setCentersLoading] = useState(true);
+  const [centersError, setCentersError] = useState("");
+
+  useEffect(() => {
+    getPublicCenters()
+      .then((data) => setCenters(data.centers || []))
+      .catch((err) => setCentersError(err.message || "Failed to load centers."))
+      .finally(() => setCentersLoading(false));
+  }, []);
+  // End: Prajwal edit
 
   // Start: Prajwal edit
   // NOTE: Photo upload feature removed (handlePhotoUpload function and its JSX deleted).
@@ -758,7 +770,8 @@ function RegisterForm({ onBack }) {
         password,
         qualification: "B.Ed",
         experience: "2 years",
-        address,
+        address: form.address,   
+        center: centerId,
       })
         .then(() => {
           setToast({ msg: "Registration submitted! Awaiting admin approval.", type: "success" });
@@ -776,7 +789,8 @@ function RegisterForm({ onBack }) {
         password,
         qualification: "Graduate",
         experience: "2 years",
-        address,
+        address:form.address,
+        center: centerId, 
         fellowshipSemester: role === "fellow" ? 1 : undefined,
         role,
       })
@@ -980,21 +994,45 @@ function RegisterForm({ onBack }) {
         ))}
         {/* Start: Prajwal edit — Upload Profile Photo field removed here */}
         {/* End: Prajwal edit */}
-        {/* Start: Prajwal edit — School/Address changed from free-text to dropdown */}
-        <div style={ci.mb}>
-          <label style={ci.label}>School / Address</label>
-          <select
-            value={form.address}
-            onChange={e => setForm({ ...form, address: e.target.value })}
-            style={{ ...S.input, fontSize: 12, padding: "7px 10px", marginBottom: 0, cursor: "pointer" }}
-          >
-            <option value="">Select a center</option>
-            <option value="Udaan Centre, Dhayari, Pune">Udaan Centre, Dhayari, Pune</option>
-            <option value="Umang Centre, Gosavi Vasti, Karve Nagar, Pune">Umang Centre, Gosavi Vasti, Karve Nagar, Pune</option>
-            <option value="Umang Centre, Shivane, Pune">Umang Centre, Shivane, Pune</option>
-          </select>
-        </div>
-        {/* End: Prajwal edit */}
+      {/* Start: Prajwal edit — School/Address now loaded live from the database */}
+<div style={ci.mb}>
+  <label style={ci.label}>School / Address *</label>
+  <select
+    required
+    value={form.centerId}
+    onChange={e => {
+      const selected = centers.find(c => c._id === e.target.value);
+      setForm({
+        ...form,
+        centerId: e.target.value,
+        address: selected ? selected.name : "",
+      });
+    }}
+    disabled={centersLoading}
+    style={{
+      ...S.input,
+      fontSize: 12,
+      padding: "7px 10px",
+      marginBottom: 0,
+      cursor: centersLoading ? "not-allowed" : "pointer",
+    }}
+  >
+    <option value="">
+      {centersLoading ? "Loading centers..." : "Select a center"}
+    </option>
+    {centers.map((c) => (
+      <option key={c._id} value={c._id}>
+        {c.name}{c.city ? `, ${c.city}` : ""}
+      </option>
+    ))}
+  </select>
+  {centersError && (
+    <p style={{ fontSize: 10, color: "#ef4444", marginTop: 3, marginBottom: 0 }}>
+      ⚠️ {centersError}
+    </p>
+  )}
+</div>
+{/* End: Prajwal edit */}
         <div style={ci.mb}>
           <label style={ci.label}>Password</label>
           <div style={{ position: "relative" }}>

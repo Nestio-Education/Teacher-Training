@@ -1530,3 +1530,8 @@ export function getMentorFellowsAttendance(params = {}) {
   if (params.date) searchParams.append("date", params.date);
   return request(`/api/mentor/fellows/attendance?${searchParams.toString()}`);
 }
+
+// Public: used by the registration form (no auth required)
+export function getPublicCenters() {
+  return request("/api/public/centers");
+}
