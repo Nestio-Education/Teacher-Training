@@ -627,7 +627,8 @@ const bypassRoutes = [
   "/api/auth/forgot-password-otp",
   "/api/auth/verify-otp",
   "/api/auth/reset-password",
-  "/api/auth/reset-password/verify"
+  "/api/auth/reset-password/verify",
+  "/api/public/centers" 
 ];
 
 app.use(async (req, res, next) => {
@@ -1279,6 +1280,17 @@ app.get("/api/admin/dashboard", requireAuth, requireRole("admin", "mentor"), asy
       pendingMentors,
       courseCompletionPercent: assignedCourses ? Math.round((completedCourses / assignedCourses) * 100) : 0,
     });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+app.get("/api/public/centers", async (_req, res, next) => {
+  try {
+    const centers = await Center.find({ status: "active" })
+      .select("name address city")
+      .sort({ name: 1 });
+    res.json({ centers });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
   }
