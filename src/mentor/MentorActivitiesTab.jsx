@@ -22,7 +22,7 @@ function formatAge(dateString) {
 export default function MentorActivitiesTab({ user, setToast }) {
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Filtering & Sorting State
   const [statusTab, setStatusTab] = useState("pending"); // "pending" | "approved" | "flagged" | "rejected" | "all"
   const [search, setSearch] = useState("");
@@ -221,9 +221,37 @@ export default function MentorActivitiesTab({ user, setToast }) {
 
   const activeIndex = selectedActivity ? filteredSubmissions.findIndex(a => a._id === selectedActivity._id) : -1;
 
+  const handleExportCsv = () => {
+    const rows = [
+      ["Date", "Fellow Name", "Activity Name", "Day Number", "Developmental Domains", "Group Mastery", "Next Planned Step", "Flagged Children", "Description", "Status"],
+      ...filteredSubmissions.map(act => [
+        act.activityDate ? new Date(act.activityDate).toLocaleDateString("en-IN") : "",
+        act.teacher?.name || "Fellow",
+        act.activityName || "Activity",
+        act.dayNumber || "",
+        Array.isArray(act.developmentalDomain) ? act.developmentalDomain.join("; ") : (act.developmentalDomain || "Cognitive"),
+        act.groupMastery || "Developing",
+        act.followUpAction || "proceed_next",
+        (act.flaggedChildren || []).map(f => `${f.childName} (${f.status})`).join("; ") || "None",
+        (act.description || "").replace(/\n/g, " "),
+        act.status || "pending"
+      ])
+    ];
+
+    const csvContent = rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Fellow_Activity_Reports_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setToast?.({ msg: "Fellow Activity Reports exported to Excel/CSV!", type: "success" });
+  };
+
   return (
     <div style={{ animation: "fadeIn 0.3s ease", color: "#0f172a", fontFamily: "inherit" }}>
-      
+
       {/* Header Banner */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
         <div>
@@ -238,14 +266,20 @@ export default function MentorActivitiesTab({ user, setToast }) {
 
         <div style={{ display: "flex", gap: 10 }}>
           {selectedIds.length > 0 && (
-            <button 
+            <button
               onClick={handleBulkApprove}
               style={{ padding: "9px 16px", borderRadius: 8, border: "none", background: "#059669", color: "#ffffff", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
             >
               ⚡ Bulk Approve ({selectedIds.length})
             </button>
           )}
-          <button 
+          <button
+            onClick={handleExportCsv}
+            style={{ padding: "9px 16px", borderRadius: 8, border: "1px solid #059669", background: "#ecfdf5", color: "#065f46", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
+          >
+            📥 Export to Excel (.csv)
+          </button>
+          <button
             onClick={handleSeedSamples}
             style={{ padding: "9px 16px", borderRadius: 8, border: "1px solid #cbd5e1", background: "#ffffff", color: "#0f172a", fontWeight: 700, fontSize: 13, cursor: "pointer" }}
           >
@@ -289,8 +323,8 @@ export default function MentorActivitiesTab({ user, setToast }) {
         <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
           <div style={{ position: "relative", width: 260 }}>
             <span style={{ position: "absolute", left: 10, top: 8, color: "#94a3b8", fontSize: 14 }}>🔍</span>
-            <input 
-              type="text" 
+            <input
+              type="text"
               placeholder="Search by fellow or activity..."
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -299,8 +333,8 @@ export default function MentorActivitiesTab({ user, setToast }) {
           </div>
 
           {/* Module Filter */}
-          <select 
-            value={moduleFilter} 
+          <select
+            value={moduleFilter}
             onChange={e => setModuleFilter(e.target.value)}
             style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 12, fontWeight: 600, outline: "none" }}
           >
@@ -312,8 +346,8 @@ export default function MentorActivitiesTab({ user, setToast }) {
           </select>
 
           {/* Type Filter */}
-          <select 
-            value={typeFilter} 
+          <select
+            value={typeFilter}
             onChange={e => setTypeFilter(e.target.value)}
             style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 12, fontWeight: 600, outline: "none" }}
           >
@@ -326,8 +360,8 @@ export default function MentorActivitiesTab({ user, setToast }) {
         {/* Sort & Select All */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>Sort:</span>
-          <select 
-            value={sortBy} 
+          <select
+            value={sortBy}
             onChange={e => setSortBy(e.target.value)}
             style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 12, fontWeight: 600, outline: "none" }}
           >
@@ -381,7 +415,7 @@ export default function MentorActivitiesTab({ user, setToast }) {
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 14, flex: 1 }}>
                   {/* Select Checkbox */}
-                  <input 
+                  <input
                     type="checkbox"
                     checked={isSelected}
                     onChange={(e) => {
@@ -405,6 +439,36 @@ export default function MentorActivitiesTab({ user, setToast }) {
                       </span>
                     </div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>{act.activityName}</div>
+
+                    {/* Structured ECE Metric Badges (With Fallbacks for Legacy Reports) */}
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", margin: "4px 0" }}>
+                      {Array.isArray(act.developmentalDomain) && act.developmentalDomain.length > 0 ? (
+                        act.developmentalDomain.map((d, di) => (
+                          <span key={di} style={{ padding: "2px 8px", borderRadius: 12, fontSize: 10, fontWeight: 700, background: "#faf5ff", color: "#7c3aed", border: "1px solid #e9d5ff" }}>
+                            🧠 {d}
+                          </span>
+                        ))
+                      ) : (
+                        <span style={{ padding: "2px 8px", borderRadius: 12, fontSize: 10, fontWeight: 700, background: "#faf5ff", color: "#7c3aed", border: "1px solid #e9d5ff" }}>
+                          🧠 {act.developmentalDomain || "Cognitive"}
+                        </span>
+                      )}
+
+                      <span style={{ padding: "2px 8px", borderRadius: 12, fontSize: 10, fontWeight: 700, background: (act.groupMastery || "Developing") === "Mastered" ? "#d1fae5" : (act.groupMastery || "Developing") === "Emerging" ? "#fee2e2" : "#fffbeb", color: (act.groupMastery || "Developing") === "Mastered" ? "#065f46" : (act.groupMastery || "Developing") === "Emerging" ? "#991b1b" : "#92400e" }}>
+                        🏅 Mastery: {act.groupMastery || "Developing"}
+                      </span>
+
+                      <span style={{ padding: "2px 8px", borderRadius: 12, fontSize: 10, fontWeight: 700, background: "#e0f2fe", color: "#0369a1", border: "1px solid #bae6fd" }}>
+                        🔁 {act.followUpAction === "remediate_subgroup" ? "Remediate Tagged Subgroup" : act.followUpAction === "repeat_activity" ? "Repeat Activity Tomorrow" : "Proceed to Next Activity"}
+                      </span>
+
+                      {(act.flaggedChildren || []).length > 0 && (
+                        <span style={{ padding: "2px 8px", borderRadius: 12, fontSize: 10, fontWeight: 700, background: "#fef2f2", color: "#991b1b", border: "1px solid #fca5a5" }}>
+                          ⚠️ Flagged ({act.flaggedChildren.length}): {act.flaggedChildren.map(f => `${f.childName} (${f.status === "advanced" ? "Advanced" : "Needs Help"})`).join(", ")}
+                        </span>
+                      )}
+                    </div>
+
                     <div style={{ fontSize: 12, color: "#64748b", marginTop: 2, display: "flex", gap: 12 }}>
                       <span>Submitted {ageStr}</span>
                       {isAging && <span style={{ color: "#ef4444", fontWeight: 800 }}>⚠️ Aging (&gt;48h)</span>}
@@ -446,14 +510,14 @@ export default function MentorActivitiesTab({ user, setToast }) {
       {/* ========================================================= */}
       {selectedActivity && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", justifyContent: "flex-end", zIndex: 1000, animation: "fadeIn 0.2s ease" }}>
-          <div 
-            style={{ 
-              width: 540, 
-              background: "#ffffff", 
-              height: "100%", 
-              boxShadow: "-8px 0 25px rgba(0,0,0,0.15)", 
-              display: "flex", 
-              flexDirection: "column", 
+          <div
+            style={{
+              width: 540,
+              background: "#ffffff",
+              height: "100%",
+              boxShadow: "-8px 0 25px rgba(0,0,0,0.15)",
+              display: "flex",
+              flexDirection: "column",
               justifyContent: "space-between",
               animation: "slideInRight 0.25s ease"
             }}
@@ -471,7 +535,7 @@ export default function MentorActivitiesTab({ user, setToast }) {
                   </div>
                 </div>
 
-                <button 
+                <button
                   onClick={() => setSelectedActivity(null)}
                   style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#64748b" }}
                 >
@@ -492,7 +556,7 @@ export default function MentorActivitiesTab({ user, setToast }) {
 
             {/* Drawer Content Body */}
             <div style={{ padding: 24, overflowY: "auto", flex: 1 }}>
-              
+
               {/* Submission Text / Description */}
               <div style={{ marginBottom: 20 }}>
                 <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "#64748b", textTransform: "uppercase", marginBottom: 6 }}>
@@ -509,7 +573,7 @@ export default function MentorActivitiesTab({ user, setToast }) {
                   <label style={{ display: "block", fontSize: 11, fontWeight: 800, color: "#64748b", textTransform: "uppercase", marginBottom: 8 }}>
                     Attached Media & File Assets ({selectedActivity.files.length})
                   </label>
-                  
+
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {selectedActivity.files.map((file, idx) => (
                       <div key={idx} style={{ background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: 8, padding: 10 }}>
@@ -527,10 +591,10 @@ export default function MentorActivitiesTab({ user, setToast }) {
                                 <div style={{ fontSize: 10, color: "#64748b" }}>Document file</div>
                               </div>
                             </div>
-                            <a 
-                              href={file.url} 
-                              download 
-                              target="_blank" 
+                            <a
+                              href={file.url}
+                              download
+                              target="_blank"
                               rel="noreferrer"
                               style={{ padding: "4px 10px", background: "#f1f5f9", color: "#0f172a", borderRadius: 4, fontSize: 11, fontWeight: 700, textDecoration: "none" }}
                             >
@@ -549,7 +613,7 @@ export default function MentorActivitiesTab({ user, setToast }) {
                 <label style={{ display: "block", fontSize: 12, fontWeight: 800, color: "#b45309", marginBottom: 6 }}>
                   Mentor Remarks & Feedback *
                 </label>
-                <textarea 
+                <textarea
                   rows={3}
                   value={feedbackText}
                   onChange={e => setFeedbackText(e.target.value)}
@@ -582,21 +646,21 @@ export default function MentorActivitiesTab({ user, setToast }) {
             <div style={{ padding: "16px 24px", borderTop: "1px solid #e2e8f0", background: "#ffffff" }}>
               {/* Action Buttons */}
               <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
-                <button 
+                <button
                   disabled={submitting}
                   onClick={() => handleReviewAction("approved")}
                   style={{ flex: 1, padding: "10px", background: "#059669", color: "#ffffff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 800, cursor: "pointer" }}
                 >
                   ✓ Approve (A)
                 </button>
-                <button 
+                <button
                   disabled={submitting}
                   onClick={() => handleReviewAction("flagged")}
                   style={{ flex: 1, padding: "10px", background: "#ea580c", color: "#ffffff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 800, cursor: "pointer" }}
                 >
                   ⟳ Rework (R)
                 </button>
-                <button 
+                <button
                   disabled={submitting}
                   onClick={() => handleReviewAction("rejected")}
                   style={{ padding: "10px 14px", background: "#ef4444", color: "#ffffff", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 800, cursor: "pointer" }}
@@ -607,7 +671,7 @@ export default function MentorActivitiesTab({ user, setToast }) {
 
               {/* Queue Navigation Footer */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 12, color: "#64748b" }}>
-                <button 
+                <button
                   disabled={activeIndex <= 0}
                   onClick={() => openDrawer(filteredSubmissions[activeIndex - 1])}
                   style={{ background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: activeIndex > 0 ? "pointer" : "not-allowed", opacity: activeIndex > 0 ? 1 : 0.4 }}
@@ -617,7 +681,7 @@ export default function MentorActivitiesTab({ user, setToast }) {
 
                 <span>Submission {activeIndex + 1} of {filteredSubmissions.length}</span>
 
-                <button 
+                <button
                   disabled={activeIndex >= filteredSubmissions.length - 1}
                   onClick={() => openDrawer(filteredSubmissions[activeIndex + 1])}
                   style={{ background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: activeIndex < filteredSubmissions.length - 1 ? "pointer" : "not-allowed", opacity: activeIndex < filteredSubmissions.length - 1 ? 1 : 0.4 }}
