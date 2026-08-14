@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -105,18 +106,43 @@ router.get("/activities/submissions", requireAuth, async (req, res) => {
   }
 });
 
-// --- PRAJWAL EDIT: START — new route to submit an Activity Bank completion report ---
+// --- PRAJWAL EDIT: START — submission route for Activity Bank and Custom Dashboard Tasks ---
 router.post("/activities/:activityId/complete", requireAuth, async (req, res) => {
   try {
-    const activity = await ActivityBank.findById(req.params.activityId);
-    if (!activity) {
-      return res.status(404).json({ success: false, message: "Activity not found" });
+    let activityBankId = null;
+    if (mongoose.Types.ObjectId.isValid(req.params.activityId)) {
+      const activity = await ActivityBank.findById(req.params.activityId);
+      if (activity) activityBankId = activity._id;
+    }
+
+    const payload = { ...req.body };
+
+    // Clean up empty string ObjectIds to prevent Mongoose BSONError
+    if (!payload.class || payload.class === "" || !mongoose.Types.ObjectId.isValid(payload.class)) {
+      delete payload.class;
+    }
+    if (!payload.center || payload.center === "" || !mongoose.Types.ObjectId.isValid(payload.center)) {
+      delete payload.center;
+    }
+    if (!payload.mentor || payload.mentor === "" || !mongoose.Types.ObjectId.isValid(payload.mentor)) {
+      delete payload.mentor;
+    }
+
+    // Clean up flaggedChildren ObjectIds if custom child name typed
+    if (Array.isArray(payload.flaggedChildren)) {
+      payload.flaggedChildren = payload.flaggedChildren.map((f) => {
+        const item = { ...f };
+        if (!item.child || item.child === "" || !mongoose.Types.ObjectId.isValid(item.child)) {
+          delete item.child;
+        }
+        return item;
+      });
     }
 
     const submission = await ActivitySubmission.create({
-      ...req.body,
+      ...payload,
       teacher: req.user.id,
-      activityBank: req.params.activityId
+      activityBank: activityBankId
     });
 
     res.status(201).json({ success: true, submission });

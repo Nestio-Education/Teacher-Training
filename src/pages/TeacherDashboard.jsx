@@ -6,7 +6,7 @@ import { updateTeacherNotificationPreference, getParentModules, getParentSession
 // End: Snehal change
 
 import AttendanceManager from "./AttendanceManager";
-import TrainingAndClassroomManager from "./TrainingAndClassroomManager";
+import TrainingAndClassroomManager, { MarkCompleteModal } from "./TrainingAndClassroomManager";
 import GeotagAttendance from "./GeotagAttendance";
 import ProctoredAssessment from "./Proctoredassessment";      // now reading/notes based, same filename
 import TeacherCourseNotes from "./TeacherCourseNotes";    // NEW — replaces the old video CoursesTab
@@ -372,6 +372,8 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
     setShowAddTaskModal(false);
   };
 
+  const [completeModalTask, setCompleteModalTask] = useState(null);
+
   const toggleTaskStatus = (id) => {
     setCustomTasks(prev => prev.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
     toggleTeacherTask(id).catch(err => console.warn("[DB Sync] Toggle task failed:", err?.message));
@@ -729,7 +731,13 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
                             ✏️
                           </button>
                           <button
-                            onClick={() => toggleTaskStatus(item.id)}
+                            onClick={() => {
+                              if (item.completed) {
+                                toggleTaskStatus(item.id);
+                              } else {
+                                setCompleteModalTask(item);
+                              }
+                            }}
                             style={{
                               padding: "4px 8px", borderRadius: 6, border: "none",
                               background: item.completed ? "#d1fae5" : "#fef3c7",
@@ -851,6 +859,25 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
             </div>
           </form>
         </Modal>
+      )}
+
+      {/* Floating Mark Complete Modal for Overview Dashboard Tasks */}
+      {completeModalTask && (
+        <MarkCompleteModal
+          activity={{
+            _id: completeModalTask.id,
+            id: completeModalTask.id,
+            activityName: completeModalTask.title,
+            title: completeModalTask.title,
+            level: completeModalTask.category || "Class Activity"
+          }}
+          user={user}
+          onSubmit={() => {
+            toggleTaskStatus(completeModalTask.id);
+            setCompleteModalTask(null);
+          }}
+          onClose={() => setCompleteModalTask(null)}
+        />
       )}
     </div>
   );
