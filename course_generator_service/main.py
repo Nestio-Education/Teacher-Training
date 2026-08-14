@@ -185,11 +185,33 @@ async def get_course(course_id: str):
 
 @app.get("/api/v1/courses/{course_id}/assessment")
 async def get_assessment(course_id: str):
-    assessment = await assessments_collection.find_one({"course_id": course_id})
+    from bson.objectid import ObjectId
+    
+    # 1. Try to query using ObjectId first, fallback to string if it's not a valid ObjectId
+    try:
+        query = {"course_id": ObjectId(course_id)}
+    except Exception:
+        query = {"course_id": course_id}
+        
+    assessment = await assessments_collection.find_one(query)
+    
+    # 2. If not found by ObjectId, try finding by string just in case
+    if not assessment:
+        assessment = await assessments_collection.find_one({"course_id": course_id})
+        
     if not assessment:
         raise HTTPException(status_code=404, detail="Assessment not found")
-    assessment["_id"] = str(assessment["_id"])
-    return assessment
+        
+    # 3. Recursively stringify any ObjectIds in the document to prevent FastAPI 500 JSON serialization errors
+    def stringify_objectids(obj):
+        if isinstance(obj, dict):
+            return {k: stringify_objectids(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [stringify_objectids(item) for item in obj]
+        elif isinstance(obj, ObjectId):
+            return str(obj)
+        return obj
+    return stringify_objectids(assessment)
 
 @app.post("/api/v1/courses/{course_id}/generate_assessment")
 async def generate_assessment(course_id: str, course_data: dict):
