@@ -5,7 +5,6 @@ import { CourseAssignment } from "../models/CourseAssignment.js";
 import { ParentSessionAssignment } from "../models/ParentSessionAssignment.js";
 import { TeacherTask } from "../models/TeacherTask.js";
 
-
 /**
  * Reminder Prediction Service
  * ----------------------------
