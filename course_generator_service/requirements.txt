@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pdfplumber
+python-docx
+openpyxl
+pandas
+groq
+motor
+pydantic
+python-dotenv
