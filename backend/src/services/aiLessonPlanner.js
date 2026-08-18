@@ -4,7 +4,7 @@
  */
 
 import { callGroq, stripCodeFences } from "./groqClient.js";
-const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 
 const SYSTEM_PROMPT = `You are an expert Early Childhood Education (ECE) curriculum designer working for SpacECE India Foundation.

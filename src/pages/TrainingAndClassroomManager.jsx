@@ -413,7 +413,7 @@ function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
     setIsDrafting(true);
     setError("");
     try {
-      const response = await fetch("http://localhost:5000/api/teacher/reports/draft-ai", {
+      const response = await fetch("http://localhost:5001/api/teacher/reports/draft-ai", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -614,7 +614,7 @@ function LessonDetailModal({ assignment, onClose, onSubmitComplete }) {
               return (
                 <div key={i} style={{ marginBottom: 12 }}>
                   <a 
-                    href={`http://localhost:5000${f.publicUrl}`} 
+                    href={`http://localhost:5001${f.publicUrl}`} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 12px", background: "#fff", border: "1px solid #10b981", borderRadius: 6, fontSize: 12, color: "#10b981", textDecoration: "none", fontWeight: 600 }}
@@ -623,7 +623,7 @@ function LessonDetailModal({ assignment, onClose, onSubmitComplete }) {
                   </a>
                   {isImage && (
                     <div style={{ marginTop: 8 }}>
-                      <img src={`http://localhost:5000${f.publicUrl}`} alt={f.originalName} style={{ maxWidth: "100%", maxHeight: "200px", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                      <img src={`http://localhost:5001${f.publicUrl}`} alt={f.originalName} style={{ maxWidth: "100%", maxHeight: "200px", borderRadius: 8, border: "1px solid #e5e7eb" }} />
                     </div>
                   )}
                 </div>
@@ -1075,7 +1075,7 @@ export default function TrainingAndClassroomManager({ user }) {
     setIsTabDrafting(true);
     setReportError("");
     try {
-      const response = await fetch("http://localhost:5000/api/teacher/reports/draft-ai", {
+      const response = await fetch("http://localhost:5001/api/teacher/reports/draft-ai", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -48,7 +48,7 @@ import { onSocketEvent } from "../services/socket";
 // End: Dnyaneshwari Thorat
 
 /* Resolve a profile photo path to a full URL */
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 
 /* Returns teacher's real photo URL or DiceBear fallback */
 const getTeacherPhotoUrl = (teacher) => {
@@ -1711,7 +1711,7 @@ function ProfileTab({ user, onWorkingCenterChange, onUserUpdate }) {
         let photoUrl = uploadRes.asset.publicUrl;
 
         if (photoUrl.startsWith("/uploads/")) {
-          const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+          const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
           photoUrl = `${API_BASE_URL}${photoUrl}`;
         }
 
