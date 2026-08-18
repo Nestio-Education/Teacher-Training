@@ -78,7 +78,7 @@ export default function NotificationsTab({ teachers = [], setToast }) {
   }, [notifications]);
 
   const bodyCharCount = body.length;
-  const bodyMaxChars = 5000;
+  const bodyMaxChars = 5001;
 
   const applyTemplate = (template) => {
     setSubject(template.subject);

@@ -41,6 +41,9 @@ const getAcademicCategories = () => [...new Set(ACADEMIC_ACTIVITY_BANK.map(a => 
 const getAcademicSubjects = (category) =>
   [...new Set(ACADEMIC_ACTIVITY_BANK.filter(a => !category || a.category === category).map(a => a.subject))];
 
+const getAcademicLanguages = (category, subject) =>
+  [...new Set(ACADEMIC_ACTIVITY_BANK.filter(a => a.category === category && a.subject === subject).map(a => a.language).filter(Boolean))];
+
 const getAcademicStartMonths = (category, subject) =>
   [...new Set(
     ACADEMIC_ACTIVITY_BANK
@@ -48,13 +51,18 @@ const getAcademicStartMonths = (category, subject) =>
       .map(a => a.month)
   )].sort((a, b) => a - b);
 
-const getAcademicPoolFromMonth = ({ category, subject, startMonth }) =>
+const getAcademicPoolFromMonth = ({ category, subject, language, startMonth }) =>
   ACADEMIC_ACTIVITY_BANK
-    .filter(a => a.category === category && a.subject === subject && a.month >= startMonth)
+    .filter(a =>
+      a.category === category &&
+      a.subject === subject &&
+      (!language || a.language === language) &&
+      a.month >= startMonth
+    )
     .sort((a, b) => a.month - b.month || a.set - b.set || a.activityNumber - b.activityNumber);
 
-const generateAcademicScheduleFromDataset = ({ category, subject, startMonth, startDate, durationWeeks, maxActivitiesPerDay }) => {
-  const pool = getAcademicPoolFromMonth({ category, subject, startMonth });
+const generateAcademicScheduleFromDataset = ({ category, subject, language, startMonth, startDate, durationWeeks, maxActivitiesPerDay }) => {
+  const pool = getAcademicPoolFromMonth({ category, subject, language, startMonth });
   if (pool.length === 0) return { error: "No content found for that Category/Subject/Start Month." };
 
   const buckets = [];
@@ -98,7 +106,7 @@ const generateAcademicScheduleFromDataset = ({ category, subject, startMonth, st
         activities.push({
           order: i + 1,
           contentTitle: a.keyConcept,
-          moduleTitle: `Month ${a.month} · Set ${a.set}`,
+          moduleTitle: `Month ${a.month} · ${a.unitLetter === "W" ? "Week" : "Set"} ${a.set}`,
           contentType: a.format || a.subject,
           durationMinutes: 30,
           materials: "",
@@ -237,7 +245,7 @@ export default function MentorLessonPlanTab({ user, setToast }) {
   const [autoForm, setAutoForm] = useState({
     type: "", level: "", topic: "", startDate: new Date().toISOString().split("T")[0],
     durationWeeks: 2, maxActivitiesPerDay: 2, centerId: "", classId: "", title: "",
-    category: "", subject: "", startMonth: "",
+    category: "", subject: "", language: "", startMonth: "",
     teacherId: "", gradeBand: "",
   });
   const [preview, setPreview] = useState(null);
@@ -620,7 +628,7 @@ export default function MentorLessonPlanTab({ user, setToast }) {
                         paddingLeft: 18, 
                         lineHeight: 1.5,
                         display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
+                        gridTemplateColumns: g.objectives.length <= 5 ? "1fr" : "1fr 1fr",
                         columnGap: "12px",
                         rowGap: "2px"
                       }}>
@@ -859,7 +867,7 @@ export default function MentorLessonPlanTab({ user, setToast }) {
             </label>
             <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
               <input type="radio" name="autoMode" checked={autoMode === "academic"} onChange={() => setAutoMode("academic")} />
-              <strong>Academic Bank</strong> (FLN/Content)
+              <strong>Academic Bank</strong> (FLN / Remedial / Library)
             </label>
           </div>
 
@@ -869,20 +877,29 @@ export default function MentorLessonPlanTab({ user, setToast }) {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 4 }}>Category</label>
-                    <select style={selectStyle} value={autoForm.category} onChange={e => setAutoForm(p => ({ ...p, category: e.target.value, subject: "", startMonth: "" }))}>
+                    <select style={selectStyle} value={autoForm.category} onChange={e => setAutoForm(p => ({ ...p, category: e.target.value, subject: "", language: "", startMonth: "" }))}>
                       <option value="">Select category…</option>
                       {getAcademicCategories().map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
                   <div>
                     <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 4 }}>Subject</label>
-                    <select style={selectStyle} value={autoForm.subject} onChange={e => setAutoForm(p => ({ ...p, subject: e.target.value, startMonth: "" }))}>
+                    <select style={selectStyle} value={autoForm.subject} onChange={e => setAutoForm(p => ({ ...p, subject: e.target.value, language: "", startMonth: "" }))}>
                       <option value="">Select subject…</option>
                       {getAcademicSubjects(autoForm.category).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                 </div>
-                <div>
+                {autoForm.subject && getAcademicLanguages(autoForm.category, autoForm.subject).length > 1 && (
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 4, marginTop: 10 }}>Language</label>
+                    <select style={selectStyle} value={autoForm.language} onChange={e => setAutoForm(p => ({ ...p, language: e.target.value }))}>
+                      <option value="">Select language…</option>
+                      {getAcademicLanguages(autoForm.category, autoForm.subject).map(l => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                  </div>
+                )}
+                <div style={{ marginTop: 10 }}>
                   <label style={{ fontSize: 12, fontWeight: 600, color: "#475569", display: "block", marginBottom: 4 }}>Start Month</label>
                   <select style={selectStyle} value={autoForm.startMonth} onChange={e => setAutoForm(p => ({ ...p, startMonth: Number(e.target.value) }))}>
                     <option value="">Select start month…</option>
