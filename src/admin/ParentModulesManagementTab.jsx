@@ -16,6 +16,13 @@ const smallBtn = (bg, color) => ({
   fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
 });
 
+// Start: PTP Form Link feature — fallback links used when a module hasn't set its own yet
+const DEFAULT_FORM_LINKS = {
+  marathi: "https://docs.google.com/forms/d/e/1FAIpQLSdQN1UqnixTwVDuzEyWmvmwBh0J8M8uB42SkjrIM6y3SOB3RA/viewform?usp=header",
+  english: "https://docs.google.com/forms/d/e/1FAIpQLSe84bWiqkIxJPYKPlzcqi3zaBNjgdx_HrALKTIBcLzeDjWpKg/viewform?usp=header",
+};
+// End: PTP Form Link feature
+
 function emptyActivity() { return { time: "", activity: "", keyFocus: "" }; }
 function emptyContentBlock() { return { heading: "", body: "" }; }
 function emptySession(num) {
@@ -38,6 +45,44 @@ function StatCard({ icon, value, label, borderColor }) {
     </div>
   );
 }
+
+// Start: PTP Form Link feature — language picker modal shown when "Fill PTP Form" is clicked
+function FormLanguageModal({ mod, onClose }) {
+  const marathiLink = mod.formLinkMarathi || DEFAULT_FORM_LINKS.marathi;
+  const englishLink = mod.formLinkEnglish || DEFAULT_FORM_LINKS.english;
+
+  const openLink = (link) => {
+    if (!link) return;
+    window.open(link, "_blank", "noopener,noreferrer");
+    onClose();
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={onClose}>
+      <div style={{ background: "white", borderRadius: 16, padding: 24, width: 360, maxWidth: "90%" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", marginBottom: 4 }}>MODULE {mod.moduleNumber}</div>
+        <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 800, color: "#1c1917" }}>{mod.title}</h3>
+        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 20 }}>Choose a language to fill the PTP form</div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <button onClick={() => openLink(marathiLink)}
+            style={{ padding: "12px", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "white", fontSize: 14, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>
+            मराठी
+          </button>
+          <button onClick={() => openLink(englishLink)}
+            style={{ padding: "12px", borderRadius: 10, border: "1px solid #f59e0b", background: "white", color: "#92400e", fontSize: 14, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>
+            English
+          </button>
+        </div>
+
+        <button onClick={onClose} style={{ marginTop: 20, width: "100%", padding: "10px", borderRadius: 10, border: "1px solid #e5e7eb", background: "white", color: "#6b7280", fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+// End: PTP Form Link feature
 
 // Start: Snehal change — Assign modal (module -> teacher + class)
 function AssignModal({ mod, teachers, classes, onClose, setToast }) {
@@ -158,6 +203,10 @@ function ModuleDetailModal({ mod, onClose, onSaved, setToast }) {
       moduleNumber: m.moduleNumber ?? "",
       title: m.title || "",
       category: m.category || "",
+      // Start: PTP Form Link feature — per-module editable links
+      formLinkMarathi: m.formLinkMarathi || "",
+      formLinkEnglish: m.formLinkEnglish || "",
+      // End: PTP Form Link feature
       sessions: (m.sessions?.length ? m.sessions : []).map((s) => ({
         sessionNumber: s.sessionNumber,
         title: s.title || "",
@@ -239,6 +288,10 @@ function ModuleDetailModal({ mod, onClose, onSaved, setToast }) {
       moduleNumber: Number(form.moduleNumber),
       title: form.title,
       category: form.category,
+      // Start: PTP Form Link feature
+      formLinkMarathi: form.formLinkMarathi || "",
+      formLinkEnglish: form.formLinkEnglish || "",
+      // End: PTP Form Link feature
       sessions: form.sessions.map((s) => ({
         sessionNumber: s.sessionNumber,
         title: s.title,
@@ -295,6 +348,21 @@ function ModuleDetailModal({ mod, onClose, onSaved, setToast }) {
               <label style={labelStyle}>Category</label>
               <input type="text" name="category" value={form.category} onChange={handleFieldChange} style={inputStyle} />
             </div>
+
+            {/* Start: PTP Form Link feature — editable per-module links */}
+            <div>
+              <label style={labelStyle}>PTP Form Link (Marathi)</label>
+              <input type="url" name="formLinkMarathi" value={form.formLinkMarathi}
+                onChange={handleFieldChange} style={inputStyle}
+                placeholder={`Leave blank to use default: ${DEFAULT_FORM_LINKS.marathi}`} />
+            </div>
+            <div>
+              <label style={labelStyle}>PTP Form Link (English)</label>
+              <input type="url" name="formLinkEnglish" value={form.formLinkEnglish}
+                onChange={handleFieldChange} style={inputStyle}
+                placeholder={`Leave blank to use default: ${DEFAULT_FORM_LINKS.english}`} />
+            </div>
+            {/* End: PTP Form Link feature */}
 
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -381,6 +449,12 @@ function ModuleDetailView({ form }) {
         </span>
       )}
 
+      {/* Start: PTP Form Link feature — show which links are set, in read mode */}
+      <div style={{ fontSize: 11, color: "#6b7280" }}>
+        PTP Form — Marathi: {form.formLinkMarathi ? "custom link set" : "using default"} · English: {form.formLinkEnglish ? "custom link set" : "using default"}
+      </div>
+      {/* End: PTP Form Link feature */}
+
       {form.sessions.map((session, sIdx) => (
         <div key={sIdx} style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, background: "#fafafa" }}>
           <div style={{ fontSize: 13, fontWeight: 800, color: "#1c1917", marginBottom: 4 }}>
@@ -439,7 +513,12 @@ export default function ParentModulesManagementTab({ setToast }) {
   const [modules, setModules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ moduleNumber: "", title: "", category: "", sessions: [] });
+  const [form, setForm] = useState({
+    moduleNumber: "", title: "", category: "", sessions: [],
+    // Start: PTP Form Link feature
+    formLinkMarathi: "", formLinkEnglish: "",
+    // End: PTP Form Link feature
+  });
   const [saving, setSaving] = useState(false);
 
   // Start: Snehal change — teachers/classes for assignment + which module's modal is open
@@ -447,6 +526,9 @@ export default function ParentModulesManagementTab({ setToast }) {
   const [classes, setClasses] = useState([]);
   const [assigningModule, setAssigningModule] = useState(null);
   const [viewingModule, setViewingModule] = useState(null);
+  // Start: PTP Form Link feature — which module's language picker is open
+  const [formModalModule, setFormModalModule] = useState(null);
+  // End: PTP Form Link feature
 
   useEffect(() => {
     getAdminTeachers()
@@ -469,7 +551,7 @@ export default function ParentModulesManagementTab({ setToast }) {
   useEffect(() => { loadModules(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openAddForm = () => {
-    setForm({ moduleNumber: "", title: "", category: "", sessions: [] });
+    setForm({ moduleNumber: "", title: "", category: "", sessions: [], formLinkMarathi: "", formLinkEnglish: "" });
     setShowForm(true);
   };
 
@@ -524,6 +606,10 @@ export default function ParentModulesManagementTab({ setToast }) {
       moduleNumber: Number(form.moduleNumber),
       title: form.title,
       category: form.category,
+      // Start: PTP Form Link feature
+      formLinkMarathi: form.formLinkMarathi || "",
+      formLinkEnglish: form.formLinkEnglish || "",
+      // End: PTP Form Link feature
       sessions: form.sessions,
     };
     try {
@@ -573,6 +659,19 @@ export default function ParentModulesManagementTab({ setToast }) {
               <label style={labelStyle}>Category</label>
               <input type="text" name="category" value={form.category} onChange={handleFieldChange} style={inputStyle} placeholder="e.g. Social, Pedagogy, Health" />
             </div>
+
+            {/* Start: PTP Form Link feature — optional at creation time, falls back to defaults */}
+            <div>
+              <label style={labelStyle}>PTP Form Link (Marathi) — optional</label>
+              <input type="url" name="formLinkMarathi" value={form.formLinkMarathi} onChange={handleFieldChange} style={inputStyle}
+                placeholder="Leave blank to use the default Marathi form" />
+            </div>
+            <div>
+              <label style={labelStyle}>PTP Form Link (English) — optional</label>
+              <input type="url" name="formLinkEnglish" value={form.formLinkEnglish} onChange={handleFieldChange} style={inputStyle}
+                placeholder="Leave blank to use the default English form" />
+            </div>
+            {/* End: PTP Form Link feature */}
 
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -650,6 +749,12 @@ export default function ParentModulesManagementTab({ setToast }) {
                 style={{ width: "100%", marginTop: 8, ...smallBtn("#dcfce7", "#15803d"), padding: "8px" }}>
                 🔗 Assign to Teacher / Class
               </button>
+              {/* Start: PTP Form Link feature — button opens the language picker for this module */}
+              <button onClick={() => setFormModalModule(mod)}
+                style={{ width: "100%", marginTop: 8, ...smallBtn("#fde68a", "#92400e"), padding: "8px" }}>
+                📝 Fill PTP Form
+              </button>
+              {/* End: PTP Form Link feature */}
             </div>
           ))}
         </div>
@@ -675,6 +780,15 @@ export default function ParentModulesManagementTab({ setToast }) {
         />
       )}
       {/* End: Snehal change */}
+
+      {/* Start: PTP Form Link feature — language picker modal */}
+      {formModalModule && (
+        <FormLanguageModal
+          mod={formModalModule}
+          onClose={() => setFormModalModule(null)}
+        />
+      )}
+      {/* End: PTP Form Link feature */}
     </div>
   );
 }
