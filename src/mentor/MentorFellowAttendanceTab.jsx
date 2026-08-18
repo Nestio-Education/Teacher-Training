@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Badge, StatusBadge, SectionCard } from "../components/Shared";
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 
 const STATUS_META = {
   present: { color: "#16a34a", bg: "#dcfce7" },

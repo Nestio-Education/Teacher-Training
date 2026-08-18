@@ -3,7 +3,7 @@
 // header-aware pacing + exponential backoff on 429s.
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const DEFAULT_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+const DEFAULT_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
 function isUsableKey(key) {
   if (!key) return false;
