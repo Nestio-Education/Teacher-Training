@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 // Start: Dnyaneshwari Thorat
 import { isValidPhoneNumber } from "libphonenumber-js";
 // End: Dnyaneshwari Thorat
@@ -89,10 +89,10 @@ function PasswordRequirements({ password }) {
 
 /* ── Compact input style overrides ── */
 const ci = {
-  input:     { fontSize: 12, padding: "7px 10px 7px 28px", marginBottom: 0 },
-  label:     { fontSize: 11, marginBottom: 3, display: "block", fontWeight: 600, color: "#374151" },
+  input: { fontSize: 12, padding: "7px 10px 7px 28px", marginBottom: 0 },
+  label: { fontSize: 11, marginBottom: 3, display: "block", fontWeight: 600, color: "#374151" },
   fieldIcon: { position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", fontSize: 12, pointerEvents: "none" },
-  mb:        { marginBottom: 10 },
+  mb: { marginBottom: 10 },
 };
 
 /* ── OTP Input Component ── */
@@ -156,11 +156,11 @@ function OtpInput({ length = 6, value, onChange, disabled }) {
 
 /* ── Login Form ── */
 function LoginForm({ onLogin, onGoRegister, onGoForgot }) {
-  const [email, setEmail]       = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPass, setShowPass] = useState(false);
-  const [loading, setLoading]   = useState(false);
-  const [toast, setToast]       = useState({ msg: "", type: "" });
+  const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState({ msg: "", type: "" });
   const [btnHover, setBtnHover] = useState(false);
 
   const handleLogin = (e) => {
@@ -250,18 +250,18 @@ function LoginForm({ onLogin, onGoRegister, onGoForgot }) {
 
 /* ── Forgot Password Form (OTP-based) ── */
 function ForgotPasswordForm({ onBack }) {
-  const [email, setEmail]           = useState("");
-  const [step, setStep]             = useState("email"); // email | otp | reset
-  const [otp, setOtp]               = useState("");
-  const [otpExpiry, setOtpExpiry]   = useState("");
+  const [email, setEmail] = useState("");
+  const [step, setStep] = useState("email"); // email | otp | reset
+  const [otp, setOtp] = useState("");
+  const [otpExpiry, setOtpExpiry] = useState("");
   const [resetToken, setResetToken] = useState("");
-  const [password, setPassword]     = useState("");
+  const [password, setPassword] = useState("");
   const [confirmPassword, setConfirm] = useState("");
-  const [showPass, setShowPass]     = useState(false);
-  const [loading, setLoading]       = useState(false);
-  const [toast, setToast]           = useState({ msg: "", type: "" });
+  const [showPass, setShowPass] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState({ msg: "", type: "" });
   const [resendTimer, setResendTimer] = useState(0);
-  const [devOtp, setDevOtp]         = useState("");
+  const [devOtp, setDevOtp] = useState("");
 
   useEffect(() => {
     if (resendTimer <= 0) return;
@@ -535,12 +535,12 @@ function ForgotPasswordForm({ onBack }) {
 
 /* ── Reset Password Form (reached via reset link token) ── */
 function ResetPasswordForm({ token, onDone }) {
-  const [password, setPassword]       = useState("");
+  const [password, setPassword] = useState("");
   const [confirmPassword, setConfirm] = useState("");
-  const [showPass, setShowPass]       = useState(false);
-  const [toast, setToast]             = useState({ msg: "", type: "" });
-  const [tokenValid, setTokenValid]   = useState(null);
-  const [tokenEmail, setTokenEmail]   = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [toast, setToast] = useState({ msg: "", type: "" });
+  const [tokenValid, setTokenValid] = useState(null);
+  const [tokenEmail, setTokenEmail] = useState("");
 
   useEffect(() => {
     verifyPasswordResetToken(token)
@@ -556,10 +556,10 @@ function ResetPasswordForm({ token, onDone }) {
   const handleReset = (e) => {
     e.preventDefault();
     if (!password || !confirmPassword) { setToast({ msg: "Please fill in both fields.", type: "error" }); return; }
-    if (password !== confirmPassword)  { setToast({ msg: "Passwords do not match.", type: "error" }); return; }
-    if (password.length < 8)           { setToast({ msg: "Password must be at least 8 characters.", type: "error" }); return; }
-    if (!/[A-Z]/.test(password))       { setToast({ msg: "Password must contain at least one uppercase letter.", type: "error" }); return; }
-    if (!/[0-9]/.test(password))       { setToast({ msg: "Password must contain at least one number.", type: "error" }); return; }
+    if (password !== confirmPassword) { setToast({ msg: "Passwords do not match.", type: "error" }); return; }
+    if (password.length < 8) { setToast({ msg: "Password must be at least 8 characters.", type: "error" }); return; }
+    if (!/[A-Z]/.test(password)) { setToast({ msg: "Password must contain at least one uppercase letter.", type: "error" }); return; }
+    if (!/[0-9]/.test(password)) { setToast({ msg: "Password must contain at least one number.", type: "error" }); return; }
     if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) { setToast({ msg: "Password must contain at least one special character.", type: "error" }); return; }
 
     resetPassword(token, password)
@@ -658,17 +658,17 @@ function ResetPasswordForm({ token, onDone }) {
 /* ── Register Form ── */
 // Start: Dnyaneshwari Thorat
 function RegisterForm({ onBack }) {
-  const [role, setRole]         = useState("teacher"); // teacher | mentor | fellow
+  const [role, setRole] = useState("teacher"); // teacher | mentor | fellow
   // Start: Prajwal edit — removed `photo` field from form state (photo upload feature removed)
-  const [form, setForm]         = useState({ name: "", email: "", phone: "", address: "", password: "", confirmPassword: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", address: "", centerId: "", password: "", confirmPassword: "" });
   // End: Prajwal edit
   const [showPass, setShowPass] = useState(false);
-  const [toast, setToast]       = useState({ msg: "", type: "" });
-  const [step, setStep]         = useState("form"); // form | otp  (otp step currently disabled below)
+  const [toast, setToast] = useState({ msg: "", type: "" });
+  const [step, setStep] = useState("form"); // form | otp  (otp step currently disabled below)
   const [emailOtp, setEmailOtp] = useState("");
   const [emailOtpDev, setEmailOtpDev] = useState("");
   const [verifying, setVerifying] = useState(false);
-   // Start: Prajwal edit — fetch centers from DB for the dropdown
+  // Start: Prajwal edit — fetch centers from DB for the dropdown
   const [centers, setCenters] = useState([]);
   const [centersLoading, setCentersLoading] = useState(true);
   const [centersError, setCentersError] = useState("");
@@ -687,9 +687,9 @@ function RegisterForm({ onBack }) {
 
   const handleRegisterClick = (e) => {
     e.preventDefault();
-    const { name, email, phone, address, password, confirmPassword } = form;
-    if (!name || !email || !phone || !address || !password || !confirmPassword) {
-      setToast({ msg: "Please fill all required fields.", type: "error" });
+    const { name, email, phone, address, centerId, password, confirmPassword } = form;
+    if (!name || !email || !phone || !address || !centerId || !password || !confirmPassword) {
+      setToast({ msg: "Please fill all required fields, including selecting a center.", type: "error" });
       return;
     }
 
@@ -770,7 +770,7 @@ function RegisterForm({ onBack }) {
         password,
         qualification: "B.Ed",
         experience: "2 years",
-        address: form.address,   
+        address: form.address,
         center: centerId,
       })
         .then(() => {
@@ -789,8 +789,8 @@ function RegisterForm({ onBack }) {
         password,
         qualification: "Graduate",
         experience: "2 years",
-        address:form.address,
-        center: centerId, 
+        address: form.address,
+        center: centerId,
         fellowshipSemester: role === "fellow" ? 1 : undefined,
         role,
       })
@@ -994,45 +994,45 @@ function RegisterForm({ onBack }) {
         ))}
         {/* Start: Prajwal edit — Upload Profile Photo field removed here */}
         {/* End: Prajwal edit */}
-      {/* Start: Prajwal edit — School/Address now loaded live from the database */}
-<div style={ci.mb}>
-  <label style={ci.label}>School / Address *</label>
-  <select
-    required
-    value={form.centerId}
-    onChange={e => {
-      const selected = centers.find(c => c._id === e.target.value);
-      setForm({
-        ...form,
-        centerId: e.target.value,
-        address: selected ? selected.name : "",
-      });
-    }}
-    disabled={centersLoading}
-    style={{
-      ...S.input,
-      fontSize: 12,
-      padding: "7px 10px",
-      marginBottom: 0,
-      cursor: centersLoading ? "not-allowed" : "pointer",
-    }}
-  >
-    <option value="">
-      {centersLoading ? "Loading centers..." : "Select a center"}
-    </option>
-    {centers.map((c) => (
-      <option key={c._id} value={c._id}>
-        {c.name}{c.city ? `, ${c.city}` : ""}
-      </option>
-    ))}
-  </select>
-  {centersError && (
-    <p style={{ fontSize: 10, color: "#ef4444", marginTop: 3, marginBottom: 0 }}>
-      ⚠️ {centersError}
-    </p>
-  )}
-</div>
-{/* End: Prajwal edit */}
+        {/* Start: Prajwal edit — School/Address now loaded live from the database */}
+        <div style={ci.mb}>
+          <label style={ci.label}>School / Address *</label>
+          <select
+            required
+            value={form.centerId}
+            onChange={e => {
+              const selected = centers.find(c => c._id === e.target.value);
+              setForm({
+                ...form,
+                centerId: e.target.value,
+                address: selected ? selected.name : "",
+              });
+            }}
+            disabled={centersLoading}
+            style={{
+              ...S.input,
+              fontSize: 12,
+              padding: "7px 10px",
+              marginBottom: 0,
+              cursor: centersLoading ? "not-allowed" : "pointer",
+            }}
+          >
+            <option value="">
+              {centersLoading ? "Loading centers..." : "Select a center"}
+            </option>
+            {centers.map((c) => (
+              <option key={c._id} value={c._id}>
+                {c.name}{c.city ? `, ${c.city}` : ""}
+              </option>
+            ))}
+          </select>
+          {centersError && (
+            <p style={{ fontSize: 10, color: "#ef4444", marginTop: 3, marginBottom: 0 }}>
+              ⚠️ {centersError}
+            </p>
+          )}
+        </div>
+        {/* End: Prajwal edit */}
         <div style={ci.mb}>
           <label style={ci.label}>Password</label>
           <div style={{ position: "relative" }}>
@@ -1078,12 +1078,12 @@ export default function LoginPage({ onLogin }) {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const token  = params.get("reset_token");
+    const token = params.get("reset_token");
     if (token) {
       setView({ type: "reset", token });
     } else if (params.get("view") === "register") {
-        window.scrollTo(0, 0);
-        setView("register");
+      window.scrollTo(0, 0);
+      setView("register");
     }
   }, []);
 
@@ -1140,29 +1140,41 @@ export default function LoginPage({ onLogin }) {
 }
 
 const ls = {
-  bg:    { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-           background: "linear-gradient(135deg,#fef3c7 0%,#fde68a 30%,#fbbf24 65%,#f59e0b 100%)",
-           position: "relative", overflowX: "hidden", overflowY: "auto", padding: "16px",
-           paddingTop: "76px",
-           fontFamily: "'Segoe UI','Inter',-apple-system,sans-serif" },
-  header: { position: "fixed", top: 0, left: 0, right: 0, zIndex: 10,
-           display: "flex", alignItems: "center", justifyContent: "space-between",
-           padding: "10px 24px", background: "rgba(255,255,255,0.92)",
-           borderBottom: "1px solid rgba(217,119,6,0.15)", backdropFilter: "blur(6px)" },
+  bg: {
+    minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+    background: "linear-gradient(135deg,#fef3c7 0%,#fde68a 30%,#fbbf24 65%,#f59e0b 100%)",
+    position: "relative", overflowX: "hidden", overflowY: "auto", padding: "16px",
+    paddingTop: "76px",
+    fontFamily: "'Segoe UI','Inter',-apple-system,sans-serif"
+  },
+  header: {
+    position: "fixed", top: 0, left: 0, right: 0, zIndex: 10,
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    padding: "10px 24px", background: "rgba(255,255,255,0.92)",
+    borderBottom: "1px solid rgba(217,119,6,0.15)", backdropFilter: "blur(6px)"
+  },
   headerBrand: { display: "flex", alignItems: "center", gap: 8, textDecoration: "none" },
   headerBrandText: { fontSize: 14, fontWeight: 700, color: "#92400e" },
   headerBack: { fontSize: 12, fontWeight: 600, color: "#d97706", textDecoration: "none" },
-  panel: { display: "flex", alignItems: "stretch", background: "rgba(255,255,255,0.97)",
-           borderRadius: 18, overflow: "hidden", boxShadow: "0 16px 48px rgba(180,120,0,0.18)",
-           border: "1px solid rgba(245,158,11,0.2)", zIndex: 1, width: "100%", maxWidth: 680 },
-  left:  { flex: "0 0 300px", background: "linear-gradient(160deg,#fffbeb,#fef3c7)", padding: "36px 20px",
-           display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-           borderRight: "1px solid rgba(245,158,11,0.15)", gap: 20 },
-  portalLabel: { display: "flex", alignItems: "center", gap: 6,
-           fontSize: 12, fontWeight: 700, color: "#92400e", letterSpacing: "0.2px",
-           background: "rgba(255,255,255,0.6)", padding: "5px 14px", borderRadius: 20,
-           border: "1px solid rgba(217,119,6,0.2)" },
+  panel: {
+    display: "flex", alignItems: "stretch", background: "rgba(255,255,255,0.97)",
+    borderRadius: 18, overflow: "hidden", boxShadow: "0 16px 48px rgba(180,120,0,0.18)",
+    border: "1px solid rgba(245,158,11,0.2)", zIndex: 1, width: "100%", maxWidth: 680
+  },
+  left: {
+    flex: "0 0 300px", background: "linear-gradient(160deg,#fffbeb,#fef3c7)", padding: "36px 20px",
+    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+    borderRight: "1px solid rgba(245,158,11,0.15)", gap: 20
+  },
+  portalLabel: {
+    display: "flex", alignItems: "center", gap: 6,
+    fontSize: 12, fontWeight: 700, color: "#92400e", letterSpacing: "0.2px",
+    background: "rgba(255,255,255,0.6)", padding: "5px 14px", borderRadius: 20,
+    border: "1px solid rgba(217,119,6,0.2)"
+  },
   right: { flex: 1, padding: "32px 32px", display: "flex", flexDirection: "column", justifyContent: "center", overflowY: "auto" },
-  badge: { display: "inline-block", padding: "3px 12px", background: "#fef3c7", color: "#92400e",
-           borderRadius: 20, fontSize: 11, fontWeight: 600, border: "1px solid #fbbf24" },
+  badge: {
+    display: "inline-block", padding: "3px 12px", background: "#fef3c7", color: "#92400e",
+    borderRadius: 20, fontSize: 11, fontWeight: 600, border: "1px solid #fbbf24"
+  },
 };
