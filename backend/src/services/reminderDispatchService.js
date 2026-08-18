@@ -51,42 +51,6 @@ const notifyAdminsOfPendingApprovals = async (registrationApprovals) => {
 };
 
 /**
- * 3.7 — Notify each mentor about ONLY their own at-risk fellows.
- * One alert per mentor per day, summarizing all their HIGH/MEDIUM risk
- * fellows together (not one notification per fellow, to avoid alert spam).
- */
-const notifyMentorsOfAtRiskFellows = async () => {
-  const grouped = await getFellowsNeedingMentorAttention();
-  if (grouped.length === 0) return 0;
-
-  const results = await Promise.allSettled(
-    grouped.map(({ mentorId, fellows }) => {
-      const highCount = fellows.filter((f) => f.riskLevel === "HIGH").length;
-      const lines = fellows
-        .map((f) => `${f.fellowName} (${f.riskLevel}): ${f.reasons[0]}`)
-        .join(" | ");
-
-      return sendNotification({
-        recipientId: mentorId,
-        templateKey: "fellows_needing_attention",
-        channel: "in_app",
-        priority: highCount > 0 ? "high" : "normal",
-        replacements: {
-          message: `${fellows.length} fellow(s) need attention: ${lines}`
-        },
-        metadata: {
-          notificationType: "fellows_needing_attention",
-          highRiskCount: highCount,
-          totalFlagged: fellows.length
-        }
-      });
-    })
-  );
-
-  return results.filter((r) => r.status === "fulfilled").length;
-};
-
-/**
  * Notify each center's mentor about registration approvals pending
  * specifically at THEIR center — not a broadcast like admins get.
  */
@@ -114,6 +78,42 @@ const notifyMentorsOfCenterApprovals = async (centerApprovals) => {
           notificationType: "center_pending_approvals",
           centerName: approvals[0]?.centerName || null,
           count: approvals.length
+        }
+      });
+    })
+  );
+
+  return results.filter((r) => r.status === "fulfilled").length;
+};
+
+/**
+ * 3.7 — Notify each mentor about ONLY their own at-risk fellows.
+ * One alert per mentor per day, summarizing all their HIGH/MEDIUM risk
+ * fellows together (not one notification per fellow, to avoid alert spam).
+ */
+const notifyMentorsOfAtRiskFellows = async () => {
+  const grouped = await getFellowsNeedingMentorAttention();
+  if (grouped.length === 0) return 0;
+
+  const results = await Promise.allSettled(
+    grouped.map(({ mentorId, fellows }) => {
+      const highCount = fellows.filter((f) => f.riskLevel === "HIGH").length;
+      const lines = fellows
+        .map((f) => `${f.fellowName} (${f.riskLevel}): ${f.reasons[0]}`)
+        .join(" | ");
+
+      return sendNotification({
+        recipientId: mentorId,
+        templateKey: "fellows_needing_attention",
+        channel: "in_app",
+        priority: highCount > 0 ? "high" : "normal",
+        replacements: {
+          message: `${fellows.length} fellow(s) need attention: ${lines}`
+        },
+        metadata: {
+          notificationType: "fellows_needing_attention",
+          highRiskCount: highCount,
+          totalFlagged: fellows.length
         }
       });
     })

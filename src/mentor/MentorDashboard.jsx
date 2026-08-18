@@ -12,7 +12,8 @@ import {
   getCourseAssignments,
   getPDCACycles, 
   getCapstoneSubmissions, 
-  getMenteeObservations 
+  getMenteeObservations,
+  assignTeacherTaskByAdmin
 } from "../services/api";
 import { MentorProfileTab, MentorNotificationsTab, MentorFeedbackTab, MenteeManagementTab, ImpactCapstoneTab, PDCATab } from "./MentorDashboardTabs";
 import MentorActivitiesTab from "./MentorActivitiesTab";
@@ -24,7 +25,7 @@ import AttendanceTab from "../admin/AttendanceTab";
 import GeotagAttendance from "../pages/GeotagAttendance";
 import { calculateTeacherScore } from "../admin/OverviewTab";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 
 const getMentorPhotoUrl = (user) => {
   const photo = user?.mentorProfile?.profilePhoto || user?.mentorProfile?.photo || user?.photoUrl || user?.profilePhoto;

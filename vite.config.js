@@ -3,12 +3,12 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig({
- base: '/',
+ base: '/landing-pages/Teacher-Training-Program/react-project/dist/',
  plugins: [react()],
   server: {
     proxy: {
       "/api": {
-        target: "http://localhost:5000",
+        target: "http://localhost:5001",
         changeOrigin: true,
       },
     },

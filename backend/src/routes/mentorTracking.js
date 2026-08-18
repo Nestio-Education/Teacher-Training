@@ -62,7 +62,7 @@ router.post("/pdca", async (req, res, next) => {
   try {
     console.log("[pdca:create] body received:", JSON.stringify(req.body));
 
-    const { menteeId, plan, do: doField, check, act, cycleNumber } = req.body;
+    const { menteeId, plan, do: doField, check, act, cycleNumber, targetDate, category } = req.body;
 
     if (!menteeId) {
       return res.status(400).json({ success: false, message: "menteeId is required" });
@@ -96,7 +96,9 @@ router.post("/pdca", async (req, res, next) => {
       plan,
       do: doField,
       check,
-      act
+      act,
+      targetDate: targetDate ? new Date(targetDate) : null,
+      category: category || "Other",
     });
     const populated = await cycle.populate("menteeId", "name email");
     res.status(201).json({ success: true, cycle: populated });
@@ -148,6 +150,42 @@ router.post("/pdca", async (req, res, next) => {
       });
     }
 
+    next(err);
+  }
+});
+
+// --- Update cycle outcome (Met / Partially Met / Not Met) ---
+router.patch("/pdca/:id/outcome", async (req, res, next) => {
+  try {
+    const { outcome, outcomeNotes } = req.body;
+    const validOutcomes = ["pending", "met", "partially_met", "not_met"];
+    if (!validOutcomes.includes(outcome)) {
+      return res.status(400).json({ success: false, message: "Invalid outcome value." });
+    }
+    const cycle = await PDCACycle.findOneAndUpdate(
+      { _id: req.params.id, mentorId: req.user.id },
+      { $set: { outcome, outcomeNotes: outcomeNotes || "" } },
+      { new: true }
+    ).populate("menteeId", "name email");
+    if (!cycle) return res.status(404).json({ success: false, message: "Cycle not found." });
+    res.json({ success: true, cycle });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Get weekly reports for a specific cycle (mentor reads) ---
+router.get("/pdca/:cycleId/weekly-reports", async (req, res, next) => {
+  try {
+    const { WeeklyReport } = await import("../models/MentorTracking.js");
+    // Verify the cycle belongs to this mentor
+    const cycle = await PDCACycle.findOne({ _id: req.params.cycleId, mentorId: req.user.id });
+    if (!cycle) return res.status(404).json({ success: false, message: "Cycle not found." });
+    const reports = await WeeklyReport.find({ cycleId: req.params.cycleId })
+      .populate("teacherId", "name email")
+      .sort({ weekOf: -1 });
+    res.json({ success: true, reports });
+  } catch (err) {
     next(err);
   }
 });

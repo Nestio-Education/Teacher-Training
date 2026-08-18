@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 
 let socket = null;
 let listeners = new Map();
@@ -18,7 +18,7 @@ export function connectSocket(token) {
     reconnection: true,
     reconnectionAttempts: 10,
     reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000,
+    reconnectionDelayMax: 5001,
   });
 
   socket.on("connect", () => {

@@ -30,7 +30,7 @@ logger = logging.getLogger("teacher-support-chat")
 
 # ── Environment ──────────────────────────────────────────────────
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 CHATBOT_MAX_TOKENS = int(os.environ.get("CHATBOT_MAX_TOKENS", "1024"))
 
 # ── System Prompt — loaded from external file at startup ─────────

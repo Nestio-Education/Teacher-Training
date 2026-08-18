@@ -18,7 +18,7 @@ pip install fastapi uvicorn httpx pydantic
 export GROQ_API_KEY=your_groq_api_key_here
 
 # 3. (Optional) Override model / max tokens
-export GROQ_MODEL=llama-3.3-70b-versatile
+export GROQ_MODEL=openai/gpt-oss-120b
 export CHATBOT_MAX_TOKENS=1024
 
 # 4. Run the service

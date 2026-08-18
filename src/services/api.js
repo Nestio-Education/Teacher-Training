@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 
 async function request(path, options = {}) {
   const token = localStorage.getItem("spaceece_auth_token");
@@ -1423,14 +1423,124 @@ export function getPDCACycles() {
   return request("/api/mentor/tracking/pdca");
 }
 
-// UPDATED: PDCA cycles are now linked to a specific mentee.
-// menteeId is required — pass the mentee's _id selected in the PDCA form.
-export function submitPDCACycle(cycleNumber, plan, doAction, check, act, menteeId) {
+// // UPDATED: PDCA cycles are now linked to a specific mentee.
+// // menteeId is required — pass the mentee's _id selected in the PDCA form.
+// // targetDate (optional ISO string) and category (optional string) are new fields.
+export function submitPDCACycle(cycleNumber, plan, doAction, check, act, menteeId, targetDate = null, category = "Other") {
   return request("/api/mentor/tracking/pdca", {
     method: "POST",
-    body: JSON.stringify({ cycleNumber, plan, do: doAction, check, act, menteeId })
+    body: JSON.stringify({ cycleNumber, plan, do: doAction, check, act, menteeId, targetDate, category })
   });
 }
+
+// // Mentor: mark a goal as Met / Partially Met / Not Met
+export function updateCycleOutcome(cycleId, outcome, outcomeNotes = "") {
+  return request(`/api/mentor/tracking/pdca/${cycleId}/outcome`, {
+    method: "PATCH",
+    body: JSON.stringify({ outcome, outcomeNotes })
+  });
+}
+
+// Mentor: read all weekly progress reports submitted by the Fellow for a goal
+export function getCycleWeeklyReports(cycleId) {
+  return request(`/api/mentor/tracking/pdca/${cycleId}/weekly-reports`);
+}
+
+
+
+
+
+// ── AI PDCA Growth Cycle Generator (AI draft + mentor approval) ──
+// One fellow + month combination = one PDCAReport. Mentor clicks "Generate
+// Draft" -> AI drafts Plan/Do/Check/Act from deterministic grounding data.
+// See backend/src/routes/pdcaGenerate.js.
+export function generatePDCADraft(fellowId, month = 1) {
+  return request("/api/pdca/generate", {
+    method: "POST",
+    body: JSON.stringify({ fellowId, month }),
+  });
+}
+
+// Fetch the current draft/approved report for a fellow + month, without
+// generating a new one — used to load an existing cycle for viewing/editing.
+export function getPDCAReport(fellowId, month = 1) {
+  return request(`/api/pdca/${fellowId}?month=${month}`);
+}
+
+// Mentor clicks "Approve & Save" after reviewing/editing the AI draft.
+// Note: backend expects the Do-section key as "do", not "doAction".
+export function approvePDCAReport(fellowId, { plan, doAction, check, act, deliverablesStatus, month = 1 }) {
+  return request(`/api/pdca/${fellowId}/approve`, {
+    method: "POST",
+    body: JSON.stringify({ plan, do: doAction, check, act, deliverablesStatus, month }),
+  });
+}
+
+// All PDCA reports (any fellow, any month/status) belonging to the current
+// mentor — powers the unified Growth Cycle History + Fellow Progress panel.
+export function getMentorPDCAReports() {
+  return request("/api/pdca/mentor/reports");
+}
+
+// ── Curriculum upload (per-month, drives the PDCA generator) ──
+// Upload a .docx/.txt/.md curriculum doc for a month; the backend runs it
+// through AI and hands back a structured draft to review/edit before it's
+// saved anywhere. See backend/src/routes/curriculum.js.
+export function parseCurriculumDocument(month, file) {
+  const formData = new FormData();
+  formData.append("month", month);
+  formData.append("file", file);
+  return request("/api/pdca-curriculum/parse", { method: "POST", body: formData });
+}
+
+// One-shot "upload curriculum and design the Growth Cycle right now" — used
+// by the Custom Growth Cycle form. Extracts + AI-parses the doc AND drafts
+// Plan/Do/Check/Act for the given fellow in a single request; the curriculum
+// itself is saved as a draft (so it also shows up in Manage Month Curricula)
+// but nothing needs to be published first. See routes/curriculum.js /design.
+export function designGrowthCycleFromCurriculum(fellowId, month, file) {
+  const formData = new FormData();
+  formData.append("fellowId", fellowId);
+  formData.append("month", month);
+  formData.append("file", file);
+  return request("/api/pdca-curriculum/design", { method: "POST", body: formData });
+}
+
+// Save a (possibly hand-edited) parsed draft as the live curriculum for
+// that month — this is what the PDCA generator reads from afterwards.
+export function publishCurriculum(month, curriculum) {
+  return request(`/api/pdca-curriculum/${month}/publish`, {
+    method: "POST",
+    body: JSON.stringify(curriculum),
+  });
+}
+
+// Summary list of every month's curriculum (published or still draft) —
+// powers the month picker + the curriculum management screen.
+export function getCurriculumList() {
+  return request("/api/pdca-curriculum");
+}
+
+// Full curriculum for one month.
+export function getCurriculum(month) {
+  return request(`/api/pdca-curriculum/${month}`);
+}
+
+export function deleteCurriculum(month) {
+  return request(`/api/pdca-curriculum/${month}`, { method: "DELETE" });
+}
+
+// ── Mentor: Fellow Activity Submissions (used by the Growth Cycle AI layer) ──
+// Same data source MentorActivitiesTab uses (ActivitySubmission, live) — the
+// AI insights engine reads from this rather than any new/duplicate endpoint.
+export function getMentorFellowActivities() {
+  return request("/api/mentor/activities");
+}
+
+export function getMentorFellowTasks() {
+  return request("/api/mentor/fellow-tasks");
+}
+
 
 // ── Mentor: Pending Fellow Approvals reminder ──
 // Lightweight count used by the polling reminder component so it doesn't need
@@ -1538,6 +1648,10 @@ export function assignTeacherTaskByAdmin(teacherId, payload) {
   });
 }
 
+export function getTasksForTeacher(teacherId) {
+  return request(`/api/teacher-tasks/for-teacher/${teacherId}`);
+}
+
 export function getMentorAttendance(params = {}) {
   const searchParams = new URLSearchParams();
   if (params.date) searchParams.append("date", params.date);
@@ -1553,7 +1667,15 @@ export function getMentorFellowsAttendance(params = {}) {
   return request(`/api/mentor/fellows/attendance?${searchParams.toString()}`);
 }
 
-// Public: used by the registration form (no auth required)
-export function getPublicCenters() {
-  return request("/api/public/centers");
+// // Teacher/Fellow: get all goals set for them by their Mentor
+export function getMyGoals() {
+  return request("/api/teacher/goals");
+}
+
+// Teacher/Fellow: submit a weekly progress report on a specific goal
+export function submitWeeklyReport(cycleId, report, weekOf = null) {
+  return request(`/api/teacher/goals/${cycleId}/weekly-report`, {
+    method: "POST",
+    body: JSON.stringify({ report, weekOf })
+  });
 }
