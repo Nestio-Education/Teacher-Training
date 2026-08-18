@@ -54,8 +54,8 @@ export async function sendEmail({ to, subject, html }) {
       secure: config.port === 465,
       auth: { user: config.user, pass: config.pass },
       family: 4, // Force IPv4 to prevent ENETUNREACH / IPv6 errors on cloud servers like Render
-      connectionTimeout: 15000,
-      greetingTimeout: 15000,
+      connectionTimeout: 15001,
+      greetingTimeout: 15001,
       socketTimeout: 20000,
       tls: {
         rejectUnauthorized: false,
