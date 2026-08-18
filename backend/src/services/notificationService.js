@@ -75,15 +75,9 @@ const TEMPLATES = {
     kn: { title: "ಹೊಸ ಅಧಿಸೂಚನೆ", body: "{{message}}" },
     ta: { title: "புதிய அறிவிப்பு", body: "{{message}}" },
   },
-    daily_task_assigned: {
-    en: {
-      title: "Daily Tasks Assigned",
-      body: "{{message}}",
-    },
-    hi: {
-      title: "दैनिक कार्य सौंपे गए",
-      body: "{{message}}",
-    },
+  daily_task_assigned: {
+    en: { title: "Daily Tasks Assigned", body: "{{message}}" },
+    hi: { title: "दैनिक कार्य सौंपे गए", body: "{{message}}" },
   },
   curriculum_assigned: {
     en: {
@@ -106,24 +100,12 @@ const TEMPLATES = {
     },
   },
   fellows_needing_attention: {
-    en: {
-      title: "Fellows needing your attention",
-      body: "{{message}}",
-    },
-    hi: {
-      title: "आपके फेलो जिन्हें ध्यान देने की आवश्यकता है",
-      body: "{{message}}",
-    },
+    en: { title: "Fellows needing your attention", body: "{{message}}" },
+    hi: { title: "आपके फेलो जिन्हें ध्यान देने की आवश्यकता है", body: "{{message}}" },
   },
   center_pending_approvals: {
-    en: {
-      title: "Pending approvals at your center",
-      body: "{{message}}",
-    },
-    hi: {
-      title: "आपके सेंटर पर लंबित स्वीकृतियां",
-      body: "{{message}}",
-    },
+    en: { title: "Pending approvals at your center", body: "{{message}}" },
+    hi: { title: "आपके सेंटर पर लंबित स्वीकृतियां", body: "{{message}}" },
   },
 };
 

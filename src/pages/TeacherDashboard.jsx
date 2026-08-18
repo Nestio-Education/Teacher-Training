@@ -36,7 +36,9 @@ import {
   updateTeacherTask,
   toggleTeacherTask,
   deleteTeacherTask,
-  getTeacherAttendance
+  getTeacherAttendance,
+  getMyGoals,
+  submitWeeklyReport
 } from "../services/api";
 // Start: Dnyaneshwari Thorat
 import { downloadCertificatePdf, viewCertificatePdf } from "../services/api";
@@ -239,6 +241,7 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
             time: t.time || `${t.startTime || '11:30'} - ${t.endTime || '12:30'}`,
             completed: !!t.completed,
             assignedByAdmin: !!t.assignedByAdmin,
+            assignedByMentor: !!t.assignedByMentor,
             isCustom: true
           }));
           setCustomTasks(apiTasks);
@@ -388,7 +391,8 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
     workshop: { bg: "#fef9c3", border: "#eab308", color: "#854d0e", label: "Workshop" },
     class: { bg: "#dcfce7", border: "#22c55e", color: "#166534", label: "Class" },
     tech: { bg: "#e0e7ff", border: "#6366f1", color: "#3730a3", label: "Technology" },
-    admin_assigned: { bg: "#fef3c7", border: "#f59e0b", color: "#92400e", label: "Admin Task" }
+    admin_assigned: { bg: "#fef3c7", border: "#f59e0b", color: "#92400e", label: "Admin Task" },
+    mentor_assigned: { bg: "#dbeafe", border: "#3b82f6", color: "#1d4ed8", label: "Mentor Task" }
   };
 
   const getWeekDays = () => {
@@ -2414,6 +2418,198 @@ function TeacherFeedbackTab({ user, setToast }) {
 /* ═══════════════════════════════════════════
    PARENT CAPACITY BUILDING TAB
 ═══════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════
+   MY GOALS TAB — Fellow views goals set by Mentor, submits weekly reports
+═══════════════════════════════════════════ */
+function MyGoalsTab({ user, setToast }) {
+  const [goals, setGoals] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [expandedGoalId, setExpandedGoalId] = useState(null);
+  const [reportForm, setReportForm] = useState({ goalId: null, text: "" });
+  const [submittingReport, setSubmittingReport] = useState(false);
+
+  const CATEGORIES = ["Classroom Management", "Literacy", "Numeracy", "Social-Emotional", "Transitions", "Other"];
+  const CATEGORY_COLORS = {
+    "Classroom Management": { bg: "#e0e7ff", color: "#3730a3" },
+    "Literacy":             { bg: "#fce7f3", color: "#9d174d" },
+    "Numeracy":             { bg: "#d1fae5", color: "#065f46" },
+    "Social-Emotional":     { bg: "#fef3c7", color: "#92400e" },
+    "Transitions":          { bg: "#ede9fe", color: "#5b21b6" },
+    "Other":                { bg: "#f1f5f9", color: "#475569" },
+  };
+  const catColor = (cat) => CATEGORY_COLORS[cat] || CATEGORY_COLORS["Other"];
+
+  const fetchGoals = () => {
+    setLoading(true);
+    getMyGoals()
+      .then(res => setGoals(res.goals || []))
+      .catch(() => setToast?.({ msg: "Failed to load goals.", type: "error" }))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchGoals(); }, []);
+
+  const getGoalStatus = (goal) => {
+    if (goal.outcome === "met")           return { label: "Met ✅",       bg: "#d1fae5", color: "#065f46" };
+    if (goal.outcome === "partially_met") return { label: "Partial 🟡",   bg: "#fef3c7", color: "#92400e" };
+    if (goal.outcome === "not_met")       return { label: "Not Met ❌",   bg: "#fee2e2", color: "#991b1b" };
+    if (!goal.targetDate)                 return { label: "Active",        bg: "#e0e7ff", color: "#3730a3" };
+    const today = new Date();
+    const target = new Date(goal.targetDate);
+    const diffDays = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+    if (diffDays < 0)   return { label: "Overdue 🔴",  bg: "#fee2e2", color: "#dc2626" };
+    if (diffDays <= 7)  return { label: "Due Soon 🟡", bg: "#fef3c7", color: "#d97706" };
+    return                     { label: "On Track 🟢", bg: "#d1fae5", color: "#059669" };
+  };
+
+  const handleSubmitReport = async (goalId) => {
+    if (!reportForm.text.trim()) {
+      setToast?.({ msg: "Please write what you did this week before submitting.", type: "error" }); return;
+    }
+    setSubmittingReport(true);
+    try {
+      await submitWeeklyReport(goalId, reportForm.text.trim());
+      setToast?.({ msg: "Weekly report submitted! ✅", type: "success" });
+      setReportForm({ goalId: null, text: "" });
+    } catch (err) {
+      setToast?.({ msg: err.message || "Failed to submit report.", type: "error" });
+    } finally { setSubmittingReport(false); }
+  };
+
+  const filtered = goals.filter(g => categoryFilter === "all" || (g.category || "Other") === categoryFilter);
+  const overdueCount = goals.filter(g => {
+    if (!g.targetDate || g.outcome !== "pending") return false;
+    return new Date(g.targetDate) < new Date();
+  }).length;
+
+  return (
+    <div style={{ animation: "fadeIn 0.3s ease" }}>
+      <h1 style={S.pageTitle}>🎯 My Goals</h1>
+      <p style={S.pageSub}>Goals set by your Mentor. Submit a weekly report to keep them updated on your progress.</p>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14, marginBottom: 24 }}>
+        <div style={{ background: "white", borderRadius: 14, border: "1px solid #e2e8f0", borderTop: "4px solid #3b82f6", padding: "14px 16px" }}>
+          <div style={{ fontSize: 22, fontWeight: 900, color: "#0f172a" }}>{goals.length}</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>Total Goals</div>
+        </div>
+        <div style={{ background: "white", borderRadius: 14, border: "1px solid #e2e8f0", borderTop: "4px solid #10b981", padding: "14px 16px" }}>
+          <div style={{ fontSize: 22, fontWeight: 900, color: "#0f172a" }}>{goals.filter(g => g.outcome === "met").length}</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>Goals Met ✅</div>
+        </div>
+        <div style={{ background: "white", borderRadius: 14, border: "1px solid #e2e8f0", borderTop: "4px solid #dc2626", padding: "14px 16px" }}>
+          <div style={{ fontSize: 22, fontWeight: 900, color: "#dc2626" }}>{overdueCount}</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>Overdue 🔴</div>
+        </div>
+        <div style={{ background: "white", borderRadius: 14, border: "1px solid #e2e8f0", borderTop: "4px solid #f59e0b", padding: "14px 16px" }}>
+          <div style={{ fontSize: 22, fontWeight: 900, color: "#0f172a" }}>{goals.filter(g => g.outcome === "pending").length}</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>In Progress</div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+        {["all", ...CATEGORIES].map(c => (
+          <button key={c} onClick={() => setCategoryFilter(c)} style={{
+            padding: "6px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+            fontFamily: "inherit", fontSize: 12, fontWeight: 700,
+            background: categoryFilter === c ? "#3b82f6" : "#f1f5f9",
+            color: categoryFilter === c ? "white" : "#475569",
+          }}>{c === "all" ? "All" : c}</button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div style={{ padding: 60, textAlign: "center", color: "#94a3b8" }}>Loading your goals…</div>
+      ) : filtered.length === 0 ? (
+        <div style={{ padding: 60, textAlign: "center", color: "#94a3b8", border: "1px dashed #cbd5e1", borderRadius: 16 }}>
+          {goals.length === 0 ? "Your Mentor hasn't set any goals for you yet." : "No goals match this category."}
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {filtered.map((goal, i) => {
+            const st = getGoalStatus(goal);
+            const cc = catColor(goal.category);
+            const isOpen = expandedGoalId === (goal._id || i);
+            const isReportOpen = reportForm.goalId === (goal._id || i);
+            return (
+              <div key={goal._id || i} style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 16, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
+                <div style={{ padding: "16px 20px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                      <span style={{ background: cc.bg, color: cc.color, fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 6 }}>{goal.category || "Other"}</span>
+                      <span style={{ background: st.bg, color: st.color, fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 6 }}>{st.label}</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                      {goal.targetDate && (
+                        <span style={{ fontSize: 11, color: "#64748b" }}>📅 Due: {new Date(goal.targetDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
+                      )}
+                      {goal.mentorId?.name && (
+                        <span style={{ fontSize: 11, color: "#3b82f6", fontWeight: 700 }}>👨‍🏫 {goal.mentorId.name}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a", marginBottom: 12 }}>
+                    {goal.plan.substring(0, 120)}{goal.plan.length > 120 ? "…" : ""}
+                  </div>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <button onClick={() => setExpandedGoalId(isOpen ? null : (goal._id || i))}
+                      style={{ background: "none", border: "none", color: "#3b82f6", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+                      {isOpen ? "Hide details ▲" : "View full goal ▼"}
+                    </button>
+                    {goal.outcome === "pending" && (
+                      <button onClick={() => setReportForm({ goalId: isReportOpen ? null : (goal._id || i), text: isReportOpen ? "" : reportForm.text })}
+                        style={{ padding: "4px 12px", borderRadius: 8, border: "none", background: "#3b82f6", color: "white", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                        {isReportOpen ? "Cancel" : "📝 Submit This Week's Update"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {isOpen && (
+                  <div style={{ padding: "14px 20px", borderTop: "1px solid #f1f5f9", background: "#f8fafc" }}>
+                    {[["P", "#e0e7ff", "#4f46e5", "Plan", goal.plan],
+                      ["D", "#fef3c7", "#d97706", "Do", goal.do],
+                      ["C", "#d1fae5", "#059669", "Check", goal.check],
+                      ["A", "#fee2e2", "#dc2626", "Act", goal.act]].map(([badge, bg, color, label, text]) => (
+                      <div key={badge} style={{ marginBottom: 12 }}>
+                        <span style={{ background: bg, color, fontSize: 10, fontWeight: 900, padding: "2px 6px", borderRadius: 4, marginRight: 8 }}>{badge}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: "#374151" }}>{label}:</span>
+                        <span style={{ fontSize: 12, color: "#374151", marginLeft: 6 }}>{text}</span>
+                      </div>
+                    ))}
+                    {goal.outcomeNotes && (
+                      <div style={{ marginTop: 8, padding: "8px 12px", background: "#fff7ed", borderRadius: 8, fontSize: 12, color: "#92400e" }}>
+                        <strong>Mentor's Outcome Notes:</strong> {goal.outcomeNotes}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {isReportOpen && (
+                  <div style={{ padding: "16px 20px", borderTop: "1px solid #bfdbfe", background: "#eff6ff" }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: "#1e40af", marginBottom: 10 }}>📝 This Week's Progress Update</div>
+                    <textarea
+                      style={{ width: "100%", border: "1px solid #bfdbfe", borderRadius: 10, padding: "10px 14px", fontSize: 13, fontFamily: "inherit", minHeight: 80, resize: "vertical", boxSizing: "border-box", outline: "none" }}
+                      placeholder="What did you do this week toward this goal? What worked? What was challenging?"
+                      value={reportForm.text}
+                      onChange={e => setReportForm({ ...reportForm, text: e.target.value })}
+                    />
+                    <button
+                      onClick={() => handleSubmitReport(goal._id || i)}
+                      disabled={submittingReport}
+                      style={{ marginTop: 10, padding: "9px 20px", borderRadius: 10, border: "none", background: "#3b82f6", color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: submittingReport ? 0.7 : 1 }}>
+                      {submittingReport ? "Submitting…" : "Submit Update"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ParentCapacityBuildingTab({ user, setToast }) {
   const [modules, setModules] = useState([]);
   const [selectedModuleId, setSelectedModuleId] = useState("");
@@ -3042,6 +3238,7 @@ export default function TeacherDashboard({ user, onLogout }) {
     { key: "training", label: "Training & Lessons", icon: "🎓", color: "#8b5cf6" },
     { key: "planner", label: "AI Lesson Planner", icon: "✏️", color: "#f59e0b" },
     { key: "courses", label: "My Courses", icon: "📚", color: "#06b6d4" },
+    { key: "my_goals", label: "My Goals", icon: "🎯", color: "#10b981" },
     { key: "parent_capacity", label: "Parent Capacity Building", icon: "👪", color: "#f97316" },
     { key: "assessment", label: "Assessments", icon: "📝", color: "#ef4444" },
     { key: "certificates", label: "Certificates", icon: "🏆", color: "#eab308" },
@@ -3062,7 +3259,7 @@ export default function TeacherDashboard({ user, onLogout }) {
   // Every other page shows an "Under Construction" placeholder instead.
   // "courses" and "assessment" are now notes/assessment based (no video) —
   // both are fully wired, so they're included here.
-  const WORKING_TABS = new Set(["overview", "children_att", "geotag", "profile", "training", "courses", "assessment", "certificates", "notifications", "feedback", "lesson_planner", "parent_capacity", "curriculum", "planner"]);
+  const WORKING_TABS = new Set(["overview", "children_att", "geotag", "profile", "training", "courses", "assessment", "certificates", "notifications", "feedback", "lesson_planner", "parent_capacity", "curriculum", "planner", "my_goals"]);
 
   const renderContent = () => {
     if (loading) {
@@ -3091,6 +3288,7 @@ export default function TeacherDashboard({ user, onLogout }) {
       case "geotag": return <GeotagAttendance user={enrichedUser} />;
       case "training": return <TrainingAndClassroomManager user={enrichedUser} />;
       case "planner": return <LessonPlannerTab setToast={setToast} user={enrichedUser} />;
+      case "my_goals": return <MyGoalsTab user={enrichedUser} setToast={setToast} />;
       case "courses":
         return (
           <TeacherCourseNotes

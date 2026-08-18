@@ -1,6 +1,40 @@
 import { useState, useEffect, useRef } from "react";
 import { S, SectionCard, Toast, StatCard, StatusBadge, SearchBar, Modal } from "../components/Shared";
-import { uploadFile, submitFeedback, getFeedbacks, updateMentorMe, changeMentorPassword, recordMenteeObservation, getMenteeObservations, submitCapstoneMilestone, getCapstoneSubmissions, submitPDCACycle, getPDCACycles, getMentorFellows, updateFellowStatus, getMentorMe, updateMenteeTracking, claimFellow, unclaimFellow, deleteMentorFellow, getMentorAttendance } from "../services/api";
+import {
+  uploadFile,
+  submitFeedback,
+  getFeedbacks,
+  updateMentorMe,
+  changeMentorPassword,
+  recordMenteeObservation,
+  getMenteeObservations,
+  submitCapstoneMilestone,
+  getCapstoneSubmissions,
+  submitPDCACycle,
+  getPDCACycles,
+  getMentorPDCAReports,
+  getMentorFellows,
+  updateFellowStatus,
+  getMentorMe,
+  updateMenteeTracking,
+  claimFellow,
+  unclaimFellow,
+  deleteMentorFellow,
+  getMentorAttendance,
+  getMentorFellowActivities,
+  getMentorFellowTasks,
+  designGrowthCycleFromCurriculum,
+  updateCycleOutcome,
+  getCycleWeeklyReports,
+} from "../services/api";
+
+import {
+  computeAllFellowInsights,
+  getFellowSubmissions,
+  matchDeliverables,
+} from "./aiInsights";
+
+import Month1PDCAGenerator from "./Month1PDCAGenerator";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
@@ -1559,41 +1593,233 @@ export function ImpactCapstoneTab({ user, setToast, onUserUpdate }) {
   );
 }
 
-/* ── Growth Cycle Tab (formerly "Documentation (PDCA)") ──
-   Same underlying concept: Plan → Do → Check → Act reflective cycles.
-   NEW in this version:
-   - Mentor must pick which fellow a cycle is being assigned/logged for.
-   - A "Fellow Progress" panel summarizes each fellow's cycle count + last activity.
-   - History can be filtered by fellow.
-   Component name kept as PDCATab so no other file needs to change its import. */
+
+
+const DELIVERABLE_DEFS = [
+  { id: "weekly_report", label: "Weekly report submitted", types: ["weekly_report"] },
+  { id: "lesson_upload", label: "Lesson materials uploaded", types: ["lesson_upload"] },
+  { id: "recent_activity", label: "Active in last 14 days", types: null }, // special-cased below
+  { id: "goal_progress", label: "Progress on current goal", types: ["goal_update"] },
+];
+
+function daysAgo(dateStr) {
+  if (!dateStr) return Infinity;
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  return diffMs / (1000 * 60 * 60 * 24);
+}
+
+function computeFellowInsight(fellowId, allActivities) {
+  const activities = allActivities.filter((a) => String(a.fellowId) === String(fellowId));
+  const sorted = [...activities].sort(
+    (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0),
+  );
+  const lastActivity = sorted[0];
+  const lastActivityDays = lastActivity ? daysAgo(lastActivity.createdAt) : Infinity;
+
+  const missedCount = activities.filter((a) => a.status === "missed").length;
+  const completedCount = activities.filter((a) => a.status === "completed" || !a.status).length;
+
+  const deliverables = DELIVERABLE_DEFS.map((d) => {
+    let met;
+    if (d.id === "recent_activity") {
+      met = lastActivityDays <= 14;
+    } else {
+      met = activities.some((a) => d.types.includes(a.type) && a.status !== "missed");
+    }
+    return { id: d.id, label: d.label, met };
+  });
+
+  const metCount = deliverables.filter((d) => d.met).length;
+  const score = Math.round((metCount / deliverables.length) * 100);
+
+  const reasons = [];
+  if (lastActivityDays > 21) reasons.push(`No activity logged in ${Math.floor(lastActivityDays)} days.`);
+  if (missedCount >= 2) reasons.push(`${missedCount} missed submissions recently.`);
+  if (score < 40) reasons.push("Overall deliverable completion is low.");
+
+  let level = "Low";
+  if (reasons.length >= 2 || score < 30) level = "High";
+  else if (reasons.length === 1 || score < 60) level = "Medium";
+
+  const interventionNeeded = level === "High";
+
+  const performanceSummary = lastActivity
+    ? `Last active ${Math.floor(lastActivityDays)} day(s) ago. ${completedCount} completed / ${missedCount} missed items tracked. Deliverable score: ${score}/100.`
+    : `No recorded activity yet. Deliverable score: ${score}/100.`;
+
+  const recommendations = [];
+  if (!deliverables.find((d) => d.id === "weekly_report")?.met) {
+    recommendations.push("Follow up on the missing weekly report.");
+  }
+  if (!deliverables.find((d) => d.id === "lesson_upload")?.met) {
+    recommendations.push("Check in on lesson material uploads.");
+  }
+  if (lastActivityDays > 14) {
+    recommendations.push("Reach out directly — no recent activity logged.");
+  }
+  if (recommendations.length === 0) {
+    recommendations.push("On track — consider setting a stretch goal for next cycle.");
+  }
+
+  return {
+    risk: { level, reasons },
+    progress: { score },
+    deliverables,
+    performanceSummary,
+    recommendations,
+    interventionNeeded,
+  };
+}
+
+
+
+
 export function PDCATab({ user, setToast, onUserUpdate }) {
   const mentees = user?.mentorProfile?.assignedTeachers || [];
 
+  // ── Sub-tab nav ──
+  const [activeSubTab, setActiveSubTab] = useState("new_cycle"); // new_cycle | timeline | history
+
   const [selectedMenteeId, setSelectedMenteeId] = useState("");
-  const [pdcaForm, setPdcaForm] = useState({ plan: "", do: "", check: "", act: "" });
+  const [pdcaForm, setPdcaForm] = useState({
+    plan: "",
+    do: "",
+    check: "",
+    act: "",
+  });
   const [submitting, setSubmitting] = useState(false);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [historyFilter, setHistoryFilter] = useState("all"); // "all" or a mentee _id
 
+  // ── Timeline state ──
+  const [timelineFellowId, setTimelineFellowId] = useState("");
+  const [expandedMonth, setExpandedMonth] = useState(null);
+
+  // ── AI/ML Layer state ──
+  // Two distinct data sources per Section 5 of the architecture design:
+  // Fellow Activity Submissions (evidence, reviewed) + Today's Tasks
+  // (daily self-logged activity log, reused from TeacherTask).
+  const [activities, setActivities] = useState([]);
+  const [todaysTasks, setTodaysTasks] = useState([]);
+  const [aiLoading, setAiLoading] = useState(true);
+
+  // "Custom Growth Cycle" entries (legacy PDCACycle model).
+  const [aiReports, setAiReports] = useState([]);
+  // AI Month 1/Month N PDCA reports (PDCAReport model) — only ones the
+  // mentor has actually approved count as a logged cycle for progress
+  // purposes; drafts-in-progress shouldn't inflate the count.
+
   const fetchCycles = () => {
     setLoading(true);
-    getPDCACycles()
-      .then(res => setHistory(res.cycles || []))
-      .catch(err => console.error("Failed to fetch Growth Cycles", err))
+    Promise.all([getPDCACycles(), getMentorPDCAReports()])
+      .then(([cyclesRes, reportsRes]) => {
+        setHistory(cyclesRes.cycles || []);
+        setAiReports((reportsRes.reports || []).filter((r) => r.status === "approved"));
+      })
+      .catch((err) => console.error("Failed to fetch Growth Cycles", err))
       .finally(() => setLoading(false));
+  };
+
+  const fetchActivities = () => {
+    setAiLoading(true);
+    Promise.all([getMentorFellowActivities(), getMentorFellowTasks()])
+      .then(([activitiesRes, tasksRes]) => {
+        setActivities(activitiesRes.activities || []);
+        setTodaysTasks(tasksRes.tasks || []);
+      })
+      .catch((err) =>
+        console.error("Failed to fetch fellow activity data for AI insights", err),
+      )
+      .finally(() => setAiLoading(false));
   };
 
   useEffect(() => {
     fetchCycles();
+    fetchActivities();
   }, []);
+
+
+  const insights = computeAllFellowInsights(mentees, activities, todaysTasks);
+  const selectedInsight = selectedMenteeId ? insights[selectedMenteeId] : null;
+  const fellowsNeedingAttention = mentees
+    .map((m) => ({ mentee: m, insight: insights[m._id] }))
+    .filter(
+      (x) => x.insight?.interventionNeeded || x.insight?.risk?.level === "High",
+    );
+
+  const applyAIDraft = () => {
+    if (!selectedInsight) {
+      setToast?.({
+        msg: "Select a fellow first so the AI can pull their activity data.",
+        type: "error",
+      });
+      return;
+    }
+    setPdcaForm((f) => ({
+      ...f,
+      // Plan (next cycle): risk + intervention signals only — the mentor
+      // still sets the actual Month 2 goals, this just carries the signal
+      // forward. Never overwrites Plan text the mentor already started.
+      plan: f.plan?.trim() ? f.plan : selectedInsight.planSignals,
+      check: selectedInsight.performanceSummary,
+      act: selectedInsight.recommendations
+        .map((r, i) => `${i + 1}. ${r}`)
+        .join("\n"),
+    }));
+    setToast?.({
+      msg: "AI draft applied to Plan, Check & Act — review and edit before saving.",
+      type: "info",
+    });
+  };
+
+// ── Design a Growth Cycle straight from an uploaded curriculum doc ──
+// Upload a curriculum file for this fellow's Custom Growth Cycle -> AI
+// extracts + structures it AND drafts Plan/Do/Check/Act in one request,
+// filling the form below immediately. Nothing needs to be published
+// first; the curriculum is kept as a draft for reuse/editing later.
+const [curriculumFile, setCurriculumFile] = useState(null);
+const [curriculumMonth, setCurriculumMonth] = useState(1);
+const [designing, setDesigning] = useState(false);
+
+const handleDesignFromCurriculum = async () => {
+  if (!selectedMenteeId) {
+    setToast?.({ msg: "Select a fellow first.", type: "error" });
+    return;
+  }
+  if (!curriculumFile) {
+    setToast?.({ msg: "Choose a curriculum document first (.docx, .txt, or .md).", type: "error" });
+    return;
+  }
+  setDesigning(true);
+  try {
+    const res = await designGrowthCycleFromCurriculum(selectedMenteeId, curriculumMonth, curriculumFile);
+    setPdcaForm({
+      plan: res.draft.plan || "",
+      do: res.draft.do || "",
+      check: res.draft.check || "",
+      act: res.draft.act || "",
+    });
+    setToast?.({
+      msg: res.draft.aiAvailable
+        ? `Growth Cycle designed from "${curriculumFile.name}" — review and edit before saving.`
+        : "AI is currently unavailable — a blank template was filled in instead. Please write these fields manually.",
+      type: res.draft.aiAvailable ? "success" : "error",
+    });
+    setCurriculumFile(null);
+  } catch (err) {
+    setToast?.({ msg: err.message || "Failed to design Growth Cycle from curriculum.", type: "error" });
+  } finally {
+    setDesigning(false);
+  }
+};
 
   // Resolve the mentee id a given cycle belongs to, whether menteeId
   // came back populated ({_id, name, email}) or as a raw id string.
   const cycleMenteeId = (cycle) => {
     const m = cycle.menteeId;
     if (!m) return null;
-    return typeof m === "object" ? (m._id || m.id) : m;
+    return typeof m === "object" ? m._id || m.id : m;
   };
 
   const cycleMenteeName = (cycle) => {
@@ -1601,189 +1827,893 @@ export function PDCATab({ user, setToast, onUserUpdate }) {
     if (!m) return "Unassigned";
     if (typeof m === "object" && m.name) return m.name;
     // fall back to looking the id up in the mentee list currently assigned
-    const found = mentees.find(mm => String(mm._id) === String(m));
+    const found = mentees.find((mm) => String(mm._id) === String(m));
     return found?.name || "Unknown Fellow";
   };
 
-  // Per-fellow progress summary, built from cycle history.
+  // ── 6-Month Timeline helpers ──
+  const getLast6Months = () => {
+    const months = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({
+        label: d.toLocaleString("en-IN", { month: "short", year: "2-digit" }),
+        year: d.getFullYear(),
+        month: d.getMonth(),
+      });
+    }
+    return months;
+  };
+
+  const cyclesForTimelineFellow = history.filter((c) =>
+    timelineFellowId ? String(cycleMenteeId(c)) === String(timelineFellowId) : false,
+  );
+
+  const cyclesInMonth = (year, month) =>
+    cyclesForTimelineFellow.filter((c) => {
+      const d = new Date(c.createdAt || c.date);
+      return d.getFullYear() === year && d.getMonth() === month;
+    });
+
+  // Per-fellow progress summary, built from BOTH cycle sources:
+  // - legacy "Custom Growth Cycle" entries (PDCACycle)
+  // - approved AI Month N PDCA reports (PDCAReport), e.g. the Month 1
+  //   generator's "Approve & Save" action — these weren't being counted
+  //   here before, which is why approving a Month 1 report didn't move
+  //   this panel.
   const menteeProgress = mentees.map((m) => {
-    const cyclesForMentee = history.filter(h => String(cycleMenteeId(h)) === String(m._id));
-    const sorted = [...cyclesForMentee].sort((a, b) => new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0));
-    const latest = sorted[0];
+    const cyclesForMentee = history.filter(
+      (h) => String(cycleMenteeId(h)) === String(m._id),
+    );
+    const reportsForMentee = aiReports.filter(
+      (r) => String(r.fellowId?._id || r.fellowId) === String(m._id),
+    );
+    const combinedDates = [
+      ...cyclesForMentee.map((h) => h.createdAt || h.date),
+      ...reportsForMentee.map((r) => r.approvedAt || r.updatedAt),
+    ].filter(Boolean);
+    const lastDate = combinedDates.length
+      ? new Date(Math.max(...combinedDates.map((d) => new Date(d))))
+      : null;
     return {
       mentee: m,
-      count: cyclesForMentee.length,
-      latest,
-      lastDate: latest ? (latest.createdAt || latest.date) : null,
+      count: cyclesForMentee.length + reportsForMentee.length,
+      lastDate,
     };
   });
 
-  const filteredHistory = historyFilter === "all"
-    ? history
-    : history.filter(h => String(cycleMenteeId(h)) === String(historyFilter));
+  const filteredHistory =
+    historyFilter === "all"
+      ? history
+      : history.filter(
+          (h) => String(cycleMenteeId(h)) === String(historyFilter),
+        );
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedMenteeId) {
-      setToast?.({ msg: "Please select which fellow this Growth Cycle is for.", type: "error" });
+      setToast?.({
+        msg: "Please select which fellow this Growth Cycle is for.",
+        type: "error",
+      });
       return;
     }
-    if(!pdcaForm.plan || !pdcaForm.do || !pdcaForm.check || !pdcaForm.act) {
-      setToast?.({ msg: "Please fill out all Growth Cycle fields.", type: "error" });
+    if (!pdcaForm.plan || !pdcaForm.do || !pdcaForm.check || !pdcaForm.act) {
+      setToast?.({
+        msg: "Please fill out all Growth Cycle fields.",
+        type: "error",
+      });
       return;
     }
     setSubmitting(true);
-    
+
     try {
       // Cycle number is scoped per-fellow so each fellow's own sequence starts at 1.
-      const existingForMentee = history.filter(h => String(cycleMenteeId(h)) === String(selectedMenteeId));
+      const existingForMentee = history.filter(
+        (h) => String(cycleMenteeId(h)) === String(selectedMenteeId),
+      );
       const cycleNumber = existingForMentee.length + 1;
-      await submitPDCACycle(cycleNumber, pdcaForm.plan, pdcaForm.do, pdcaForm.check, pdcaForm.act, selectedMenteeId);
-      setToast?.({ msg: "Growth Cycle assigned and recorded successfully!", type: "success" });
+      await submitPDCACycle(
+        cycleNumber,
+        pdcaForm.plan,
+        pdcaForm.do,
+        pdcaForm.check,
+        pdcaForm.act,
+        selectedMenteeId,
+      );
+      setToast?.({
+        msg: "Growth Cycle assigned and recorded successfully!",
+        type: "success",
+      });
       setPdcaForm({ plan: "", do: "", check: "", act: "" });
       fetchCycles();
     } catch (err) {
-      setToast?.({ msg: err.message || "Failed to save Growth Cycle", type: "error" });
+      setToast?.({
+        msg: err.message || "Failed to save Growth Cycle",
+        type: "error",
+      });
     } finally {
       setSubmitting(false);
     }
   };
 
+  const subTabs = [
+    { key: "new_cycle", label: "✏️ New Goal" },
+    { key: "timeline",  label: "📅 6-Month Timeline" },
+    { key: "history",   label: "📚 Goal History" },
+  ];
+
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
       <h1 style={S.pageTitle}>Growth Cycle</h1>
-      <p style={S.pageSub}>Assign Plan–Do–Check–Act growth cycles to your fellows and track their progress.</p>
+      <p style={S.pageSub}>
+        Assign Plan–Do–Check–Act growth cycles to your fellows and track their
+        progress.
+      </p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
-        <SectionCard title="🔄 New Growth Cycle">
-          <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: 16 }}>
-              <label style={S.label}>Assign To Fellow *</label>
-              {mentees.length === 0 ? (
-                <div style={{ padding: "10px 12px", background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 8, fontSize: 12, color: "#92400e" }}>
-                  You have no fellows assigned yet. Claim a fellow from Mentee Management first.
-                </div>
-              ) : (
-                <select
-                  style={S.input}
-                  value={selectedMenteeId}
-                  onChange={e => setSelectedMenteeId(e.target.value)}
-                  required
-                >
-                  <option value="">Select a fellow…</option>
-                  {mentees.map(m => (
-                    <option key={m._id} value={m._id}>{m.name || "Unknown Fellow"}</option>
-                  ))}
-                </select>
-              )}
-            </div>
+      {/* ── AI-generated official Month 1 report (always visible, above sub-tabs) ── */}
+      <div style={{ marginBottom: 24, marginTop: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <span style={{
+            fontSize: 11, fontWeight: 800, color: "#5b21b6", background: "#ede9fe",
+            border: "1px solid #c4b5fd", borderRadius: 999, padding: "2px 10px",
+          }}>
+            🤖 AI-GENERATED
+          </span>
+          <span style={{ fontSize: 12, color: "#6b7280" }}>
+            Official Month 1 report — grounded in real logged data. Review and approve here to send to Admin.
+          </span>
+        </div>
+        <Month1PDCAGenerator mentees={mentees} setToast={setToast} onApproved={fetchCycles} />
+      </div>
 
-            <div style={{ marginBottom: 16 }}>
-              <label style={{...S.label, display: "flex", alignItems: "center", gap: 6}}>
-                <span style={{background: "#e0e7ff", color: "#4f46e5", padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 900}}>P</span>
-                PLAN (Objective & Strategy)
-              </label>
-              <textarea style={{...S.input, minHeight: 60}} value={pdcaForm.plan} onChange={e=>setPdcaForm({...pdcaForm, plan: e.target.value})} placeholder="What is the goal? What is the plan?" required />
-            </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "28px 0 20px" }}>
+        <div style={{ flex: 1, height: 1, background: "#e5e7eb" }} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>
+          Custom / Other Growth Cycles
+        </span>
+        <div style={{ flex: 1, height: 1, background: "#e5e7eb" }} />
+      </div>
 
-            <div style={{ marginBottom: 16 }}>
-              <label style={{...S.label, display: "flex", alignItems: "center", gap: 6}}>
-                <span style={{background: "#fef3c7", color: "#d97706", padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 900}}>D</span>
-                DO (Action Taken)
-              </label>
-              <textarea style={{...S.input, minHeight: 60}} value={pdcaForm.do} onChange={e=>setPdcaForm({...pdcaForm, do: e.target.value})} placeholder="How was the plan executed?" required />
-            </div>
+      {/* Sub-tab nav */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+        {subTabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setActiveSubTab(t.key)}
+            style={{
+              padding: "9px 20px",
+              borderRadius: 10,
+              border: "none",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              fontSize: 13,
+              fontWeight: 700,
+              transition: "all 0.15s",
+              background: activeSubTab === t.key ? "#3b82f6" : "#f1f5f9",
+              color: activeSubTab === t.key ? "white" : "#475569",
+              boxShadow: activeSubTab === t.key ? "0 2px 8px rgba(59,130,246,0.3)" : "none",
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-            <div style={{ marginBottom: 16 }}>
-              <label style={{...S.label, display: "flex", alignItems: "center", gap: 6}}>
-                <span style={{background: "#d1fae5", color: "#059669", padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 900}}>C</span>
-                CHECK (Results & Observations)
-              </label>
-              <textarea style={{...S.input, minHeight: 60}} value={pdcaForm.check} onChange={e=>setPdcaForm({...pdcaForm, check: e.target.value})} placeholder="What were the outcomes? What worked well?" required />
-            </div>
-
-            <div style={{ marginBottom: 24 }}>
-              <label style={{...S.label, display: "flex", alignItems: "center", gap: 6}}>
-                <span style={{background: "#fee2e2", color: "#dc2626", padding: "2px 6px", borderRadius: 4, fontSize: 10, fontWeight: 900}}>A</span>
-                ACT (Next Steps & Adjustments)
-              </label>
-              <textarea style={{...S.input, minHeight: 60}} value={pdcaForm.act} onChange={e=>setPdcaForm({...pdcaForm, act: e.target.value})} placeholder="What changes will you make for the next cycle?" required />
-            </div>
-
-            <button type="submit" disabled={submitting || mentees.length === 0} style={{...S.primaryBtn, width: "100%", opacity: (submitting || mentees.length === 0) ? 0.7 : 1}}>
-              {submitting ? "Saving..." : "Assign & Save Growth Cycle"}
-            </button>
-          </form>
-        </SectionCard>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-          {/* Fellow Progress Summary */}
-          <SectionCard title="📊 Fellow Progress">
-            {mentees.length === 0 ? (
-              <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No fellows assigned yet.</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {menteeProgress.map(({ mentee, count, lastDate }) => (
-                  <button
-                    key={mentee._id}
-                    onClick={() => setHistoryFilter(historyFilter === mentee._id ? "all" : mentee._id)}
+      {/* ── NEW GOAL TAB ── */}
+      {/* {activeSubTab === "new_cycle" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+          <SectionCard
+            title="🔄 Custom Growth Cycle"
+            subtitle="For Month 2+ or informal tracking — separate from the official Month 1 report above."
+          >
+            <form onSubmit={handleSubmit}>
+              <div style={{ marginBottom: 16 }}>
+                <label style={S.label}>Assign To Fellow *</label>
+                {mentees.length === 0 ? (
+                  <div
                     style={{
-                      display: "flex", justifyContent: "space-between", alignItems: "center",
-                      padding: "12px 14px", borderRadius: 10, textAlign: "left", cursor: "pointer",
-                      border: historyFilter === mentee._id ? "1.5px solid #3b82f6" : "1px solid #e2e8f0",
-                      background: historyFilter === mentee._id ? "#eff6ff" : "#f8fafc",
+                      padding: "10px 12px",
+                      background: "#fef3c7",
+                      border: "1px solid #fde68a",
+                      borderRadius: 8,
+                      fontSize: 12,
+                      color: "#92400e",
                     }}
                   >
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>{mentee.name || "Unknown Fellow"}</div>
-                      <div style={{ fontSize: 11, color: "#64748b" }}>
-                        {count} cycle{count !== 1 ? "s" : ""} logged{lastDate ? ` · last on ${new Date(lastDate).toLocaleDateString()}` : ""}
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 16, fontWeight: 900, color: count > 0 ? "#10b981" : "#cbd5e1" }}>{count}</div>
-                  </button>
-                ))}
-                {historyFilter !== "all" && (
-                  <button onClick={() => setHistoryFilter("all")} style={{ ...S.exportBtn, alignSelf: "flex-start", marginTop: 4 }}>
-                    Clear filter (show all fellows)
-                  </button>
+                    You have no fellows assigned yet. Claim a fellow from Mentee
+                    Management first.
+                  </div>
+                ) : (
+                  <select
+                    style={S.input}
+                    value={selectedMenteeId}
+                    onChange={(e) => setSelectedMenteeId(e.target.value)}
+                    required
+                  >
+                    <option value="">Select a fellow…</option>
+                    {mentees.map((m) => (
+                      <option key={m._id} value={m._id}>
+                        {m.name || "Unknown Fellow"}
+                      </option>
+                    ))}
+                  </select>
                 )}
               </div>
-            )}
-          </SectionCard>
 
-          {/* Growth Cycle History (filterable by fellow) */}
-          <SectionCard title="📚 Growth Cycle History">
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {loading ? (
-                <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>Loading...</div>
-              ) : filteredHistory.length === 0 ? (
-                <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>
-                  {historyFilter === "all" ? "No Growth Cycles recorded yet." : "No Growth Cycles recorded for this fellow yet."}
+              <div
+                style={{
+                  marginBottom: 20,
+                  background: "#ede9fe",
+                  border: "1px solid #c4b5fd",
+                  borderRadius: 12,
+                  padding: 16,
+                }}
+              >
+                <div style={{ fontSize: 12, fontWeight: 800, color: "#5b21b6", marginBottom: 8 }}>
+                  📄 Design from Curriculum
                 </div>
-              ) : filteredHistory.map((item, i) => (
-                <div key={item._id || i} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: 16 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#3b82f6" }}>🎓 {cycleMenteeName(item)}</div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>{new Date(item.createdAt || item.date).toLocaleDateString("en-US", { month:"short", day:"2-digit", year:"numeric" })}</div>
-                    <div style={{ fontSize: 10, fontWeight: 800, background: "#d1fae5", color: "#059669", padding: "2px 8px", borderRadius: 10 }}>{item.status || "Completed"}</div>
+                <div style={{ fontSize: 11, color: "#4c1d95", marginBottom: 10 }}>
+                  Upload this month's curriculum document and the AI will
+                  design the Plan/Do/Check/Act fields below immediately, using{" "}
+                  {selectedMenteeId ? "this fellow's" : "the selected fellow's"}{" "}
+                  real logged activity — no separate publish step needed.
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <select
+                    value={curriculumMonth}
+                    onChange={(e) => setCurriculumMonth(Number(e.target.value))}
+                    style={{ ...S.input, width: 110 }}
+                  >
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                      <option key={m} value={m}>Month {m}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="file"
+                    accept=".docx,.txt,.md"
+                    onChange={(e) => setCurriculumFile(e.target.files?.[0] || null)}
+                    style={{ fontSize: 12, flex: 1, minWidth: 160 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleDesignFromCurriculum}
+                    disabled={designing || !curriculumFile || !selectedMenteeId}
+                    style={{
+                      padding: "8px 16px", borderRadius: 6, border: "1px solid #7c3aed",
+                      background: "#7c3aed", color: "#fff", fontWeight: 700,
+                      cursor: designing || !curriculumFile || !selectedMenteeId ? "not-allowed" : "pointer",
+                      opacity: designing || !curriculumFile || !selectedMenteeId ? 0.6 : 1,
+                    }}
+                  >
+                    {designing ? "Designing…" : "✨ Design Now"}
+                  </button>
+                </div>
+              </div>
+
+              {selectedMenteeId && selectedInsight && (
+                <div
+                  style={{
+                    marginBottom: 20,
+                    background: "#f5f3ff",
+                    border: "1px solid #ddd6fe",
+                    borderRadius: 12,
+                    padding: 16,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      marginBottom: 10,
+                    }}
+                  >
+                    <div
+                      style={{ fontSize: 12, fontWeight: 800, color: "#5b21b6" }}
+                    >
+                      🤖 AI Insights
+                    </div>
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 800,
+                        padding: "2px 8px",
+                        borderRadius: 10,
+                        background:
+                          selectedInsight.risk.level === "High"
+                            ? "#fee2e2"
+                            : selectedInsight.risk.level === "Medium"
+                              ? "#fef3c7"
+                              : "#d1fae5",
+                        color:
+                          selectedInsight.risk.level === "High"
+                            ? "#dc2626"
+                            : selectedInsight.risk.level === "Medium"
+                              ? "#b45309"
+                              : "#059669",
+                      }}
+                    >
+                      {selectedInsight.risk.level} risk
+                    </span>
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", marginBottom: 8 }}>{item.plan.substring(0, 60) + (item.plan.length > 60 ? "..." : "")}</div>
-                  <button onClick={() => setToast?.({ msg: `Plan: ${item.plan}\nDo: ${item.do}\nCheck: ${item.check}\nAct: ${item.act}`, type: "info" })} style={{ background: "none", border: "none", color: "#3b82f6", fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0 }}>View Full Cycle →</button>
+                  <div
+                    style={{
+                      fontSize: 20,
+                      fontWeight: 900,
+                      color: "#4f46e5",
+                      marginBottom: 10,
+                    }}
+                  >
+                    {selectedInsight.progress.score}
+                    <span style={{ fontSize: 12, color: "#94a3b8" }}>/100</span>
+                  </div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: 4,
+                      marginBottom: 10,
+                    }}
+                  >
+                    {selectedInsight.deliverables.map((d) => (
+                      <div
+                        key={d.id}
+                        style={{
+                          fontSize: 11,
+                          color: d.met
+                            ? "#059669"
+                            : d.taskOnly
+                              ? "#b45309"
+                              : "#94a3b8",
+                        }}
+                        title={
+                          d.met
+                            ? "Evidenced via submission"
+                            : d.taskOnly
+                              ? "Logged in Today's Tasks — not yet submitted as evidence"
+                              : "No task log or submission yet"
+                        }
+                      >
+                        {d.met ? "✓" : d.taskOnly ? "◐" : "☐"} {d.label}
+                      </div>
+                    ))}
+                  </div>
+                  <div
+                    style={{ fontSize: 12, color: "#334155", marginBottom: 12 }}
+                  >
+                    {selectedInsight.performanceSummary}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={applyAIDraft}
+                    style={{
+                      ...S.exportBtn,
+                      background: "#ede9fe",
+                      color: "#5b21b6",
+                      borderColor: "#c4b5fd",
+                      fontWeight: 700,
+                    }}
+                  >
+                    ✨ Use AI Draft for Plan, Check & Act
+                  </button>
                 </div>
-              ))}
-            </div>
+              )}
+
+              <div style={{ marginBottom: 16 }}>
+                <label
+                  style={{
+                    ...S.label,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <span
+                    style={{
+                      background: "#e0e7ff",
+                      color: "#4f46e5",
+                      padding: "2px 6px",
+                      borderRadius: 4,
+                      fontSize: 10,
+                      fontWeight: 900,
+                    }}
+                  >
+                    P
+                  </span>
+                  PLAN (Objective & Strategy)
+                </label>
+                <textarea
+                  style={{ ...S.input, minHeight: 60 }}
+                  value={pdcaForm.plan}
+                  onChange={(e) =>
+                    setPdcaForm({ ...pdcaForm, plan: e.target.value })
+                  }
+                  placeholder="What is the goal? What is the plan?"
+                  required
+                />
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label
+                  style={{
+                    ...S.label,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <span
+                    style={{
+                      background: "#fef3c7",
+                      color: "#d97706",
+                      padding: "2px 6px",
+                      borderRadius: 4,
+                      fontSize: 10,
+                      fontWeight: 900,
+                    }}
+                  >
+                    D
+                  </span>
+                  DO (Action Taken)
+                </label>
+                <textarea
+                  style={{ ...S.input, minHeight: 60 }}
+                  value={pdcaForm.do}
+                  onChange={(e) =>
+                    setPdcaForm({ ...pdcaForm, do: e.target.value })
+                  }
+                  placeholder="How was the plan executed?"
+                  required
+                />
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label
+                  style={{
+                    ...S.label,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <span
+                    style={{
+                      background: "#d1fae5",
+                      color: "#059669",
+                      padding: "2px 6px",
+                      borderRadius: 4,
+                      fontSize: 10,
+                      fontWeight: 900,
+                    }}
+                  >
+                    C
+                  </span>
+                  CHECK (Results & Observations)
+                </label>
+                <textarea
+                  style={{ ...S.input, minHeight: 60 }}
+                  value={pdcaForm.check}
+                  onChange={(e) =>
+                    setPdcaForm({ ...pdcaForm, check: e.target.value })
+                  }
+                  placeholder="What were the outcomes? What worked well?"
+                  required
+                />
+              </div>
+
+              <div style={{ marginBottom: 24 }}>
+                <label
+                  style={{
+                    ...S.label,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <span
+                    style={{
+                      background: "#fee2e2",
+                      color: "#dc2626",
+                      padding: "2px 6px",
+                      borderRadius: 4,
+                      fontSize: 10,
+                      fontWeight: 900,
+                    }}
+                  >
+                    A
+                  </span>
+                  ACT (Next Steps & Adjustments)
+                </label>
+                <textarea
+                  style={{ ...S.input, minHeight: 60 }}
+                  value={pdcaForm.act}
+                  onChange={(e) =>
+                    setPdcaForm({ ...pdcaForm, act: e.target.value })
+                  }
+                  placeholder="What changes will you make for the next cycle?"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting || mentees.length === 0}
+                style={{
+                  ...S.primaryBtn,
+                  width: "100%",
+                  opacity: submitting || mentees.length === 0 ? 0.7 : 1,
+                }}
+              >
+                {submitting ? "Saving..." : "Assign & Save Growth Cycle"}
+              </button>
+            </form>
           </SectionCard>
 
-          <SectionCard title="💡 Growth Cycle Tips">
-            <ul style={{ paddingLeft: 20, margin: 0, color: "#475569", fontSize: 13, lineHeight: 1.6 }}>
-              <li style={{marginBottom: 8}}>Keep objectives SMART (Specific, Measurable, Achievable, Relevant, Time-bound).</li>
-              <li style={{marginBottom: 8}}>Document data and specific observations in the <strong>Check</strong> phase.</li>
-              <li>Use the <strong>Act</strong> phase to refine your strategy for the next iteration, and revisit the Fellow Progress panel to see who may need a follow-up cycle.</li>
-            </ul>
-          </SectionCard>
+          <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+            {fellowsNeedingAttention.length > 0 && (
+              <SectionCard title="🚨 Fellows Needing Attention">
+                {fellowsNeedingAttention.map(({ mentee, insight }) => (
+                  <div
+                    key={mentee._id}
+                    style={{
+                      padding: "10px 12px",
+                      marginBottom: 8,
+                      borderRadius: 10,
+                      background: "#fef2f2",
+                      border: "1px solid #fecaca",
+                    }}
+                  >
+                    <strong style={{ fontSize: 13, color: "#991b1b" }}>
+                      {mentee.name}
+                    </strong>
+                    <div style={{ fontSize: 11, color: "#7f1d1d" }}>
+                      {insight.risk.reasons.join(" ")}
+                    </div>
+                  </div>
+                ))}
+              </SectionCard>
+            )}
+            <SectionCard title="📊 Fellow Progress">
+              {mentees.length === 0 ? (
+                <div
+                  style={{
+                    padding: 20,
+                    textAlign: "center",
+                    color: "#94a3b8",
+                    fontSize: 13,
+                  }}
+                >
+                  No fellows assigned yet.
+                </div>
+              ) : (
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 10 }}
+                >
+                  {menteeProgress.map(({ mentee, count, lastDate }) => (
+                    <button
+                      key={mentee._id}
+                      onClick={() => {
+                        setHistoryFilter(mentee._id);
+                        setActiveSubTab("history");
+                      }}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        padding: "12px 14px",
+                        borderRadius: 10,
+                        textAlign: "left",
+                        cursor: "pointer",
+                        border: "1px solid #e2e8f0",
+                        background: "#f8fafc",
+                      }}
+                    >
+                      <div>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 700,
+                            color: "#1e293b",
+                          }}
+                        >
+                          {mentee.name || "Unknown Fellow"}
+                        </div>
+                        <div style={{ fontSize: 11, color: "#64748b" }}>
+                          {count} cycle{count !== 1 ? "s" : ""} logged
+                          {lastDate
+                            ? ` · last on ${new Date(lastDate).toLocaleDateString()}`
+                            : ""}
+                        </div>
+                      </div>
+                      {insights[mentee._id] && (
+                        <span
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 900,
+                            color: "#4f46e5",
+                            marginRight: 8,
+                          }}
+                        >
+                          {insights[mentee._id].progress.score}
+                        </span>
+                      )}
+                      <div
+                        style={{
+                          fontSize: 16,
+                          fontWeight: 900,
+                          color: count > 0 ? "#10b981" : "#cbd5e1",
+                        }}
+                      >
+                        {count}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </SectionCard>
+
+            <SectionCard title="💡 Growth Cycle Tips">
+              <ul
+                style={{
+                  paddingLeft: 20,
+                  margin: 0,
+                  color: "#475569",
+                  fontSize: 13,
+                  lineHeight: 1.6,
+                }}
+              >
+                <li style={{ marginBottom: 8 }}>
+                  Keep objectives SMART (Specific, Measurable, Achievable,
+                  Relevant, Time-bound).
+                </li>
+                <li style={{ marginBottom: 8 }}>
+                  Document data and specific observations in the{" "}
+                  <strong>Check</strong> phase.
+                </li>
+                <li>
+                  Use the <strong>Act</strong> phase to refine your strategy for
+                  the next iteration, and revisit the Fellow Progress panel to see
+                  who may need a follow-up cycle.
+                </li>
+              </ul>
+            </SectionCard>
+          </div>
         </div>
-      </div>
+      )} */}
+
+      {/* ── 6-MONTH TIMELINE TAB ── */}
+      {activeSubTab === "timeline" && (
+        <div>
+          <div style={{ marginBottom: 20 }}>
+            <label style={S.label}>Select Fellow</label>
+            <select
+              style={{ ...S.input, maxWidth: 320 }}
+              value={timelineFellowId}
+              onChange={(e) => { setTimelineFellowId(e.target.value); setExpandedMonth(null); }}
+            >
+              <option value="">— Choose a Fellow —</option>
+              {mentees.map((m) => <option key={m._id} value={m._id}>{m.name}</option>)}
+            </select>
+          </div>
+
+          {!timelineFellowId ? (
+            <div style={{ textAlign: "center", padding: "60px 20px", color: "#94a3b8", fontSize: 14 }}>
+              Select a Fellow above to see their 6-month growth timeline.
+            </div>
+          ) : (
+            <>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  marginBottom: 20,
+                  background: "#eff6ff",
+                  borderRadius: 12,
+                  padding: "12px 18px",
+                  border: "1px solid #bfdbfe",
+                }}
+              >
+                <span style={{ fontSize: 22 }}>📈</span>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: "#1e40af" }}>
+                    {cyclesForTimelineFellow.length} total goal{cyclesForTimelineFellow.length !== 1 ? "s" : ""} across 6 months
+                  </div>
+                  {cyclesForTimelineFellow[0] && (
+                    <div style={{ fontSize: 11, color: "#3b82f6" }}>
+                      Last logged: {new Date(cyclesForTimelineFellow[0].createdAt || cyclesForTimelineFellow[0].date).toLocaleDateString()}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12, marginBottom: 24 }}>
+                {getLast6Months().map(({ label, year, month }) => {
+                  const cycles = cyclesInMonth(year, month);
+                  const isExpanded = expandedMonth === `${year}-${month}`;
+                  const dotColor = cycles.length >= 2 ? "#10b981" : cycles.length === 1 ? "#f59e0b" : "#e2e8f0";
+                  const dotBg = cycles.length >= 2 ? "#d1fae5" : cycles.length === 1 ? "#fef3c7" : "#f8fafc";
+                  return (
+                    <div key={`${year}-${month}`}>
+                      <button
+                        onClick={() => setExpandedMonth(isExpanded ? null : `${year}-${month}`)}
+                        style={{
+                          width: "100%",
+                          background: isExpanded ? dotBg : "white",
+                          border: `2px solid ${isExpanded ? dotColor : "#e2e8f0"}`,
+                          borderRadius: 12,
+                          padding: "14px 10px",
+                          cursor: "pointer",
+                          textAlign: "center",
+                          transition: "all 0.15s",
+                          fontFamily: "inherit",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: "50%",
+                            background: dotBg,
+                            border: `3px solid ${dotColor}`,
+                            margin: "0 auto 8px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 13,
+                            fontWeight: 900,
+                            color: cycles.length > 0 ? dotColor : "#94a3b8",
+                          }}
+                        >
+                          {cycles.length}
+                        </div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#374151" }}>{label}</div>
+                        <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 2 }}>
+                          {cycles.length === 0 ? "No goals" : `${cycles.length} goal${cycles.length > 1 ? "s" : ""}`}
+                        </div>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {expandedMonth && (() => {
+                const [yr, mo] = expandedMonth.split("-").map(Number);
+                const mCycles = cyclesInMonth(yr, mo);
+                const mLabel = new Date(yr, mo, 1).toLocaleString("en-IN", { month: "long", year: "numeric" });
+                return mCycles.length === 0 ? null : (
+                  <SectionCard title={`Goals in ${mLabel}`}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      {mCycles.map((c, i) => (
+                        <div key={c._id || i} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: 16 }}>
+                          <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 6 }}>
+                            {new Date(c.createdAt || c.date).toLocaleDateString()}
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>
+                            {c.plan.substring(0, 80)}{c.plan.length > 80 ? "…" : ""}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </SectionCard>
+                );
+              })()}
+
+              <div style={{ display: "flex", gap: 16, marginTop: 8, fontSize: 12, color: "#64748b" }}>
+                <span>🟢 ≥2 goals</span>
+                <span>🟡 1 goal</span>
+                <span>⚪ No goals</span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── GOAL HISTORY TAB ── */}
+      {activeSubTab === "history" && (
+        <div>
+          <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+            <select
+              style={{ ...S.input, width: "auto", minWidth: 180 }}
+              value={historyFilter}
+              onChange={(e) => setHistoryFilter(e.target.value)}
+            >
+              <option value="all">All Fellows</option>
+              {mentees.map((m) => <option key={m._id} value={m._id}>{m.name}</option>)}
+            </select>
+            <span style={{ fontSize: 12, color: "#64748b" }}>
+              {filteredHistory.length} goal{filteredHistory.length !== 1 ? "s" : ""}
+            </span>
+            {historyFilter !== "all" && (
+              <button onClick={() => setHistoryFilter("all")} style={{ ...S.exportBtn }}>
+                Clear fellow filter
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {loading ? (
+              <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>
+                Loading...
+              </div>
+            ) : filteredHistory.length === 0 ? (
+              <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>
+                {historyFilter === "all"
+                  ? "No Growth Cycles recorded yet."
+                  : "No Growth Cycles recorded for this fellow yet."}
+              </div>
+            ) : (
+              filteredHistory.map((item, i) => (
+                <div
+                  key={item._id || i}
+                  style={{
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: 12,
+                    padding: 16,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      marginBottom: 8,
+                      flexWrap: "wrap",
+                      gap: 6,
+                    }}
+                  >
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#3b82f6" }}>
+                      🎓 {cycleMenteeName(item)}
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>
+                      {new Date(item.createdAt || item.date).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "2-digit",
+                        year: "numeric",
+                      })}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 800,
+                        background: "#d1fae5",
+                        color: "#059669",
+                        padding: "2px 8px",
+                        borderRadius: 10,
+                      }}
+                    >
+                      {item.status || "Completed"}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#0f172a", marginBottom: 8 }}>
+                    {item.plan.substring(0, 60) + (item.plan.length > 60 ? "..." : "")}
+                  </div>
+                  <button
+                    onClick={() =>
+                      setToast?.({
+                        msg: `Plan: ${item.plan}\nDo: ${item.do}\nCheck: ${item.check}\nAct: ${item.act}`,
+                        type: "info",
+                      })
+                    }
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "#3b82f6",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      padding: 0,
+                    }}
+                  >
+                    View Full Cycle →
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

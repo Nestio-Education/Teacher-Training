@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { AttendanceBar, Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
-import { getAdminTeachers, updateTeacherStatus, updateTeacherProfile, registerTeacher, getCenters, getClasses, sendDirectMessageToTeacher, blockTeacher, unblockTeacher, deleteTeacher, assignTeacherTaskByAdmin, getMentorFellows, claimFellow, unclaimFellow, updateFellowStatus, deleteMentorFellow } from "../services/api";
+import { getAdminTeachers, updateTeacherStatus, updateTeacherProfile, registerTeacher, getCenters, getClasses, sendDirectMessageToTeacher, blockTeacher, unblockTeacher, deleteTeacher, assignTeacherTaskByAdmin, getMentorFellows, claimFellow, unclaimFellow, updateFellowStatus, deleteMentorFellow, getTasksForTeacher } from "../services/api";
 import { t } from "../services/i18n";
 import MentorManagementTab from "../mentor/MentorManagementTab";
 
@@ -19,6 +19,21 @@ const getPhotoUrl = (photo) => {
   if (!path) return null;
   if (path.startsWith("http")) return path;
   return `${API_BASE_URL}${path}`;
+};
+
+const taskActionBtnStyle = {
+  ...S.tblBtn,
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  padding: "8px 12px",
+  borderRadius: 999,
+  border: "1px solid #86efac",
+  background: "linear-gradient(135deg, #ecfdf5, #d1fae5)",
+  color: "#047857",
+  fontSize: 12,
+  fontWeight: 800,
+  boxShadow: "0 4px 10px rgba(16, 185, 129, 0.12)",
 };
 
 const mapTeacherFromApi = (tr) => ({
@@ -537,7 +552,7 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: 10, borderBottom: "1px solid #e5e7eb", marginBottom: 20 }}>
-        {["overview", "activity"].map(sec => (
+        {["overview", "activity", "tasks"].map(sec => (
           <button key={sec} onClick={() => setActiveSection(sec)}
             style={{
               padding: "10px 16px", background: "none", border: "none",
@@ -637,7 +652,66 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
           ))}
         </SectionCard>
       )}
+
+      {activeSection === "tasks" && <TeacherTasksSection teacher={teacher} />}
     </div>
+  );
+}
+
+/* ── TeacherTasksSection: tasks assigned to this specific teacher ── */
+function TeacherTasksSection({ teacher }) {
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let ignore = false;
+    setLoading(true);
+    getTasksForTeacher(teacher.id)
+      .then((res) => { if (!ignore) setTasks(res.tasks || []); })
+      .catch((err) => { if (!ignore) setError(err.message || "Could not load tasks."); })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; };
+  }, [teacher.id]);
+
+  if (loading) {
+    return <SectionCard title="📌 Assigned Tasks"><div style={{ padding: 20, textAlign: "center", color: "#9ca3af", fontSize: 12 }}>Loading tasks...</div></SectionCard>;
+  }
+  if (error) {
+    return <SectionCard title="📌 Assigned Tasks"><div style={{ padding: 20, textAlign: "center", color: "#ef4444", fontSize: 12 }}>{error}</div></SectionCard>;
+  }
+  if (tasks.length === 0) {
+    return <SectionCard title="📌 Assigned Tasks"><div style={{ padding: 20, textAlign: "center", color: "#9ca3af", fontSize: 12 }}>No tasks assigned yet.</div></SectionCard>;
+  }
+
+  return (
+    <SectionCard title={`📌 Assigned Tasks (${tasks.length})`}>
+      {tasks.map((task) => {
+        const isOverdue = !task.completed && task.date && task.date < new Date().toISOString().split("T")[0];
+        return (
+          <div key={task._id} style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            padding: "10px 12px", borderRadius: 10, marginBottom: 8,
+            background: task.completed ? "#f0fdf4" : isOverdue ? "#fef2f2" : "#fffbeb",
+            border: `1px solid ${task.completed ? "#bbf7d0" : isOverdue ? "#fecaca" : "#fde68a"}`
+          }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#1c1917" }}>{task.title}</div>
+              <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>
+                {task.category || "task"} · {task.date}{task.time ? ` · ${task.time}` : ""}
+              </div>
+            </div>
+            <span style={{
+              fontSize: 10, fontWeight: 800, padding: "3px 10px", borderRadius: 20,
+              color: task.completed ? "#16a34a" : isOverdue ? "#dc2626" : "#d97706",
+              background: task.completed ? "#dcfce7" : isOverdue ? "#fee2e2" : "#fef3c7"
+            }}>
+              {task.completed ? "✓ Completed" : isOverdue ? "Overdue" : "Pending"}
+            </span>
+          </div>
+        );
+      })}
+    </SectionCard>
   );
 }
 
@@ -662,13 +736,14 @@ export function TeacherManagementList({ setToast, role = "admin", user = null, o
     qualification: "Graduate", experience: "Fresher", assignedCenter: "", assignedClasses: [], password: ""
   });
 
+  const isMentorView = role === "mentor" || user?.role === "mentor";
   const showToast = setToast || setLocalToast;
 
   const loadData = async () => {
     setLoading(true);
     try {
       let teachersRes;
-      if (role === "mentor") {
+      if (isMentorView) {
         const res = await getMentorFellows();
         teachersRes = { fellows: res.fellows || [] };
       } else {
@@ -679,7 +754,7 @@ export function TeacherManagementList({ setToast, role = "admin", user = null, o
         getCenters(),
         getClasses()
       ]);
-      const rawTeachers = role === "mentor" ? teachersRes.fellows : teachersRes.teachers;
+      const rawTeachers = isMentorView ? teachersRes.fellows : teachersRes.teachers;
       setTeachers((rawTeachers || []).map(mapTeacherFromApi));
       setCenters(centersRes.centers || []);
       setClasses(classesRes.classes || []);
@@ -773,8 +848,8 @@ export function TeacherManagementList({ setToast, role = "admin", user = null, o
         <div style={{ position: "absolute", top: -30, right: -30, width: 160, height: 160, borderRadius: "50%", background: "rgba(255,255,255,0.12)" }} />
         <div style={{ position: "relative", zIndex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#fffbeb", letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 6 }}>{role === "mentor" ? t("Teacher Management") : t("User Management")}</div>
-            <h1 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 6px" }}>{role === "mentor" ? t("All Teachers") : t("All Users")}</h1>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#fffbeb", letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 6 }}>{isMentorView ? t("Teacher Management") : t("User Management")}</div>
+            <h1 style={{ fontSize: 22, fontWeight: 900, margin: "0 0 6px" }}>{isMentorView ? t("All Teachers") : t("All Users")}</h1>
             <p style={{ fontSize: 12, margin: 0, color: "rgba(255,255,255,0.85)" }}>
               {`${teachers.filter(t => t.status === "approved").length} approved · ${pending} pending · ${teachers.length} total`}
             </p>
@@ -869,7 +944,7 @@ export function TeacherManagementList({ setToast, role = "admin", user = null, o
                       title="Assign task to teacher">📌 Task</button>
                     <button onClick={() => setSelected(tr)}
                       style={{ ...S.tblBtn, color: "#3b82f6", borderColor: "#93c5fd" }}>👁 View</button>
-                    {role === "mentor" ? (
+                    {isMentorView ? (
                       <>
                         {String(tr.assignedMentorId) === String(user?._id || user?.id) ? (
                           <>
@@ -896,7 +971,7 @@ export function TeacherManagementList({ setToast, role = "admin", user = null, o
                                 await unclaimFellow(tr.id);
                                 await loadData();
                                 if (onUserUpdate) {
-                                  const updatedMentees = (user?.mentorProfile?.assignedTeachers || []).filter(m => String(m._id || m) !== String(tr.id));
+                                  const updatedMentees = (user?.mentorProfile?.assignedTeachers || []).filter(m => String(m?._id || m) !== String(tr.id));
                                   onUserUpdate({
                                     ...user,
                                     mentorProfile: {
@@ -923,7 +998,7 @@ export function TeacherManagementList({ setToast, role = "admin", user = null, o
                                 await claimFellow(tr.id);
                                 await loadData();
                                 if (onUserUpdate) {
-                                  const updatedMentees = [...(user?.mentorProfile?.assignedTeachers || []), { _id: tr.id, name: tr.name, email: tr.email }];
+                                  const updatedMentees = [...(user?.mentorProfile?.assignedTeachers || []), tr.id];
                                   onUserUpdate({
                                     ...user,
                                     mentorProfile: {
@@ -1009,7 +1084,12 @@ export function TeacherManagementList({ setToast, role = "admin", user = null, o
 
       {/* Assign Task Modal from Table Row */}
       {assigningTaskTeacher && (
-        <AssignTaskModal teacher={assigningTaskTeacher} onClose={() => setAssigningTaskTeacher(null)} setToast={showToast} />
+        <AssignTaskModal
+          teacher={assigningTaskTeacher}
+          onClose={() => setAssigningTaskTeacher(null)}
+          setToast={showToast}
+          isMentorView={isMentorView}
+        />
       )}
 
       {/* Add Teacher Modal */}
@@ -1122,13 +1202,19 @@ export function TeacherManagementList({ setToast, role = "admin", user = null, o
 }
 
 /* ── AssignTaskModal ── */
-function AssignTaskModal({ teacher, onClose, setToast }) {
+function AssignTaskModal({ teacher, onClose, setToast, isMentorView = false }) {
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("admin_assigned");
+  const [category, setCategory] = useState(isMentorView ? "mentor_assigned" : "admin_assigned");
+  const [taskMode, setTaskMode] = useState(isMentorView ? "single" : "single");
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [skipWeekends, setSkipWeekends] = useState(true);
+  const [holidayDates, setHolidayDates] = useState("");
   const [startTime, setStartTime] = useState("11:30");
   const [endTime, setEndTime] = useState("12:30");
   const [submitting, setSubmitting] = useState(false);
+  const isDaily = taskMode === "daily";
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1136,17 +1222,40 @@ function AssignTaskModal({ teacher, onClose, setToast }) {
       setToast({ msg: "Please enter a task title.", type: "error" });
       return;
     }
+    if (taskMode === "daily" && (!startDate || !endDate)) {
+      setToast({ msg: "Please choose a start and end date for daily tasks.", type: "error" });
+      return;
+    }
+    if (taskMode === "daily" && new Date(`${endDate}T00:00:00`) < new Date(`${startDate}T00:00:00`)) {
+      setToast({ msg: "End date must be after the start date.", type: "error" });
+      return;
+    }
     setSubmitting(true);
     try {
-      await assignTeacherTaskByAdmin(teacher.id, {
+      const payload = {
         title: title.trim(),
         category,
         date,
+        startDate,
+        endDate,
         startTime,
         endTime,
-        time: `${startTime} - ${endTime}`
+        time: `${startTime} - ${endTime}`,
+        taskMode,
+        skipWeekends,
+        holidayDates: holidayDates
+          .split(",")
+          .map(d => d.trim())
+          .filter(Boolean)
+      };
+      const res = await assignTeacherTaskByAdmin(teacher.id, payload);
+      const createdCount = res?.createdCount || 0;
+      setToast({
+        msg: taskMode === "daily"
+          ? `Daily task created for ${createdCount} working day${createdCount === 1 ? "" : "s"} for ${teacher.name}! 📌`
+          : `Task assigned to ${teacher.name}! 📌`,
+        type: "success"
       });
-      setToast({ msg: `Task assigned to ${teacher.name}! 📌`, type: "success" });
       onClose();
     } catch (err) {
       setToast({ msg: err.message || "Failed to assign task.", type: "error" });
@@ -1158,50 +1267,119 @@ function AssignTaskModal({ teacher, onClose, setToast }) {
   return (
     <Modal title={`📌 Assign Task to ${teacher.name}`} onClose={onClose}>
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        <div>
-          <label style={S.label}>Task Title *</label>
-          <input
-            style={S.input}
-            placeholder="e.g. Conduct Parent-Teacher Review Session"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
-          />
+
+        <div style={{ background: "#ffffff", border: "1px solid #f1f5f9", borderRadius: 16, padding: 14, boxShadow: "0 4px 14px rgba(15, 23, 42, 0.04)" }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: "#334155", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.6px" }}>
+            Task Details
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div>
+              <label style={S.label}>Task Title *</label>
+              <input
+                style={{ ...S.input, background: "#fbfdff" }}
+                placeholder="e.g. Conduct Parent-Teacher Review Session"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                required
+              />
+            </div>
+
+            {isMentorView && (
+              <div>
+                <label style={S.label}>Task Type</label>
+                <select style={{ ...S.input, background: "#fbfdff" }} value={taskMode} onChange={(e) => setTaskMode(e.target.value)}>
+                  <option value="single">Single custom date</option>
+                  <option value="daily">Daily task for a date range</option>
+                </select>
+              </div>
+            )}
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+              <div>
+                <label style={S.label}>Category</label>
+                <select style={{ ...S.input, background: "#fbfdff" }} value={category} onChange={(e) => setCategory(e.target.value)}>
+                  <option value={isMentorView ? "mentor_assigned" : "admin_assigned"}>{isMentorView ? "Mentor Assigned" : "Admin Assigned"}</option>
+                  <option value="homework">Homework</option>
+                  <option value="class">Class</option>
+                  <option value="exam">Exam / Assessment</option>
+                  <option value="workshop">Workshop</option>
+                  <option value="tech">Technology</option>
+                </select>
+              </div>
+              {!isDaily && (
+                <div>
+                  <label style={S.label}>Scheduled Date</label>
+                  <input
+                    type="date"
+                    style={{ ...S.input, background: "#fbfdff" }}
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div>
-            <label style={S.label}>Category</label>
-            <select style={S.input} value={category} onChange={(e) => setCategory(e.target.value)}>
-              <option value="admin_assigned">Admin Assigned</option>
-              <option value="homework">Homework</option>
-              <option value="class">Class</option>
-              <option value="exam">Exam / Assessment</option>
-              <option value="workshop">Workshop</option>
-              <option value="tech">Technology</option>
-            </select>
+        {isDaily && (
+          <div style={{ background: "#ffffff", border: "1px solid #f1f5f9", borderRadius: 16, padding: 14, boxShadow: "0 4px 14px rgba(15, 23, 42, 0.04)" }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#334155", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.6px" }}>
+              Recurring Schedule
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={S.label}>Start Date</label>
+                <input type="date" style={{ ...S.input, background: "#fbfdff" }} value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
+              </div>
+              <div>
+                <label style={S.label}>End Date</label>
+                <input type="date" style={{ ...S.input, background: "#fbfdff" }} value={endDate} onChange={(e) => setEndDate(e.target.value)} required />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+              <label style={{ ...S.label, display: "flex", alignItems: "center", gap: 8, marginBottom: 0, background: "#f8fafc", border: "1px solid #e2e8f0", padding: "10px 12px", borderRadius: 12 }}>
+                <input type="checkbox" checked={skipWeekends} onChange={(e) => setSkipWeekends(e.target.checked)} />
+                Skip weekends
+              </label>
+              <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600 }}>
+                Holidays are optional and comma separated.
+              </span>
+            </div>
+
+            <div>
+              <label style={S.label}>Holiday dates (optional, comma separated)</label>
+              <input
+                style={{ ...S.input, background: "#fbfdff" }}
+                value={holidayDates}
+                onChange={(e) => setHolidayDates(e.target.value)}
+                placeholder="2026-08-15, 2026-09-02"
+              />
+            </div>
           </div>
-          <div>
-            <label style={S.label}>Scheduled Date</label>
-            <input type="date" style={S.input} value={date} onChange={(e) => setDate(e.target.value)} required />
+        )}
+
+        <div style={{ background: "#ffffff", border: "1px solid #f1f5f9", borderRadius: 16, padding: 14, boxShadow: "0 4px 14px rgba(15, 23, 42, 0.04)" }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: "#334155", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.6px" }}>
+            Timing
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+            <div>
+              <label style={S.label}>Start Time</label>
+              <input type="time" style={{ ...S.input, background: "#fbfdff" }} value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+            </div>
+            <div>
+              <label style={S.label}>End Time</label>
+              <input type="time" style={{ ...S.input, background: "#fbfdff" }} value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+            </div>
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div>
-            <label style={S.label}>Start Time</label>
-            <input type="time" style={S.input} value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-          </div>
-          <div>
-            <label style={S.label}>End Time</label>
-            <input type="time" style={S.input} value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-          </div>
-        </div>
-
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 10 }}>
-          <button type="button" onClick={onClose} style={S.exportBtn}>Cancel</button>
-          <button type="submit" disabled={submitting} style={S.primaryBtn}>
-            {submitting ? "Assigning..." : "Assign Task →"}
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6, flexWrap: "wrap" }}>
+          <button type="button" onClick={onClose} style={{ ...S.exportBtn, padding: "9px 16px", borderRadius: 10 }}>Cancel</button>
+          <button type="submit" disabled={submitting} style={{ ...S.primaryBtn, padding: "11px 18px", borderRadius: 10 }}>
+            {submitting ? "Assigning..." : isDaily ? "Assign Daily Tasks →" : "Assign Task →"}
           </button>
         </div>
       </form>
@@ -1214,15 +1392,16 @@ function AssignTaskModal({ teacher, onClose, setToast }) {
    ══════════════════════════════════════════ */
 export default function TeacherManagementTab({ setToast, role = "admin", user = null, onUserUpdate }) {
   const [activeRole, setActiveRole] = useState("Teacher");
+  const isMentorView = role === "mentor" || user?.role === "mentor";
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, borderBottom: "1px solid #e2e8f0", paddingBottom: 16 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 900, color: "#0f172a", margin: "0 0 4px" }}>{role === "mentor" ? t("Teacher Management") : t("User Management")}</h1>
-          <p style={{ margin: 0, color: "#64748b", fontSize: 13 }}>{role === "mentor" ? t("Manage teachers, courses, and access.") : t("Manage platform users, roles, and access.")}</p>
+          <h1 style={{ fontSize: 24, fontWeight: 900, color: "#0f172a", margin: "0 0 4px" }}>{isMentorView ? t("Teacher Management") : t("User Management")}</h1>
+          <p style={{ margin: 0, color: "#64748b", fontSize: 13 }}>{isMentorView ? t("Manage teachers, courses, and access.") : t("Manage platform users, roles, and access.")}</p>
         </div>
-        {role !== "mentor" && (
+        {!isMentorView && (
           <div style={{ display: "flex", background: "#f1f5f9", padding: 4, borderRadius: 12 }}>
             {["Teacher", "Mentor"].map(roleKey => (
               <button
@@ -1248,7 +1427,7 @@ export default function TeacherManagementTab({ setToast, role = "admin", user = 
         )}
       </div>
 
-      {role === "mentor" || activeRole === "Teacher" ? (
+      {isMentorView || activeRole === "Teacher" ? (
         <TeacherManagementList setToast={setToast} role={role} user={user} onUserUpdate={onUserUpdate} />
       ) : (
         <MentorManagementTab setToast={setToast} role={role} />

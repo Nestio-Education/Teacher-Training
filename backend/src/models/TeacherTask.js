@@ -16,6 +16,10 @@ const teacherTaskSchema = new mongoose.Schema(
       type: Boolean,
       default: false
     },
+    assignedByMentor: {
+      type: Boolean,
+      default: false
+    },
     title: {
       type: String,
       required: true,
@@ -23,7 +27,7 @@ const teacherTaskSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ["homework", "exam", "workshop", "class", "tech", "admin_assigned"],
+      enum: ["homework", "exam", "workshop", "class", "tech", "admin_assigned", "mentor_assigned"],
       default: "homework"
     },
     date: {
