@@ -1,4 +1,4 @@
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash"; // eslint-disable-line no-undef
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash"; // eslint-disable-line no-undef
 
 function aiLog(event, details = {}) {
   console.log(`[ai-course] ${event}`, JSON.stringify(details));

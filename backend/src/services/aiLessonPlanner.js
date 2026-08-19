@@ -4,8 +4,8 @@
  */
 
 import { callGroq, stripCodeFences } from "./groqClient.js";
-const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.6-flash";
 
 const SYSTEM_PROMPT = `You are an expert Early Childhood Education (ECE) curriculum designer working for SpacECE India Foundation.
 Your task is to create a detailed, classroom-ready lesson plan tailored specifically to the given age group, topic, and session duration.
@@ -52,7 +52,13 @@ function aiLog(event, details = {}) {
 
 
 function parseLessonJson(raw) {
-  const cleaned = stripCodeFences(raw);
+  let cleaned = stripCodeFences(raw).replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  const jsonStart = cleaned.indexOf("{");
+  const jsonEnd = cleaned.lastIndexOf("}");
+  if (jsonStart < 0 || jsonEnd < jsonStart) {
+    throw new Error("AI response did not contain a JSON object.");
+  }
+  cleaned = cleaned.slice(jsonStart, jsonEnd + 1);
   const draft = JSON.parse(cleaned);
   if (!draft || typeof draft.objective !== "string") {
     throw new Error("Invalid lesson plan JSON: missing objective.");
