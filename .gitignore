@@ -45,3 +45,4 @@ teacher-training-backend/
 
 # Empty directories
 uploads/
+backend/.env.example
