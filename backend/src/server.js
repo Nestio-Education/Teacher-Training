@@ -79,10 +79,12 @@ function localizeLessonPlan(lpDoc, lang) {
 
 import { autoSeed } from "./auto-seed.js";
 import { generateAICourse } from "./services/aiCourseGenerator.js";
-import { generateAILessonPlan, generateAIActivitySchedule } from "./services/aiLessonPlanner.js";
+import { generateAILessonPlan } from "./services/aiLessonPlanner.js";
 import dailyTaskAutomationRoutes from "./routes/dailyTaskAutomationRoutes.js";
 import teacherTasksRouter from "./routes/teacherTasks.js";
 import { startDailyTaskAutomationCron } from "./cron/dailyTaskCron.js";
+import reminderAutomationRoutes from "./routes/reminderAutomationRoutes.js";
+import { startReminderAutomationCron } from "./cron/reminderCron.js";
 import { User } from "./models/User.js";
 import { TeacherTask } from "./models/TeacherTask.js";
 import { Center } from "./models/Center.js";
@@ -579,6 +581,8 @@ const allowedOrigins = [
   "http://localhost:5174",
   "http://127.0.0.1:5173",
   "http://127.0.0.1:5174",
+  "https://nestiopreschools.com",
+  "http://nestiopreschools.com",
   ...(process.env.CORS_ORIGIN || process.env.FRONTEND_URL || "")
     .split(",")
     .map((origin) => origin.trim())
@@ -618,6 +622,7 @@ app.use(
 app.use(express.json({ limit: "2mb" }));
 
 app.use("/api/daily-task-automation", dailyTaskAutomationRoutes);
+app.use("/api/reminder-automation", reminderAutomationRoutes);
 
 const bypassRoutes = [
   "/health",
@@ -1684,7 +1689,7 @@ app.post("/api/admin/mentors/:id/message", requireAuth, requireRole("admin"), as
   }
 });
 
-app.get("/api/admin/children", requireAuth, requireRole("admin", "mentor"), async (req, res, next) => {
+app.get("/api/admin/children", requireAuth, requireRole("admin", "mentor", "teacher", "fellow"), async (req, res, next) => {
   try {
     const filter = {};
     const centerId = objectIdFilter(req.query.centerId, "centerId");
@@ -2035,7 +2040,7 @@ app.get("/api/mentor/fellows", requireAuth, requireRole("mentor"), async (req, r
       ]
     })
       .select("-passwordHash")
-      .populate("teacherProfile.center", "name city type gradeBands")
+      .populate("teacherProfile.center", "name city")
       .populate("teacherProfile.classes", "name")
       .populate("assignedMentor", "name email")
       .sort({ createdAt: -1 });
@@ -2722,11 +2727,7 @@ app.get("/api/teacher/children", requireAuth, requireRole("teacher", "fellow"), 
     const requestedClassId = req.query.classId;
     const filter = { status: "active" };
 
-    // Fellows only see children they created themselves
-    // Teachers see ALL children enrolled in their assigned classes (regardless of who created them)
-    if (req.user.role === "fellow") {
-      filter.createdBy = req.user.id;
-    }
+    // Fellows and Teachers see ALL children enrolled in their assigned classes/center
 
     if (allClassIds.length > 0) {
       if (requestedClassId && allClassIds.includes(requestedClassId)) {
@@ -3199,29 +3200,40 @@ app.get("/api/teacher/progress", requireAuth, requireRole("teacher", "fellow"), 
 app.post("/api/teacher/chatbot", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const message = String(req.body.message || "").trim();
-    if (!message) {
-      return res.status(400).json({ message: "message required" });
+    const text = message.toLowerCase();
+
+    const [teacher, courseCount, pendingLessons, pendingActivities, notifications] = await Promise.all([
+      User.findById(req.user.id)
+        .select("-passwordHash")
+        .populate("teacherProfile.center", "name city")
+        .populate("teacherProfile.classes", "name schedule"),
+      CourseAssignment.countDocuments({ teacher: req.user.id }),
+      LessonPlanAssignment.countDocuments({ teacher: req.user.id, status: "pending" }),
+      ActivitySubmission.countDocuments({ teacher: req.user.id, status: "pending" }),
+      Notification.countDocuments({ recipient: req.user.id, read: false }),
+    ]);
+
+    let reply = "I can help with attendance, lesson plans, activities, courses, profile, and notifications. Tell me what you want to do.";
+
+    if (text.includes("attendance")) {
+      reply = "Open Daily Attendance to mark children present, absent, or late. Use Geotag Attendance for your own teacher attendance.";
+    } else if (text.includes("lesson") || text.includes("plan")) {
+      reply = `You have ${pendingLessons} pending lesson plan${pendingLessons === 1 ? "" : "s"}. Open Training & Lessons to view, complete, add notes, and upload evidence.`;
+    } else if (text.includes("course") || text.includes("training")) {
+      reply = `You currently have ${courseCount} assigned course${courseCount === 1 ? "" : "s"}. Open My Courses to view material and progress.`;
+    } else if (text.includes("activity") || text.includes("upload")) {
+      reply = `You have ${pendingActivities} activity submission${pendingActivities === 1 ? "" : "s"} waiting for admin review. Open Training & Lessons, then Classroom Activities to upload more evidence.`;
+    } else if (text.includes("center") || text.includes("class")) {
+      const classNames = (teacher?.teacherProfile?.classes || []).map(c => c?.name).filter(Boolean);
+      const className = teacher?.teacherProfile?.class?.name || (classNames.length > 0 ? classNames.join(", ") : "not assigned yet");
+      reply = `Your assigned center is ${teacher?.teacherProfile?.center?.name || "not assigned yet"} and your class(es) are ${className}.`;
+    } else if (text.includes("notification") || text.includes("alert")) {
+      reply = `You have ${notifications} unread notification${notifications === 1 ? "" : "s"}. Open Notifications to review them.`;
+    } else if (text.includes("profile") || text.includes("phone") || text.includes("qualification")) {
+      reply = "Open My Profile to update your phone, address, qualification, subject, and experience.";
     }
 
-    try {
-      // Forward the request to the Python microservice running on port 8001
-      const response = await fetch("http://127.0.0.1:8001/api/v1/teacher-support-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Chatbot service returned ${response.status}`);
-      }
-
-      const data = await response.json();
-      res.json({ reply: data.reply });
-    } catch (chatbotErr) {
-      console.error("Error calling Python chatbot service:", chatbotErr);
-      // Fallback to a static response in case the python service is down
-      res.json({ reply: "I'm sorry, I'm having trouble connecting to the AI brain right now." });
-    }
+    res.json({ reply });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
   }
@@ -3859,9 +3871,6 @@ app.delete("/api/courses/:id", requireAuth, requireRole("admin"), async (req, re
 // AI Course Generation (mounted router with auth + admin middleware)
 import courseAiRouter from "./routes/courseAi.js";
 app.use("/api/courses/ai", requireAuth, requireRole("admin"), courseAiRouter);
-
-import { attachCourseLibraryRoutes } from "./routes/courseLibrary.routes.js";
-attachCourseLibraryRoutes(app, { Course, requireAuth });
 // Grades routes
 import gradesRouter from "./routes/grades.js";
 app.use("/api/grades", gradesRouter);
@@ -4174,16 +4183,6 @@ app.post("/api/ai/generate-lesson-plan", requireAuth, requireRole("teacher", "ad
   }
 });
 
-app.post("/api/ai/generate-activity-schedule", requireAuth, requireRole("mentor", "admin"), async (req, res, next) => {
-  try {
-    const schedule = await generateAIActivitySchedule(req.body || {});
-    res.json(schedule);
-  } catch (error) {
-    if (error.status) return res.status(error.status).json({ message: error.message });
-    res.status(500).json({ message: error.message, stack: error.stack });
-  }
-});
-
 app.post("/api/courses/generate-from-ai", requireAuth, requireRole("admin"), async (req, res, next) => {
   try {
     console.log("[ai-course] generate_and_save_start", JSON.stringify({ userId: req.user.id, topic: req.body?.topic || req.body?.title }));
@@ -4266,11 +4265,246 @@ app.get("/api/lesson-plans", requireAuth, async (req, res, next) => {
   }
 });
 
-// ── Lesson Plan mutation routes moved to /api/mentor/lesson-plans/* ──
-// Old admin POST/PATCH/DELETE/auto-generate/auto-publish/assign routes removed.
-// Mentor now owns creation, assignment, and review via mentorLessonPlans.js router.
+app.post("/api/lesson-plans", requireAuth, requireRole("admin"), async (req, res, next) => {
+  try {
+    const lessonPlan = await LessonPlan.create({ ...req.body, createdBy: req.user.id });
+    syncLessonPlanTranslations(lessonPlan._id).catch(console.error);
+    res.status(201).json({ lessonPlan });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
 
-// Read-only: admin GET assignments (used by ReportsTab analytics)
+app.patch("/api/lesson-plans/:id", requireAuth, requireRole("admin"), async (req, res, next) => {
+  try {
+    requireObjectId(req.params.id, "lesson plan id");
+    const lessonPlan = await LessonPlan.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!lessonPlan) return res.status(404).json({ message: "Lesson plan not found." });
+    syncLessonPlanTranslations(lessonPlan._id).catch(console.error);
+    res.json({ lessonPlan });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+app.delete("/api/lesson-plans/:id", requireAuth, requireRole("admin"), async (req, res, next) => {
+  try {
+    requireObjectId(req.params.id, "lesson plan id");
+    const lessonPlan = await LessonPlan.findByIdAndDelete(req.params.id);
+    if (!lessonPlan) return res.status(404).json({ message: "Lesson plan not found." });
+    // Cascade delete associated assignments and reports
+    const assignments = await LessonPlanAssignment.find({ lessonPlan: req.params.id });
+    const assignmentIds = assignments.map(a => a._id);
+    await LessonPlanAssignment.deleteMany({ lessonPlan: req.params.id });
+    await LessonCompletionReport.deleteMany({ assignment: { $in: assignmentIds } });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Lesson Plan Auto-Generation Engine Ã¢â€â‚¬Ã¢â€â‚¬ */
+app.post("/api/lesson-plans/auto-generate", requireAuth, requireRole("admin"), async (req, res, next) => {
+  try {
+    const { courseId, classId, centerId, startDate, durationWeeks, maxActivitiesPerDay = 2 } = req.body;
+    requireObjectId(courseId, "courseId");
+
+    const course = await Course.findById(courseId);
+    if (!course) return res.status(404).json({ message: "Course not found." });
+
+    // Flatten all activities from course modules Ã¢â€ â€™ contents
+    const allActivities = [];
+    (course.modules || []).forEach((mod, mi) => {
+      (mod.contents || []).forEach((content, ci) => {
+        allActivities.push({
+          moduleIndex: mi,
+          contentIndex: ci,
+          moduleTitle: mod.title,
+          contentTitle: content.title,
+          contentType: content.type,
+          durationMinutes: content.durationMinutes || 30,
+          objectives: (mod.learningOutcomes || []).join("; "),
+          instructions: content.detailedLearningContent || content.description || "",
+          resources: content.notes || "",
+          activities: content.practicalExamples ? content.practicalExamples.join(", ") : "",
+        });
+      });
+      // Also add module assessments as activities if they exist
+      if (mod.assessments) {
+        (mod.assessments.practicalAssignments || []).forEach((pa, pai) => {
+          allActivities.push({
+            moduleIndex: mi,
+            contentIndex: -1,
+            moduleTitle: mod.title,
+            contentTitle: `Assessment: ${pa.substring(0, 50)}`,
+            contentType: "assessment",
+            durationMinutes: 45,
+            objectives: (mod.learningOutcomes || []).join("; "),
+            instructions: pa,
+            resources: "",
+            activities: pa,
+          });
+        });
+      }
+    });
+
+    if (allActivities.length === 0) {
+      return res.status(400).json({ message: "Course has no modules or activities to generate from." });
+    }
+
+    // Generate working days (Mon-Fri), skip weekends
+    const start = new Date(startDate);
+    const end = new Date(start);
+    end.setDate(end.getDate() + (durationWeeks * 7));
+
+    const workingDays = [];
+    const cursor = new Date(start);
+    while (cursor < end) {
+      const dow = cursor.getDay();
+      if (dow >= 1 && dow <= 5) {
+        workingDays.push(new Date(cursor));
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    // Distribute activities across working days (max N per day)
+    const schedule = [];
+    let actIdx = 0;
+    for (const day of workingDays) {
+      if (actIdx >= allActivities.length) break;
+      const dayActivities = [];
+      for (let i = 0; i < maxActivitiesPerDay && actIdx < allActivities.length; i++) {
+        dayActivities.push({ ...allActivities[actIdx], order: i + 1 });
+        actIdx++;
+      }
+      schedule.push({
+        date: day.toISOString().split("T")[0],
+        dayOfWeek: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][day.getDay()],
+        activities: dayActivities,
+      });
+    }
+
+    res.json({
+      course: { id: course._id, title: course.title, moduleCount: (course.modules || []).length },
+      totalActivities: allActivities.length,
+      totalDays: schedule.length,
+      durationWeeks,
+      maxActivitiesPerDay,
+      schedule,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+/* Ã¢â€â‚¬Ã¢â€â‚¬ Confirm & Publish Auto-Generated Plan Ã¢â€â‚¬Ã¢â€â‚¬ */
+app.post("/api/lesson-plans/auto-publish", requireAuth, requireRole("admin"), async (req, res, next) => {
+  try {
+    const { courseId, classId, centerId, schedule, title } = req.body;
+    if (!schedule || !Array.isArray(schedule) || schedule.length === 0) {
+      return res.status(400).json({ message: "Schedule data is required." });
+    }
+
+    // Create one LessonPlan per day's activities
+    const createdPlans = [];
+    for (const day of schedule) {
+      const activitiesText = day.activities.map(a => `${a.order}. [${a.moduleTitle}] ${a.contentTitle}`).join("\n");
+      const objectivesText = [...new Set(day.activities.map(a => a.objectives).filter(Boolean))].join("; ");
+      const instructionsText = day.activities.map(a => a.instructions).filter(Boolean).join("\n\n");
+      const resourcesText = day.activities.map(a => a.resources).filter(Boolean).join(", ");
+
+      const plan = await LessonPlan.create({
+        course: courseId || undefined,
+        title: title ? `${title} Ã¢â‚¬â€ ${day.date} (${day.dayOfWeek})` : `Auto Plan Ã¢â‚¬â€ ${day.date} (${day.dayOfWeek})`,
+        objectives: objectivesText,
+        instructions: instructionsText || activitiesText,
+        activities: activitiesText,
+        resources: resourcesText,
+        scheduleDate: new Date(day.date),
+        createdBy: req.user.id,
+      });
+      createdPlans.push(plan);
+    }
+
+    // Auto-assign to matching teachers
+    let assignedCount = 0;
+    if (classId || centerId) {
+      const teacherQuery = { status: "approved" };
+      if (centerId) teacherQuery["teacherProfile.center"] = centerId;
+      if (classId) teacherQuery["teacherProfile.classes"] = classId;
+
+      const teachers = await User.find(teacherQuery);
+      for (const plan of createdPlans) {
+        for (const teacher of teachers) {
+          const existing = await LessonPlanAssignment.findOne({ lessonPlan: plan._id, teacher: teacher._id });
+          if (!existing) {
+            await LessonPlanAssignment.create({
+              lessonPlan: plan._id,
+              teacher: teacher._id,
+              center: centerId || teacher.teacherProfile?.center,
+              class: classId || (teacher.teacherProfile?.classes || [])[0],
+              assignedDate: plan.scheduleDate,
+              status: "pending",
+            });
+            assignedCount++;
+          }
+        }
+      }
+    }
+
+    // Kick off translation syncs for created plans
+    for (const plan of createdPlans) {
+      syncLessonPlanTranslations(plan._id).catch(console.error);
+    }
+
+    res.status(201).json({
+      message: `Published ${createdPlans.length} lesson plans with ${assignedCount} teacher assignments.`,
+      plansCreated: createdPlans.length,
+      assignmentsCreated: assignedCount,
+      plans: createdPlans.map(p => ({ id: p._id, title: p.title, date: p.scheduleDate })),
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+app.post("/api/lesson-plans/assign", requireAuth, requireRole("admin"), async (req, res, next) => {
+  try {
+    const { lessonPlanId, teacherId, centerId, classId, assignedDate } = req.body;
+    requireObjectId(lessonPlanId, "lessonPlanId");
+    if (teacherId) requireObjectId(teacherId, "teacherId");
+    if (centerId) requireObjectId(centerId, "centerId");
+    if (classId) requireObjectId(classId, "classId");
+    // Prevent duplicate assignments
+    if (teacherId && lessonPlanId) {
+      const existing = await LessonPlanAssignment.findOne({ lessonPlan: lessonPlanId, teacher: teacherId });
+      if (existing) {
+        return res.status(200).json({ assignment: existing, message: "Assignment already exists." });
+      }
+    }
+    const assignment = await LessonPlanAssignment.create({
+      lessonPlan: lessonPlanId,
+      teacher: teacherId,
+      center: centerId,
+      class: classId,
+      assignedDate: assignedDate || new Date(),
+      status: "pending"
+    });
+    if (teacherId) {
+      await Notification.create({
+        recipient: teacherId,
+        title: "New lesson plan assigned",
+        body: "A lesson plan has been allocated to your classroom schedule.",
+        status: "sent",
+        sentAt: new Date(),
+      });
+    }
+    res.status(201).json({ assignment });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
 app.get("/api/admin/lesson-plans/assignments", requireAuth, requireRole("admin"), async (req, res, next) => {
   try {
     const assignments = await LessonPlanAssignment.find()
@@ -4284,76 +4518,23 @@ app.get("/api/admin/lesson-plans/assignments", requireAuth, requireRole("admin")
   }
 });
 
-// Admin Delivery Monitoring — read-only aggregate of lesson plan delivery status
-app.get("/api/admin/lesson-plans/monitoring", requireAuth, requireRole("admin"), async (req, res, next) => {
+app.patch("/api/admin/lesson-plans/assignments/:id", requireAuth, requireRole("admin"), async (req, res, next) => {
   try {
-    // Aggregate assignments by mentor (via LessonPlan.createdBy) × center × class
-    const assignments = await LessonPlanAssignment.find()
-      .populate({
-        path: "lessonPlan",
-        select: "title createdBy scheduleDate",
-        populate: { path: "createdBy", select: "name email" },
-      })
-      .populate("teacher", "name email assignedMentor")
-      .populate("center", "name")
-      .populate("class", "name")
-      .lean();
-
-    // Group by mentor → center → class
-    const monitoringMap = new Map();
-
-    for (const a of assignments) {
-      const mentorId = a.lessonPlan?.createdBy?._id
-        ? String(a.lessonPlan.createdBy._id)
-        : (a.teacher?.assignedMentor ? String(a.teacher.assignedMentor) : "unknown");
-      const mentorName = a.lessonPlan?.createdBy?.name || "Unknown Mentor";
-      const mentorEmail = a.lessonPlan?.createdBy?.email || "";
-      const centerName = a.center?.name || "Unassigned";
-      const centerId = a.center?._id ? String(a.center._id) : "none";
-      const className = a.class?.name || "Unassigned";
-      const classId = a.class?._id ? String(a.class._id) : "none";
-      const isConducted = a.status === "completed" || a.status === "reviewed";
-
-      const groupKey = `${mentorId}|${centerId}|${classId}`;
-      if (!monitoringMap.has(groupKey)) {
-        monitoringMap.set(groupKey, {
-          mentorId,
-          mentorName,
-          mentorEmail,
-          centerId,
-          centerName,
-          classId,
-          className,
-          total: 0,
-          conducted: 0,
-          pending: 0,
-        });
-      }
-      const group = monitoringMap.get(groupKey);
-      group.total++;
-      if (isConducted) group.conducted++;
-      else group.pending++;
-    }
-
-    const monitoring = Array.from(monitoringMap.values());
-    const totalAssignments = assignments.length;
-    const totalConducted = assignments.filter(a => a.status === "completed" || a.status === "reviewed").length;
-
-    res.json({
-      monitoring,
-      summary: {
-        totalAssignments,
-        totalConducted,
-        totalPending: totalAssignments - totalConducted,
-        conductedPercent: totalAssignments > 0 ? Math.round((totalConducted / totalAssignments) * 100) : 0,
-      },
-    });
+    requireObjectId(req.params.id, "assignment id");
+    const { status } = req.body;
+    const assignment = await LessonPlanAssignment.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true }
+    );
+    if (!assignment) return res.status(404).json({ message: "Lesson assignment not found." });
+    res.json({ assignment });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
 
-// Teacher-facing: submit lesson completion report
+
 app.post("/api/teacher/lesson-plans/:id/complete", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     requireObjectId(req.params.id, "assignment id");
@@ -4379,6 +4560,42 @@ app.post("/api/teacher/lesson-plans/:id/complete", requireAuth, requireRole("tea
   }
 });
 
+app.get("/api/admin/lesson-plans/reports", requireAuth, requireRole("admin"), async (req, res, next) => {
+  try {
+    const reports = await LessonCompletionReport.find()
+      .populate({
+        path: "assignment",
+        populate: [
+          { path: "lessonPlan" },
+          { path: "center", select: "name" },
+          { path: "class", select: "name" }
+        ]
+      })
+      .populate("teacher", "name email")
+      .populate("files");
+    res.json({ reports });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+app.patch("/api/admin/lesson-plans/reports/:id", requireAuth, requireRole("admin"), async (req, res, next) => {
+  try {
+    const { status, adminFeedback } = req.body;
+    const report = await LessonCompletionReport.findByIdAndUpdate(
+      req.params.id,
+      { status, adminFeedback, reviewedBy: req.user.id, reviewedAt: new Date() },
+      { new: true }
+    );
+    // Also update the parent assignment status when report is approved
+    if (report && (status === "approved" || status === "rejected")) {
+      await LessonPlanAssignment.findByIdAndUpdate(report.assignment, { status: "reviewed" });
+    }
+    res.json({ report });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
 
 // ==========================================
 // CLASSROOM ACTIVITIES
@@ -4404,7 +4621,7 @@ app.get("/api/activities", requireAuth, async (req, res, next) => {
 
 app.post("/api/activities", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
-    const { center, class: classId, lessonPlan, activityBank, activityDate, description, files, activityName, duration, level, type, ageGroup, milestone, developmentalDomain, purposeOfActivity, howToConduct, facilitatorRole, materialsRequired, expectedLearningOutcomes, dayNumber, learningObjectives, activities, resources, instructions, expectedOutput, notes } = req.body;
+    const { center, class: classId, lessonPlan, activityBank, activityDate, description, files, activityName, duration, level, type, ageGroup, milestone, developmentalDomain, groupMastery, flaggedChildren, followUpAction, purposeOfActivity, howToConduct, facilitatorRole, materialsRequired, expectedLearningOutcomes, dayNumber, learningObjectives, activities, resources, instructions, expectedOutput, notes } = req.body;
     if (!center || !classId) {
       return res.status(400).json({ message: "Teacher center and class assignment are required before submitting activities." });
     }
@@ -4427,7 +4644,10 @@ app.post("/api/activities", requireAuth, requireRole("teacher", "fellow"), async
       type,
       ageGroup,
       milestone,
-      developmentalDomain,
+      developmentalDomain: Array.isArray(developmentalDomain) ? developmentalDomain : (developmentalDomain ? [developmentalDomain] : ["Cognitive"]),
+      groupMastery: groupMastery || "Developing",
+      flaggedChildren: Array.isArray(flaggedChildren) ? flaggedChildren : [],
+      followUpAction: followUpAction || "proceed_next",
       purposeOfActivity,
       howToConduct,
       facilitatorRole,
@@ -4443,20 +4663,6 @@ app.post("/api/activities", requireAuth, requireRole("teacher", "fellow"), async
       files: files || [],
       status: "pending"
     });
-
-    if (userObj.assignedMentor) {
-  await createAndEmitNotification({
-    recipientId: userObj.assignedMentor,
-    title: "Pending Activity Review",
-    body: `${userObj.name} has submitted a new activity that is pending mentor review.`,
-    type: "in_app",
-    metadata: {
-      activityId: activity._id,
-      teacherId: req.user.id,
-      notificationType: "activity_pending"
-    }
-  });
-}
     res.status(201).json({ activity });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
@@ -5644,14 +5850,24 @@ app.post("/api/automation/attendance-reminders", requireAuth, requireRole("admin
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Get all approved teachers
-    const allTeachers = await User.find({ role: "teacher", status: "approved" }).select("_id name email phone language");
+    // Get all approved teachers, mentors AND fellows — mam wants everyone
+    // who marks attendance to show up here, not just teachers.
+    const allTeachers = await User.find({ role: { $in: ["teacher", "mentor", "fellow"] }, status: "approved" }).select("_id name email phone language role");
 
-    // Get teachers who already marked attendance today
-    const attendedToday = await TeacherAttendanceRecord.find({
-      attendanceDate: { $gte: today, $lte: new Date(today.getTime() + 86400000) }
-    }).select("teacher");
-    const attendedIds = new Set(attendedToday.map(r => r.teacher.toString()));
+    // Get users who already marked attendance today — teachers use TeacherAttendanceRecord,
+    // mentors/fellows use MentorAttendanceRecord (different model, different field name)
+    const [teacherAttended, mentorAttended] = await Promise.all([
+      TeacherAttendanceRecord.find({
+        attendanceDate: { $gte: today, $lte: new Date(today.getTime() + 86400000) }
+      }).select("teacher"),
+      MentorAttendanceRecord.find({
+        attendanceDate: { $gte: today, $lte: new Date(today.getTime() + 86400000) }
+      }).select("mentor"),
+    ]);
+    const attendedIds = new Set([
+      ...teacherAttended.map(r => r.teacher.toString()),
+      ...mentorAttended.map(r => r.mentor.toString()),
+    ]);
 
     // Filter teachers who haven't attended
     const pendingTeachers = allTeachers.filter(t => !attendedIds.has(t._id.toString()));
@@ -5662,21 +5878,54 @@ app.post("/api/automation/attendance-reminders", requireAuth, requireRole("admin
 
     // Send reminders via preferred channel
     const channel = req.body.channel || "in_app";
-    const results = await broadcastNotification({
-      recipientIds: pendingTeachers.map(t => t._id),
-      templateKey: "attendance_reminder",
-      channel,
-      priority: "high",
-      metadata: { automation: true, type: "attendance_reminder" },
-    });
+    
+    // Send individually to capture per-user errors
+    const sendResults = await Promise.allSettled(
+      pendingTeachers.map(async (teacher) => {
+        try {
+          const r = await sendNotification({
+            recipientId: teacher._id,
+            templateKey: "attendance_reminder",
+            channel,
+            priority: "high",
+            metadata: { automation: true, type: "attendance_reminder" },
+          });
+          if (!r.success) {
+            console.warn("[automation] attendance_reminder failed for", teacher.name,
+              r.channelErrors?.join(", ") || JSON.stringify(r.results));
+          }
+          return { teacher, success: r.success, channelErrors: r.channelErrors };
+        } catch (err) {
+          console.error("[automation] attendance_reminder error for", teacher.name, err.message);
+          return { teacher, success: false, error: err.message };
+        }
+      })
+    );
 
-    console.log("[automation] attendance_reminders", JSON.stringify({ sent: results.success, pending: pendingTeachers.length }));
+    const sentTeachers = sendResults
+      .filter(r => r.status === "fulfilled" && r.value.success)
+      .map(r => r.value.teacher);
+
+    // Collect unique channel errors to tell admin exactly what failed
+    const allChannelErrors = [...new Set(
+      sendResults
+        .filter(r => r.status === "fulfilled" && r.value.channelErrors?.length)
+        .flatMap(r => r.value.channelErrors)
+    )];
+
+    console.log("[automation] attendance_reminders", JSON.stringify({ 
+      sent: sentTeachers.length, 
+      pending: pendingTeachers.length,
+      channelErrors: allChannelErrors,
+    }));
 
     res.json({
-      message: `Attendance reminders sent to ${results.success} teachers`,
+      message: `Attendance reminders sent to ${sentTeachers.length} (teachers/mentors/fellows)`,
       totalPending: pendingTeachers.length,
-      sent: results.success,
-      failed: results.failed,
+      sent: sentTeachers.length,
+      failed: pendingTeachers.length - sentTeachers.length,
+      channelErrors: allChannelErrors,
+      sentTo: sentTeachers.map(t => ({ id: t._id, name: t.name, role: t.role })),
     });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
@@ -5715,21 +5964,23 @@ app.post("/api/automation/auto-assign-courses", requireAuth, requireRole("admin"
     const course = await Course.findById(courseId);
     if (!course) return res.status(404).json({ message: "Course not found" });
 
-    // Find teachers with matching subject or unassigned
+    // Find teachers, mentors AND fellows with matching subject or unassigned —
+    // mam wants everyone with a matching specialization to be caught, not just teachers.
     const teachers = await User.find({
-      role: "teacher",
+      role: { $in: ["teacher", "mentor", "fellow"] },
       status: "approved",
       $or: [
         { "teacherProfile.subject": { $regex: course.category || "", $options: "i" } },
         { "teacherProfile.subject": { $exists: false } },
       ],
-    }).select("_id name email phone language");
+    }).select("_id name email phone language role");
 
     if (teachers.length === 0) {
       return res.json({ message: "No matching teachers found for this course", assigned: 0 });
     }
 
     let assignedCount = 0;
+    const assignedTo = [];
     for (const teacher of teachers) {
       const existing = await CourseAssignment.findOne({ course: courseId, teacher: teacher._id });
       if (!existing) {
@@ -5741,7 +5992,7 @@ app.post("/api/automation/auto-assign-courses", requireAuth, requireRole("admin"
           progressPercent: 0,
         });
 
-        // Notify teacher
+        // Notify teacher/mentor/fellow
         await sendNotification({
           recipientId: teacher._id,
           templateKey: "course_assigned",
@@ -5751,15 +6002,18 @@ app.post("/api/automation/auto-assign-courses", requireAuth, requireRole("admin"
         });
 
         assignedCount++;
+        assignedTo.push({ id: teacher._id, name: teacher.name, role: teacher.role });
       }
     }
 
     console.log("[automation] auto_assign_courses", JSON.stringify({ courseId, assigned: assignedCount }));
 
     res.json({
-      message: `Course auto-assigned to ${assignedCount} teachers`,
+      message: `Course auto-assigned to ${assignedCount} (teachers/mentors/fellows)`,
       assigned: assignedCount,
       total: teachers.length,
+      // Names + roles of everyone the course was actually assigned to.
+      assignedTo,
     });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
@@ -5778,8 +6032,11 @@ app.get("/api/automation/status", requireAuth, requireRole("admin"), async (req,
       pendingAssignments,
       unreadNotifications,
     ] = await Promise.all([
-      User.countDocuments({ role: "teacher", status: "approved" }),
-      TeacherAttendanceRecord.countDocuments({ attendanceDate: { $gte: today } }),
+      User.countDocuments({ role: { $in: ["teacher", "mentor", "fellow"] }, status: "approved" }),
+      Promise.all([
+        TeacherAttendanceRecord.countDocuments({ attendanceDate: { $gte: today } }),
+        MentorAttendanceRecord.countDocuments({ attendanceDate: { $gte: today } }),
+      ]).then(([t, m]) => t + m),
       CourseAssignment.countDocuments({ status: "assigned" }),
       Notification.countDocuments({ read: false }),
     ]);
@@ -6337,7 +6594,7 @@ app.use((error, _req, res, _next) => {
 // Course Generator Service Integration
 // ==========================================
 
-const COURSE_GENERATOR_SERVICE_URL = process.env.COURSE_GENERATOR_SERVICE_URL || "https://course-generator-service.onrender.com";
+const COURSE_GENERATOR_SERVICE_URL = process.env.COURSE_GENERATOR_SERVICE_URL || "http://localhost:8002";
 
 app.post("/api/assessments/ai-grade", requireAuth, async (req, res, next) => {
   try {
@@ -6431,7 +6688,7 @@ Example format:
 ]`;
 
   try {
-    const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+    const model = process.env.GEMINI_MODEL || "gemini-3.6-flash";
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
       method: "POST",
       headers: {
@@ -6529,25 +6786,87 @@ import parentModuleAssignmentsRouter from "./routes/parentModuleAssignments.js";
 app.use("/api/parent-module-assignments", parentModuleAssignmentsRouter);
 import mentorTrackingRouter from "./routes/mentorTracking.js";
 import mentorCurriculumRouter from "./routes/mentorCurriculum.js";
-import { createMentorLessonPlansRouter } from "./routes/mentorLessonPlans.js";
 app.use("/api/mentor/tracking", requireAuth, requireRole("mentor"), mentorTrackingRouter);
 app.use("/api/mentor/curriculum", requireAuth, mentorCurriculumRouter);
-app.use("/api/mentor/lesson-plans", requireAuth, requireRole("mentor"), createMentorLessonPlansRouter(upload));
 
-app.post("/api/teacher/reports/draft-ai", requireAuth, requireRole("teacher"), async (req, res, next) => {
+app.post("/api/teacher/reports/draft-ai", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { roughNotes } = req.body;
     if (!roughNotes || !roughNotes.trim()) {
       return res.status(400).json({ message: "Rough notes are required." });
     }
 
+    const groqKey = process.env.GROQ_API_KEY ? process.env.GROQ_API_KEY.trim() : "";
     const openaiKey = process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.trim() : "";
     const geminiKey = process.env.GEMINI_API_KEY ? process.env.GEMINI_API_KEY.trim() : "";
 
+    const isGroqConfigured = groqKey && groqKey !== "";
     const isGeminiConfigured = geminiKey && geminiKey !== "your_api_key_here" && geminiKey !== "";
     const isOpenaiConfigured = openaiKey && openaiKey !== "";
 
-    // ── 1. GEMINI API CALL ──
+    // ── 1. GROQ API CALL (ULTRA-FAST LLAMA 3.3 70B) ──
+    if (isGroqConfigured) {
+      try {
+        const groqModel = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+        const systemPrompt = `You are an AI assistant for Early Childhood Education (ECE) teachers.
+Your task is to take a teacher's messy, raw, unstructured notes about their class activity and restructure them into a professional teaching report.
+
+You must return a JSON object with the following fields:
+1. "topic": A concise, professional title (5-7 words maximum) summarizing the main theme (e.g., "Sensory Shape Sorting Activity").
+2. "groupMastery": Select exactly one from ["Emerging", "Developing", "Mastered"] based on overall class mastery described.
+3. "developmentalDomain": An array containing 1 to 3 matching domains from ["Cognitive", "Language & Literacy", "Fine Motor", "Gross Motor", "Socio-Emotional"].
+4. "followUpAction": Select exactly one from ["proceed_next", "repeat_activity", "remediate_subgroup"].
+5. "flaggedChildren": An array of child exception objects: [{"childName": "Name", "status": "needs_support" or "advanced", "note": "Short reason"}].
+   CRITICAL RULE FOR FLAGGED CHILDREN: Only extract a child if they specifically demonstrated an EXCEPTION (e.g. "needs_support" if struggling/behind, or "advanced" if excelling far beyond peers). Do NOT flag average/normal participating children mentioned in passing.
+6. "text": A beautifully formatted, structured report using clear headings with bullet points:
+   - **Activity Summary**:
+     - [Bullet point 1]
+     - [Bullet point 2]
+   - **Student Observations**:
+     - [Bullet point 1]
+     - [Bullet point 2]
+   - **Next Steps & Action Plan**:
+     - [Bullet point 1]
+     - [Bullet point 2]
+
+Do not include markdown blocks like \`\`\`json around the returned string. Return raw JSON.`;
+
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${groqKey}`
+          },
+          body: JSON.stringify({
+            model: groqModel,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: roughNotes }
+            ],
+            response_format: { type: "json_object" }
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const rawContent = data.choices?.[0]?.message?.content || "";
+          const aiResult = JSON.parse(rawContent);
+
+          return res.json({
+            topic: aiResult.topic || "Class Activity Report Log",
+            groupMastery: aiResult.groupMastery || "Developing",
+            developmentalDomain: Array.isArray(aiResult.developmentalDomain) ? aiResult.developmentalDomain : [aiResult.developmentalDomain || "Cognitive"],
+            followUpAction: aiResult.followUpAction || "proceed_next",
+            flaggedChildren: Array.isArray(aiResult.flaggedChildren) ? aiResult.flaggedChildren : [],
+            text: aiResult.text || roughNotes
+          });
+        }
+      } catch (groqErr) {
+        console.warn("Groq API Call Warning:", groqErr?.message, "- Falling back to Gemini/OpenAI");
+      }
+    }
+
+    // ── 2. GEMINI API CALL ──
     if (isGeminiConfigured) {
       const model = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
@@ -6555,9 +6874,14 @@ app.post("/api/teacher/reports/draft-ai", requireAuth, requireRole("teacher"), a
       const prompt = `You are an AI assistant for Early Childhood Education (ECE) teachers.
 Your task is to take a teacher's messy, raw, unstructured notes about their class activity and restructure them into a professional teaching report.
 
-You must return a JSON object with exactly two fields:
-1. "topic": A concise, professional title (5-7 words maximum) summarizing the main theme (e.g., "Sensory Learning Integration").
-2. "text": A beautifully formatted, structured report using clear headings. Under each heading, use bullet points (each on a new line starting with a dash '-') instead of paragraphs:
+You must return a JSON object with the following fields:
+1. "topic": A concise, professional title (5-7 words maximum) summarizing the main theme (e.g., "Sensory Shape Sorting Activity").
+2. "groupMastery": Select exactly one from ["Emerging", "Developing", "Mastered"] based on overall class mastery described.
+3. "developmentalDomain": An array containing 1 to 3 matching domains from ["Cognitive", "Language & Literacy", "Fine Motor", "Gross Motor", "Socio-Emotional"].
+4. "followUpAction": Select exactly one from ["proceed_next", "repeat_activity", "remediate_subgroup"].
+5. "flaggedChildren": An array of child exception objects: [{"childName": "Name", "status": "needs_support" or "advanced", "note": "Short reason"}].
+   CRITICAL RULE FOR FLAGGED CHILDREN: Only extract a child if they specifically demonstrated an EXCEPTION (e.g. "needs_support" if struggling/behind, or "advanced" if excelling far beyond peers). Do NOT flag average/normal participating children mentioned in passing.
+6. "text": A beautifully formatted, structured report using clear headings with bullet points:
    - **Activity Summary**:
      - [Bullet point 1]
      - [Bullet point 2]
@@ -6601,6 +6925,10 @@ ${roughNotes}`;
       const aiResult = JSON.parse(textResponse.trim());
       return res.json({
         topic: aiResult.topic || "Class Activity Report Log",
+        groupMastery: aiResult.groupMastery || "Developing",
+        developmentalDomain: Array.isArray(aiResult.developmentalDomain) ? aiResult.developmentalDomain : [aiResult.developmentalDomain || "Cognitive"],
+        followUpAction: aiResult.followUpAction || "proceed_next",
+        flaggedChildren: Array.isArray(aiResult.flaggedChildren) ? aiResult.flaggedChildren : [],
         text: aiResult.text || roughNotes
       });
     }
@@ -6672,6 +7000,38 @@ const server = http.createServer(app);
 const io = initSocket(server);
 
 startDailyTaskAutomationCron();
+startReminderAutomationCron();
+
+// Enrich legacy activity submissions created before structured ECE metrics were added
+async function enrichLegacyActivitySubmissions() {
+  try {
+    const result = await ActivitySubmission.updateMany(
+      {
+        $or: [
+          { groupMastery: { $exists: false } },
+          { groupMastery: null },
+          { developmentalDomain: { $exists: false } },
+          { developmentalDomain: { $size: 0 } },
+          { followUpAction: { $exists: false } }
+        ]
+      },
+      {
+        $set: {
+          groupMastery: "Developing",
+          developmentalDomain: ["Cognitive"],
+          followUpAction: "proceed_next"
+        }
+      }
+    );
+    if (result.modifiedCount > 0) {
+      console.log(`Enriched ${result.modifiedCount} legacy activity reports with ECE metrics.`);
+    }
+  } catch (err) {
+    console.warn("[Legacy Migration Notice]", err?.message);
+  }
+}
+
+enrichLegacyActivitySubmissions();
 
 server.listen(port, () => {
   console.log(`API running on http://localhost:${port}`);

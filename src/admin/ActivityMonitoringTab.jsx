@@ -44,7 +44,7 @@ const mapActivityFromApi = (a) => {
     date: a.activityDate ? new Date(a.activityDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—",
     centerName: a.center?.name || "Unassigned Center",
     centerId: a.center?._id || a.center || "",
-    teacherName: a.teacher?.name || "Unknown Teacher",teacherId: a.teacher?._id || a.teacher || "",
+    teacherName: a.teacher?.name || "Unknown Teacher", teacherId: a.teacher?._id || a.teacher || "",
     teacherAvatar: a.teacher?.name ? `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(a.teacher.name)}` : null,
     className: a.class?.name || "Unassigned Class",
     description: a.description || "",
@@ -83,10 +83,10 @@ const mapActivityFromApi = (a) => {
 
 /* ── Activity Review Modal ── */
 function ActivityReviewModal({ activity, onAction, onClose }) {
-  const [comments, setComments]       = useState(activity.adminComments || "");
+  const [comments, setComments] = useState(activity.adminComments || "");
   const [rejectReason, setRejectReason] = useState("");
-  const [otherReason, setOtherReason]   = useState("");
-  const [acting, setActing]           = useState(false);
+  const [otherReason, setOtherReason] = useState("");
+  const [acting, setActing] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const handleDownload = async (url, filename) => {
@@ -131,232 +131,250 @@ function ActivityReviewModal({ activity, onAction, onClose }) {
       {lightboxOpen && activity.image && (
         <div
           onClick={() => setLightboxOpen(false)}
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 1100,
-            display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out", padding: 24 }}>
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 1100,
+            display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out", padding: 24
+          }}>
           <img src={activity.image} alt={activity.imageName}
-            style={{ maxWidth: "92vw", maxHeight: "92vh", objectFit: "contain", borderRadius: 8,
-              boxShadow: "0 10px 40px rgba(0,0,0,0.5)" }} />
+            style={{
+              maxWidth: "92vw", maxHeight: "92vh", objectFit: "contain", borderRadius: 8,
+              boxShadow: "0 10px 40px rgba(0,0,0,0.5)"
+            }} />
           <button onClick={() => setLightboxOpen(false)}
-            style={{ position: "absolute", top: 20, right: 24, background: "rgba(255,255,255,0.15)",
+            style={{
+              position: "absolute", top: 20, right: 24, background: "rgba(255,255,255,0.15)",
               border: "none", color: "white", fontSize: 22, width: 40, height: 40, borderRadius: "50%",
-              cursor: "pointer" }}>✕</button>
+              cursor: "pointer"
+            }}>✕</button>
         </div>
       )}
-    <Modal title="🔎 Review Activity Submission" onClose={onClose}>
-      {/* Current status banner */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
-        background: `${sc}10`, border: `1px solid ${sc}30`, borderRadius: 10,
-        padding: "10px 14px", marginBottom: 14 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: sc }}>
-          Current Status: <b>{activity.status.toUpperCase()}</b>
-        </span>
-        <span style={{ fontSize: 11, color: "#9ca3af" }}>{activity.date}</span>
-      </div>
-
-      {/* Detail grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-        {[
-          { icon: "👩‍🏫", label: "Teacher", val: activity.teacherName },
-          { icon: "🏢", label: "Center", val: activity.centerName },
-          { icon: "🎒", label: "Class", val: activity.className },
-          { icon: "📅", label: "Activity Date", val: activity.date },
-        ].map((item, idx) => (
-          <div key={idx} style={{ background: "#f9fafb", borderRadius: 10, padding: "10px 12px", border: "1px solid #f3f4f6" }}>
-            <span style={{ fontSize: 10, color: "#9ca3af", fontWeight: 700, textTransform: "uppercase", display: "block", marginBottom: 2 }}>{item.label}</span>
-            <span style={{ fontSize: 12, color: "#374151", fontWeight: 600 }}>{item.icon} {item.val}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Description */}
-      <div style={{ marginBottom: 14 }}>
-        <label style={S.label}>Activity Description</label>
-        <div style={{ background: "#f8fafc", padding: "10px 12px", borderRadius: 10,
-          border: "1px solid #e2e8f0", fontSize: 12, lineHeight: "1.6", color: "#334155",
-          maxHeight: 100, overflowY: "auto" }}>
-          {activity.description || "No description provided."}
+      <Modal title="🔎 Review Activity Submission" onClose={onClose}>
+        {/* Current status banner */}
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          background: `${sc}10`, border: `1px solid ${sc}30`, borderRadius: 10,
+          padding: "10px 14px", marginBottom: 14
+        }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: sc }}>
+            Current Status: <b>{activity.status.toUpperCase()}</b>
+          </span>
+          <span style={{ fontSize: 11, color: "#9ca3af" }}>{activity.date}</span>
         </div>
-      </div>
 
-      {/* Added Rich Fields */}
-      {activity.learningObjectives && (
+        {/* Detail grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+          {[
+            { icon: "👩‍🏫", label: "Teacher", val: activity.teacherName },
+            { icon: "🏢", label: "Center", val: activity.centerName },
+            { icon: "🎒", label: "Class", val: activity.className },
+            { icon: "📅", label: "Activity Date", val: activity.date },
+          ].map((item, idx) => (
+            <div key={idx} style={{ background: "#f9fafb", borderRadius: 10, padding: "10px 12px", border: "1px solid #f3f4f6" }}>
+              <span style={{ fontSize: 10, color: "#9ca3af", fontWeight: 700, textTransform: "uppercase", display: "block", marginBottom: 2 }}>{item.label}</span>
+              <span style={{ fontSize: 12, color: "#374151", fontWeight: 600 }}>{item.icon} {item.val}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Description */}
         <div style={{ marginBottom: 14 }}>
-          <label style={S.label}>🧠 Learning Objectives</label>
-          <div style={{ background: "#f0fdf4", padding: "10px 12px", borderRadius: 10, border: "1px solid #bbf7d0", fontSize: 12, lineHeight: "1.6", color: "#166534" }}>
-            {activity.learningObjectives}
+          <label style={S.label}>Activity Description</label>
+          <div style={{
+            background: "#f8fafc", padding: "10px 12px", borderRadius: 10,
+            border: "1px solid #e2e8f0", fontSize: 12, lineHeight: "1.6", color: "#334155",
+            maxHeight: 100, overflowY: "auto"
+          }}>
+            {activity.description || "No description provided."}
           </div>
         </div>
-      )}
 
-      {activity.activities && (
-        <div style={{ marginBottom: 14 }}>
-          <label style={S.label}>🎪 Activities</label>
-          <div style={{ background: "#fdf2f8", padding: "10px 12px", borderRadius: 10, border: "1px solid #fbcfe8", fontSize: 12, lineHeight: "1.6", color: "#9d174d" }}>
-            {activity.activities}
+        {/* Added Rich Fields */}
+        {activity.learningObjectives && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={S.label}>🧠 Learning Objectives</label>
+            <div style={{ background: "#f0fdf4", padding: "10px 12px", borderRadius: 10, border: "1px solid #bbf7d0", fontSize: 12, lineHeight: "1.6", color: "#166534" }}>
+              {activity.learningObjectives}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {activity.resources && (
-        <div style={{ marginBottom: 14 }}>
-          <label style={S.label}>📦 Resources</label>
-          <div style={{ background: "#eff6ff", padding: "10px 12px", borderRadius: 10, border: "1px solid #bfdbfe", fontSize: 12, lineHeight: "1.6", color: "#1e40af" }}>
-            {activity.resources}
+        {activity.activities && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={S.label}>🎪 Activities</label>
+            <div style={{ background: "#fdf2f8", padding: "10px 12px", borderRadius: 10, border: "1px solid #fbcfe8", fontSize: 12, lineHeight: "1.6", color: "#9d174d" }}>
+              {activity.activities}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {activity.instructions && (
-        <div style={{ marginBottom: 14 }}>
-          <label style={S.label}>📝 Instructions</label>
-          <div style={{ background: "#f5f5f4", padding: "10px 12px", borderRadius: 10, border: "1px solid #e7e5e4", fontSize: 12, lineHeight: "1.6", color: "#44403c", maxHeight: 150, overflowY: "auto" }}>
-            {activity.instructions}
+        {activity.resources && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={S.label}>📦 Resources</label>
+            <div style={{ background: "#eff6ff", padding: "10px 12px", borderRadius: 10, border: "1px solid #bfdbfe", fontSize: 12, lineHeight: "1.6", color: "#1e40af" }}>
+              {activity.resources}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {activity.expectedOutput && (
-        <div style={{ marginBottom: 14 }}>
-          <label style={S.label}>🏆 Expected Output</label>
-          <div style={{ background: "#f0fdfa", padding: "10px 12px", borderRadius: 10, border: "1px solid #ccfbf1", fontSize: 12, lineHeight: "1.6", color: "#115e59" }}>
-            {activity.expectedOutput}
+        {activity.instructions && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={S.label}>📝 Instructions</label>
+            <div style={{ background: "#f5f5f4", padding: "10px 12px", borderRadius: 10, border: "1px solid #e7e5e4", fontSize: 12, lineHeight: "1.6", color: "#44403c", maxHeight: 150, overflowY: "auto" }}>
+              {activity.instructions}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {activity.facilitatorRole && (
-        <div style={{ marginBottom: 14 }}>
-          <label style={S.label}>👩‍🏫 Facilitator's Role</label>
-          <div style={{ background: "#fff7ed", padding: "10px 12px", borderRadius: 10, border: "1px solid #fed7aa", fontSize: 12, lineHeight: "1.6", color: "#9a3412" }}>
-            {activity.facilitatorRole}
+        {activity.expectedOutput && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={S.label}>🏆 Expected Output</label>
+            <div style={{ background: "#f0fdfa", padding: "10px 12px", borderRadius: 10, border: "1px solid #ccfbf1", fontSize: 12, lineHeight: "1.6", color: "#115e59" }}>
+              {activity.expectedOutput}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {activity.notes && (
-        <div style={{ marginBottom: 14 }}>
-          <label style={S.label}>💡 Notes</label>
-          <div style={{ background: "#fff7ed", padding: "10px 12px", borderRadius: 10, border: "1px solid #fed7aa", fontSize: 12, lineHeight: "1.6", color: "#9a3412" }}>
-            {activity.notes}
+        {activity.facilitatorRole && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={S.label}>👩‍🏫 Facilitator's Role</label>
+            <div style={{ background: "#fff7ed", padding: "10px 12px", borderRadius: 10, border: "1px solid #fed7aa", fontSize: 12, lineHeight: "1.6", color: "#9a3412" }}>
+              {activity.facilitatorRole}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Image / Document */}
-      <div style={{ marginBottom: 16 }}>
-        <label style={S.label}>Submitted Photo / Documentation</label>
-        {activity.allFiles && activity.allFiles.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {activity.allFiles.map((f, idx) => (
-              f.isImage ? (
-                <div key={idx}
-                  onClick={() => setLightboxOpen(true)}
-                  title="Click to view full size"
-                  style={{ borderRadius: 12, border: "1px solid #cbd5e1", overflow: "hidden", background: "#f1f5f9", cursor: "zoom-in", position: "relative" }}>
-                  <img src={f.url} alt={f.name}
-                    style={{ width: "100%", maxHeight: 200, objectFit: "cover", display: "block" }}
-                    onError={e => { e.target.style.display = "none"; }} />
-                  <span style={{ position: "absolute", bottom: 8, right: 8, background: "rgba(0,0,0,0.55)",
-                    color: "white", fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6 }}>🔍 Click to enlarge</span>
-                </div>
-              ) : (
-                <div key={idx} style={{ background: "#f8fafc", padding: "16px", borderRadius: 12, border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span style={{ fontSize: 24 }}>📄</span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>{f.name}</span>
+        {activity.notes && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={S.label}>💡 Notes</label>
+            <div style={{ background: "#fff7ed", padding: "10px 12px", borderRadius: 10, border: "1px solid #fed7aa", fontSize: 12, lineHeight: "1.6", color: "#9a3412" }}>
+              {activity.notes}
+            </div>
+          </div>
+        )}
+
+        {/* Image / Document */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={S.label}>Submitted Photo / Documentation</label>
+          {activity.allFiles && activity.allFiles.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {activity.allFiles.map((f, idx) => (
+                f.isImage ? (
+                  <div key={idx}
+                    onClick={() => setLightboxOpen(true)}
+                    title="Click to view full size"
+                    style={{ borderRadius: 12, border: "1px solid #cbd5e1", overflow: "hidden", background: "#f1f5f9", cursor: "zoom-in", position: "relative" }}>
+                    <img src={f.url} alt={f.name}
+                      style={{ width: "100%", maxHeight: 200, objectFit: "cover", display: "block" }}
+                      onError={e => { e.target.style.display = "none"; }} />
+                    <span style={{
+                      position: "absolute", bottom: 8, right: 8, background: "rgba(0,0,0,0.55)",
+                      color: "white", fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6
+                    }}>🔍 Click to enlarge</span>
                   </div>
-                  <button onClick={() => handleDownload(f.url, f.name)} style={{ ...S.exportBtn, cursor: "pointer", border: "1px solid #cbd5e1", background: "white" }}>
-                    ⬇️ Download
-                  </button>
+                ) : (
+                  <div key={idx} style={{ background: "#f8fafc", padding: "16px", borderRadius: 12, border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <span style={{ fontSize: 24 }}>📄</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>{f.name}</span>
+                    </div>
+                    <button onClick={() => handleDownload(f.url, f.name)} style={{ ...S.exportBtn, cursor: "pointer", border: "1px solid #cbd5e1", background: "white" }}>
+                      ⬇️ Download
+                    </button>
+                  </div>
+                )
+              ))}
+            </div>
+          ) : activity.image ? (
+            activity.isDocument ? (
+              <div style={{ background: "#f8fafc", padding: "16px", borderRadius: 12, border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 24 }}>📄</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>{activity.imageName}</span>
                 </div>
-              )
-            ))}
-          </div>
-        ) : activity.image ? (
-          activity.isDocument ? (
-            <div style={{ background: "#f8fafc", padding: "16px", borderRadius: 12, border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ fontSize: 24 }}>📄</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>{activity.imageName}</span>
+                <button onClick={() => handleDownload(activity.image, activity.imageName)} style={{ ...S.exportBtn, cursor: "pointer", border: "1px solid #cbd5e1", background: "white" }}>
+                  ⬇️ Download
+                </button>
               </div>
-              <button onClick={() => handleDownload(activity.image, activity.imageName)} style={{ ...S.exportBtn, cursor: "pointer", border: "1px solid #cbd5e1", background: "white" }}>
-                ⬇️ Download
-              </button>
-            </div>
+            ) : (
+              <div
+                onClick={() => setLightboxOpen(true)}
+                title="Click to view full size"
+                style={{ borderRadius: 12, border: "1px solid #cbd5e1", overflow: "hidden", background: "#f1f5f9", cursor: "zoom-in", position: "relative" }}>
+                <img src={activity.image} alt={activity.imageName}
+                  style={{ width: "100%", maxHeight: 200, objectFit: "cover", display: "block" }}
+                  onError={e => { e.target.style.display = "none"; }} />
+                <span style={{
+                  position: "absolute", bottom: 8, right: 8, background: "rgba(0,0,0,0.55)",
+                  color: "white", fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6
+                }}>🔍 Click to enlarge</span>
+              </div>
+            )
           ) : (
-            <div
-              onClick={() => setLightboxOpen(true)}
-              title="Click to view full size"
-              style={{ borderRadius: 12, border: "1px solid #cbd5e1", overflow: "hidden", background: "#f1f5f9", cursor: "zoom-in", position: "relative" }}>
-              <img src={activity.image} alt={activity.imageName}
-                style={{ width: "100%", maxHeight: 200, objectFit: "cover", display: "block" }}
-                onError={e => { e.target.style.display = "none"; }} />
-              <span style={{ position: "absolute", bottom: 8, right: 8, background: "rgba(0,0,0,0.55)",
-                color: "white", fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 6 }}>🔍 Click to enlarge</span>
+            <div style={{
+              background: "#fef3c7", border: "1.5px dashed #f59e0b", borderRadius: 12,
+              height: 80, display: "flex", alignItems: "center", justifyContent: "center",
+              gap: 8, color: "#b45309", fontSize: 12, fontWeight: 600
+            }}>
+              <span style={{ fontSize: 24 }}>📷</span>
+              No image submitted — text description only
             </div>
-          )
-        ) : (
-          <div style={{ background: "#fef3c7", border: "1.5px dashed #f59e0b", borderRadius: 12,
-            height: 80, display: "flex", alignItems: "center", justifyContent: "center",
-            gap: 8, color: "#b45309", fontSize: 12, fontWeight: 600 }}>
-            <span style={{ fontSize: 24 }}>📷</span>
-            No image submitted — text description only
+          )}
+        </div>
+
+        {/* Reject reason (shown when clicking reject) */}
+        <div style={{ marginBottom: 12 }}>
+          <label style={S.label}>
+            Reject Reason <span style={{ fontSize: 10, color: "#9ca3af" }}>(required only when rejecting)</span>
+          </label>
+          <select style={{ ...S.input }} value={rejectReason} onChange={e => setRejectReason(e.target.value)}>
+            <option value="">Select reason for rejection...</option>
+            {REJECT_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+          {rejectReason === "Other" && (
+            <input
+              type="text"
+              style={{ ...S.input, marginTop: 8 }}
+              value={otherReason}
+              onChange={e => setOtherReason(e.target.value)}
+              placeholder="Please specify the reason..."
+              autoFocus
+            />
+          )}
+        </div>
+
+        {/* Admin comments */}
+        <div style={{ marginBottom: 18 }}>
+          <label style={S.label}>Admin Feedback / Comments (optional)</label>
+          <textarea style={{ ...S.input, height: 70, resize: "none" }}
+            value={comments}
+            onChange={e => setComments(e.target.value)}
+            placeholder="Constructive feedback, follow-up notes..." />
+        </div>
+
+        {/* Action buttons */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+          <button onClick={() => handleAction("approved")} disabled={acting}
+            style={{ ...S.btnGreen, padding: "10px", fontSize: 12, fontWeight: 700, opacity: acting ? 0.7 : 1 }}>
+            ✅ Approve
+          </button>
+          <button onClick={() => handleAction("flagged")} disabled={acting}
+            style={{ ...S.tblBtn, padding: "10px", fontSize: 12, fontWeight: 700, color: "#d97706", borderColor: "#fbbf24", opacity: acting ? 0.7 : 1 }}>
+            🚩 Flag
+          </button>
+          <button onClick={() => handleAction("rejected")} disabled={acting || !reasonIsValid}
+            style={{
+              ...S.btnRed, padding: "10px", fontSize: 12, fontWeight: 700,
+              opacity: acting || !reasonIsValid ? 0.5 : 1, cursor: reasonIsValid ? "pointer" : "not-allowed"
+            }}>
+            ✕ Reject
+          </button>
+        </div>
+        {!reasonIsValid && (
+          <div style={{ fontSize: 10, color: "#9ca3af", textAlign: "center", marginTop: 6 }}>
+            {rejectReason === "Other" ? "Please specify a reason in the text box above" : "Select a reject reason above to enable the Reject button"}
           </div>
         )}
-      </div>
-
-      {/* Reject reason (shown when clicking reject) */}
-      <div style={{ marginBottom: 12 }}>
-        <label style={S.label}>
-          Reject Reason <span style={{ fontSize: 10, color: "#9ca3af" }}>(required only when rejecting)</span>
-        </label>
-        <select style={{ ...S.input }} value={rejectReason} onChange={e => setRejectReason(e.target.value)}>
-          <option value="">Select reason for rejection...</option>
-          {REJECT_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
-        </select>
-        {rejectReason === "Other" && (
-          <input
-            type="text"
-            style={{ ...S.input, marginTop: 8 }}
-            value={otherReason}
-            onChange={e => setOtherReason(e.target.value)}
-            placeholder="Please specify the reason..."
-            autoFocus
-          />
-        )}
-      </div>
-
-      {/* Admin comments */}
-      <div style={{ marginBottom: 18 }}>
-        <label style={S.label}>Admin Feedback / Comments (optional)</label>
-        <textarea style={{ ...S.input, height: 70, resize: "none" }}
-          value={comments}
-          onChange={e => setComments(e.target.value)}
-          placeholder="Constructive feedback, follow-up notes..." />
-      </div>
-
-      {/* Action buttons */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-        <button onClick={() => handleAction("approved")} disabled={acting}
-          style={{ ...S.btnGreen, padding: "10px", fontSize: 12, fontWeight: 700, opacity: acting ? 0.7 : 1 }}>
-          ✅ Approve
-        </button>
-        <button onClick={() => handleAction("flagged")} disabled={acting}
-          style={{ ...S.tblBtn, padding: "10px", fontSize: 12, fontWeight: 700, color: "#d97706", borderColor: "#fbbf24", opacity: acting ? 0.7 : 1 }}>
-          🚩 Flag
-        </button>
-        <button onClick={() => handleAction("rejected")} disabled={acting || !reasonIsValid}
-          style={{ ...S.btnRed, padding: "10px", fontSize: 12, fontWeight: 700,
-            opacity: acting || !reasonIsValid ? 0.5 : 1, cursor: reasonIsValid ? "pointer" : "not-allowed" }}>
-          ✕ Reject
-        </button>
-      </div>
-      {!reasonIsValid && (
-        <div style={{ fontSize: 10, color: "#9ca3af", textAlign: "center", marginTop: 6 }}>
-          {rejectReason === "Other" ? "Please specify a reason in the text box above" : "Select a reject reason above to enable the Reject button"}
-        </div>
-      )}
-    </Modal>
+      </Modal>
     </>
   );
 }
@@ -366,20 +384,20 @@ function ActivityReviewModal({ activity, onAction, onClose }) {
    ══════════════════════════════════════════ */
 export default function ActivityMonitoringTab({ setToast }) {
   const [activities, setActivities] = useState([]);
-  const [centers, setCenters]       = useState([]);
-  const [search, setSearch]         = useState("");
+  const [centers, setCenters] = useState([]);
+  const [search, setSearch] = useState("");
   const [centerFilter, setCenterFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [dateFrom, setDateFrom]     = useState("");
-  const [dateTo, setDateTo]         = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkActing, setBulkActing] = useState(false);
-  const [loading, setLoading]       = useState(true);
+  const [loading, setLoading] = useState(true);
   // BUG FIX: previously, a failed load left the screen permanently blank
   // with no way to retry other than refreshing the whole page.
-  const [loadError, setLoadError]   = useState(null);
-  const [toast, setLocalToast]      = useState({ msg: "", type: "" });
+  const [loadError, setLoadError] = useState(null);
+  const [toast, setLocalToast] = useState({ msg: "", type: "" });
 
   // ===== PRAJWAL EDIT START: view mode toggle (Grid / By Center) =====
   // Adds a second way to browse activities — grouped Center -> Teacher,
@@ -518,9 +536,23 @@ export default function ActivityMonitoringTab({ setToast }) {
   };
 
   const handleExportCsv = () => {
-    const rows = [["Date", "Teacher", "Center", "Class", "Description", "Status", "Admin Comments"]];
+    const rows = [["Date", "Teacher/Fellow", "Center", "Class", "Developmental Domains", "Group Mastery", "Next Planned Step", "Flagged Children", "Description", "Status", "Admin Comments"]];
     filtered.forEach(a => {
-      rows.push([a.date, a.teacherName, a.centerName, a.className, a.description.substring(0, 100), a.status, a.adminComments || ""]);
+      const dom = a.raw?.developmentalDomain;
+      const domStr = Array.isArray(dom) ? dom.join("; ") : (dom || "Cognitive");
+      rows.push([
+        a.date,
+        a.teacherName,
+        a.centerName,
+        a.className,
+        domStr,
+        a.raw?.groupMastery || "Developing",
+        a.raw?.followUpAction || "proceed_next",
+        (a.raw?.flaggedChildren || []).map(f => `${f.childName} (${f.status === "advanced" ? "Advanced" : "Needs Help"})`).join("; ") || "None",
+        (a.description || "").replace(/\n/g, " "),
+        a.status,
+        a.adminComments || ""
+      ]);
     });
     const csv = rows.map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -570,8 +602,10 @@ export default function ActivityMonitoringTab({ setToast }) {
   // screen when the initial load fails (e.g. network/server error).
   if (loadError) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-        height: "40vh", gap: 14, textAlign: "center" }}>
+      <div style={{
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        height: "40vh", gap: 14, textAlign: "center"
+      }}>
         <span style={{ fontSize: 40 }}>⚠️</span>
         <div style={{ fontSize: 14, fontWeight: 700, color: "#991b1b" }}>Couldn't load activities</div>
         <div style={{ fontSize: 12, color: "#9ca3af", maxWidth: 320 }}>{loadError}</div>
@@ -580,15 +614,15 @@ export default function ActivityMonitoringTab({ setToast }) {
     );
   }
 
-  const pending  = activities.filter(a => a.status === "pending").length;
+  const pending = activities.filter(a => a.status === "pending").length;
   const approved = activities.filter(a => a.status === "approved").length;
-  const flagged  = activities.filter(a => a.status === "flagged").length;
+  const flagged = activities.filter(a => a.status === "flagged").length;
   const rejected = activities.filter(a => a.status === "rejected").length;
 
   const statusConfig = {
-    pending:  { color: "#f59e0b", bg: "#fef3c7" },
+    pending: { color: "#f59e0b", bg: "#fef3c7" },
     approved: { color: "#10b981", bg: "#d1fae5" },
-    flagged:  { color: "#dc2626", bg: "#fee2e2" },
+    flagged: { color: "#dc2626", bg: "#fee2e2" },
     rejected: { color: "#6b7280", bg: "#f3f4f6" },
   };
 
@@ -601,17 +635,21 @@ export default function ActivityMonitoringTab({ setToast }) {
     const sc = statusConfig[act.status] || { color: "#6b7280", bg: "#f3f4f6" };
     const isSelected = selectedIds.includes(act.id);
     return (
-      <div key={act.id} style={{ background: "white", borderRadius: 16,
+      <div key={act.id} style={{
+        background: "white", borderRadius: 16,
         border: isSelected ? "2px solid #f59e0b" : "1px solid #f1f5f9",
         boxShadow: "0 2px 12px rgba(0,0,0,0.06)", overflow: "hidden", display: "flex", flexDirection: "column",
-        borderTop: `3px solid ${sc.color}`, position: "relative" }}>
+        borderTop: `3px solid ${sc.color}`, position: "relative"
+      }}>
 
         {/* FEATURE: bulk-select checkbox, only shown for pending items */}
         {act.status === "pending" && (
-          <label style={{ position: "absolute", top: 10, left: 10, zIndex: 2,
+          <label style={{
+            position: "absolute", top: 10, left: 10, zIndex: 2,
             width: 22, height: 22, borderRadius: 6, background: "rgba(255,255,255,0.9)",
             display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
-            boxShadow: "0 1px 4px rgba(0,0,0,0.15)" }}>
+            boxShadow: "0 1px 4px rgba(0,0,0,0.15)"
+          }}>
             <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(act.id)}
               style={{ width: 16, height: 16, cursor: "pointer", accentColor: "#f59e0b" }} />
           </label>
@@ -625,8 +663,10 @@ export default function ActivityMonitoringTab({ setToast }) {
               onError={e => { e.target.parentElement.innerHTML = '<div style="height:160px;display:flex;align-items:center;justify-content:center;background:#fef3c7;color:#b45309;font-size:12px;font-weight:700;gap:8px"><span style=\'font-size:24px\'>📝</span>Image unavailable</div>'; }} />
           </div>
         ) : (
-          <div style={{ height: 160, background: `${sc.bg}`, display: "flex", flexDirection: "column",
-            alignItems: "center", justifyContent: "center", color: sc.color, gap: 6 }}>
+          <div style={{
+            height: 160, background: `${sc.bg}`, display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center", color: sc.color, gap: 6
+          }}>
             <span style={{ fontSize: 40 }}>📝</span>
             <span style={{ fontSize: 11, fontWeight: 700 }}>Text Report Only</span>
           </div>
@@ -656,17 +696,21 @@ export default function ActivityMonitoringTab({ setToast }) {
           </p>
 
           {act.adminComments && (
-            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8,
-              padding: "8px 10px", fontSize: 11, color: "#334155", marginBottom: 10 }}>
+            <div style={{
+              background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8,
+              padding: "8px 10px", fontSize: 11, color: "#334155", marginBottom: 10
+            }}>
               💬 <b>Admin:</b> {act.adminComments.length > 80 ? act.adminComments.substring(0, 80) + "..." : act.adminComments}
             </div>
           )}
 
           <button onClick={() => setSelectedActivity(act)}
-            style={{ ...S.primaryBtn, width: "100%", fontSize: 12, padding: "9px 12px",
+            style={{
+              ...S.primaryBtn, width: "100%", fontSize: 12, padding: "9px 12px",
               background: act.status === "pending"
                 ? "linear-gradient(135deg,#f59e0b,#d97706)"
-                : "linear-gradient(135deg,#6b7280,#4b5563)" }}>
+                : "linear-gradient(135deg,#6b7280,#4b5563)"
+            }}>
             {act.status === "pending" ? "🔎 Review & Decide" : "🔎 View & Update"}
           </button>
         </div>
@@ -707,30 +751,34 @@ export default function ActivityMonitoringTab({ setToast }) {
       {/* KPI Stat Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(160px,1fr))", gap: 14, marginBottom: 20 }}>
         <StatCard icon="📸" label={t("Total Submissions")} val={activities.length} color="#3b82f6" bg="#dbeafe" />
-        <StatCard icon="⏳" label={t("Awaiting Review")}   val={pending}           color="#f59e0b" bg="#fef3c7" />
-        <StatCard icon="✅" label={t("Approved")}           val={approved}          color="#10b981" bg="#d1fae5" />
-        <StatCard icon="🚩" label={t("Flagged")}            val={flagged}           color="#dc2626" bg="#fee2e2" />
-        <StatCard icon="✕" label={t("Rejected")}            val={rejected}          color="#6b7280" bg="#f3f4f6" />
+        <StatCard icon="⏳" label={t("Awaiting Review")} val={pending} color="#f59e0b" bg="#fef3c7" />
+        <StatCard icon="✅" label={t("Approved")} val={approved} color="#10b981" bg="#d1fae5" />
+        <StatCard icon="🚩" label={t("Flagged")} val={flagged} color="#dc2626" bg="#fee2e2" />
+        <StatCard icon="✕" label={t("Rejected")} val={rejected} color="#6b7280" bg="#f3f4f6" />
       </div>
 
       {/* Status filter pills */}
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
         {[["all", t("All")], ["pending", "⏳ " + t("Pending")], ["approved", "✅ " + t("Approved")], ["flagged", "🚩 " + t("Flagged")], ["rejected", "✕ " + t("Rejected")]].map(([val, label]) => (
           <button key={val} onClick={() => setStatusFilter(val)}
-            style={{ padding: "7px 14px", borderRadius: 20,
+            style={{
+              padding: "7px 14px", borderRadius: 20,
               border: `1.5px solid ${statusFilter === val ? (statusConfig[val]?.color || "#374151") : "#e5e7eb"}`,
               background: statusFilter === val ? (statusConfig[val]?.bg || "#f3f4f6") : "white",
               color: statusFilter === val ? (statusConfig[val]?.color || "#374151") : "#6b7280",
-              fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+              fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit"
+            }}>
             {label} {val !== "all" && `(${activities.filter(a => a.status === val).length})`}
           </button>
         ))}
       </div>
 
       {/* Filter Toolbar */}
-      <div style={{ background: "white", borderRadius: 14, padding: "12px 16px",
+      <div style={{
+        background: "white", borderRadius: 14, padding: "12px 16px",
         border: "1px solid #f1f5f9", marginBottom: 16,
-        display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+        display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center"
+      }}>
         <div style={{ flex: 1, minWidth: 200 }}>
           <SearchBar value={search} onChange={setSearch} placeholder="Search by teacher, class, center, description..." />
         </div>
@@ -758,9 +806,11 @@ export default function ActivityMonitoringTab({ setToast }) {
 
       {/* FEATURE: bulk approve bar — only relevant when there are pending items in view */}
       {pendingInView.length > 0 && (
-        <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 12,
+        <div style={{
+          background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 12,
           padding: "10px 14px", marginBottom: 16, display: "flex", alignItems: "center",
-          gap: 10, flexWrap: "wrap" }}>
+          gap: 10, flexWrap: "wrap"
+        }}>
           <span style={{ fontSize: 12, color: "#92400e", fontWeight: 600 }}>
             {selectedIds.length > 0 ? `${selectedIds.length} ${t("selected")}` : `${pendingInView.length} ${t("pending in view")}`}
           </span>
@@ -790,17 +840,21 @@ export default function ActivityMonitoringTab({ setToast }) {
         {/* ===== PRAJWAL EDIT START: Grid / By Center view toggle ===== */}
         <div style={{ display: "flex", gap: 6, background: "#f3f4f6", padding: 4, borderRadius: 10 }}>
           <button onClick={() => setViewMode("grid")}
-            style={{ padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer",
+            style={{
+              padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer",
               background: viewMode === "grid" ? "white" : "transparent",
               boxShadow: viewMode === "grid" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-              fontSize: 12, fontWeight: 700, color: viewMode === "grid" ? "#374151" : "#9ca3af" }}>
+              fontSize: 12, fontWeight: 700, color: viewMode === "grid" ? "#374151" : "#9ca3af"
+            }}>
             ▦ {t("Grid")}
           </button>
           <button onClick={() => setViewMode("byCenter")}
-            style={{ padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer",
+            style={{
+              padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer",
               background: viewMode === "byCenter" ? "white" : "transparent",
               boxShadow: viewMode === "byCenter" ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-              fontSize: 12, fontWeight: 700, color: viewMode === "byCenter" ? "#374151" : "#9ca3af" }}>
+              fontSize: 12, fontWeight: 700, color: viewMode === "byCenter" ? "#374151" : "#9ca3af"
+            }}>
             🏢 {t("By Center")}
           </button>
         </div>
@@ -820,21 +874,27 @@ export default function ActivityMonitoringTab({ setToast }) {
           {groupedByCenter.map(center => {
             const isCollapsed = collapsedCenters[center.centerId];
             return (
-              <div key={center.centerId} style={{ background: "white", borderRadius: 16,
-                border: "1px solid #f1f5f9", overflow: "hidden" }}>
+              <div key={center.centerId} style={{
+                background: "white", borderRadius: 16,
+                border: "1px solid #f1f5f9", overflow: "hidden"
+              }}>
 
                 {/* Center header — click to expand/collapse */}
                 <div onClick={() => toggleCenterCollapse(center.centerId)}
-                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+                  style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
                     padding: "14px 18px", cursor: "pointer",
                     background: "linear-gradient(135deg,#fff7ed,#ffedd5)",
-                    borderBottom: isCollapsed ? "none" : "1px solid #fed7aa" }}>
+                    borderBottom: isCollapsed ? "none" : "1px solid #fed7aa"
+                  }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <span style={{ fontSize: 14, color: "#9a3412" }}>{isCollapsed ? "▶" : "▼"}</span>
                     <span style={{ fontSize: 15, fontWeight: 800, color: "#9a3412" }}>🏢 {center.centerName}</span>
                   </div>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#b45309",
-                    background: "#fed7aa", padding: "4px 10px", borderRadius: 12 }}>
+                  <span style={{
+                    fontSize: 12, fontWeight: 700, color: "#b45309",
+                    background: "#fed7aa", padding: "4px 10px", borderRadius: 12
+                  }}>
                     {center.teachers.length} {t("teacher")}{center.teachers.length !== 1 ? "s" : ""} · {center.total} {t("activities")}
                   </span>
                 </div>

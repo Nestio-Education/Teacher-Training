@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
 
 async function request(path, options = {}) {
   const token = localStorage.getItem("spaceece_auth_token");
@@ -955,6 +955,25 @@ export function autoAssignCourse(courseId) {
     method: "POST",
     body: JSON.stringify({ courseId }),
   });
+}
+
+// Reminder Automation APIs (AI risk prediction + 24h-before deadline reminders)
+export function getReminderRiskReport() {
+  return request("/api/reminder-automation/risk-report");
+}
+
+export function getUpcomingDeadlineReminders() {
+  return request("/api/reminder-automation/upcoming");
+}
+
+export function sendDueReminders() {
+  return request("/api/reminder-automation/send-reminders", {
+    method: "POST",
+  });
+}
+
+export function getTasksForTeacher(teacherId) {
+  return request(`/api/teacher-tasks/for-teacher/${teacherId}`);
 }
 
 // Reports/Analytics API

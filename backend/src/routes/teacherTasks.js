@@ -15,6 +15,20 @@ router.get("/", requireAuth, async (req, res, next) => {
   }
 });
 
+// GET /api/teacher-tasks/for-teacher/:teacherId - Admin/Mentor view of a
+// specific teacher's assigned tasks (e.g. the "View" profile page).
+router.get("/for-teacher/:teacherId", requireAuth, async (req, res, next) => {
+  try {
+    if (!["admin", "mentor", "super_admin"].includes(req.user.role)) {
+      return res.status(403).json({ message: "Not authorized to view another teacher's tasks" });
+    }
+    const tasks = await TeacherTask.find({ teacher: req.params.teacherId }).sort({ date: -1, createdAt: -1 });
+    res.json({ tasks });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /api/teacher-tasks/admin-assign - Admin assigns task to a target teacher
 router.post("/admin-assign", requireAuth, async (req, res, next) => {
   try {

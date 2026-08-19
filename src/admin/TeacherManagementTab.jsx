@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { AttendanceBar, Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
-import { getAdminTeachers, updateTeacherStatus, updateTeacherProfile, registerTeacher, getCenters, getClasses, sendDirectMessageToTeacher, blockTeacher, unblockTeacher, deleteTeacher, assignTeacherTaskByAdmin, getMentorFellows, claimFellow, unclaimFellow, updateFellowStatus, deleteMentorFellow } from "../services/api";
+import { getAdminTeachers, updateTeacherStatus, updateTeacherProfile, registerTeacher, getCenters, getClasses, sendDirectMessageToTeacher, blockTeacher, unblockTeacher, deleteTeacher, assignTeacherTaskByAdmin, getMentorFellows, claimFellow, unclaimFellow, updateFellowStatus, deleteMentorFellow, getTasksForTeacher } from "../services/api";
 import { t } from "../services/i18n";
 import MentorManagementTab from "../mentor/MentorManagementTab";
 
 // Reuse same base URL pattern as ActivityMonitoringTab
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 
 // Returns the teacher's real photo URL if available, otherwise DiceBear initials avatar
 const avatarSrc = (teacher) =>
@@ -537,7 +537,7 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: 10, borderBottom: "1px solid #e5e7eb", marginBottom: 20 }}>
-        {["overview", "activity"].map(sec => (
+        {["overview", "activity", "tasks"].map(sec => (
           <button key={sec} onClick={() => setActiveSection(sec)}
             style={{
               padding: "10px 16px", background: "none", border: "none",
@@ -637,7 +637,66 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
           ))}
         </SectionCard>
       )}
+
+      {activeSection === "tasks" && <TeacherTasksSection teacher={teacher} />}
     </div>
+  );
+}
+
+/* ── TeacherTasksSection: tasks assigned to this specific teacher ── */
+function TeacherTasksSection({ teacher }) {
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let ignore = false;
+    setLoading(true);
+    getTasksForTeacher(teacher.id)
+      .then((res) => { if (!ignore) setTasks(res.tasks || []); })
+      .catch((err) => { if (!ignore) setError(err.message || "Could not load tasks."); })
+      .finally(() => { if (!ignore) setLoading(false); });
+    return () => { ignore = true; };
+  }, [teacher.id]);
+
+  if (loading) {
+    return <SectionCard title="📌 Assigned Tasks"><div style={{ padding: 20, textAlign: "center", color: "#9ca3af", fontSize: 12 }}>Loading tasks...</div></SectionCard>;
+  }
+  if (error) {
+    return <SectionCard title="📌 Assigned Tasks"><div style={{ padding: 20, textAlign: "center", color: "#ef4444", fontSize: 12 }}>{error}</div></SectionCard>;
+  }
+  if (tasks.length === 0) {
+    return <SectionCard title="📌 Assigned Tasks"><div style={{ padding: 20, textAlign: "center", color: "#9ca3af", fontSize: 12 }}>No tasks assigned yet.</div></SectionCard>;
+  }
+
+  return (
+    <SectionCard title={`📌 Assigned Tasks (${tasks.length})`}>
+      {tasks.map((task) => {
+        const isOverdue = !task.completed && task.date && task.date < new Date().toISOString().split("T")[0];
+        return (
+          <div key={task._id} style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            padding: "10px 12px", borderRadius: 10, marginBottom: 8,
+            background: task.completed ? "#f0fdf4" : isOverdue ? "#fef2f2" : "#fffbeb",
+            border: `1px solid ${task.completed ? "#bbf7d0" : isOverdue ? "#fecaca" : "#fde68a"}`
+          }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#1c1917" }}>{task.title}</div>
+              <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>
+                {task.category || "task"} · {task.date}{task.time ? ` · ${task.time}` : ""}
+              </div>
+            </div>
+            <span style={{
+              fontSize: 10, fontWeight: 800, padding: "3px 10px", borderRadius: 20,
+              color: task.completed ? "#16a34a" : isOverdue ? "#dc2626" : "#d97706",
+              background: task.completed ? "#dcfce7" : isOverdue ? "#fee2e2" : "#fef3c7"
+            }}>
+              {task.completed ? "✓ Completed" : isOverdue ? "Overdue" : "Pending"}
+            </span>
+          </div>
+        );
+      })}
+    </SectionCard>
   );
 }
 

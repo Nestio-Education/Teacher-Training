@@ -46,7 +46,54 @@ import { onSocketEvent } from "../services/socket";
 // End: Dnyaneshwari Thorat
 
 /* Resolve a profile photo path to a full URL */
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
+
+// Start: PTP Form Link feature — fallback links used when a module hasn't set its own yet
+const DEFAULT_FORM_LINKS = {
+  marathi: "https://docs.google.com/forms/d/e/1FAIpQLSdQN1UqnixTwVDuzEyWmvmwBh0J8M8uB42SkjrIM6y3SOB3RA/viewform?usp=header",
+  english: "https://docs.google.com/forms/d/e/1FAIpQLSe84bWiqkIxJPYKPlzcqi3zaBNjgdx_HrALKTIBcLzeDjWpKg/viewform?usp=header",
+};
+
+/* Language picker modal — same behavior as the admin side. Opens the right
+   Google Form (module-specific link if set, otherwise the default) in a new tab. */
+function FormLanguageModal({ mod, onClose }) {
+  const marathiLink = mod?.formLinkMarathi || DEFAULT_FORM_LINKS.marathi;
+  const englishLink = mod?.formLinkEnglish || DEFAULT_FORM_LINKS.english;
+
+  const openLink = (link) => {
+    if (!link) return;
+    window.open(link, "_blank", "noopener,noreferrer");
+    onClose();
+  };
+
+  if (!mod) return null;
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={onClose}>
+      <div style={{ background: "white", borderRadius: 16, padding: 24, width: 360, maxWidth: "90%" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", marginBottom: 4 }}>MODULE {mod.moduleNumber}</div>
+        <h3 style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 800, color: "#1c1917" }}>{mod.title}</h3>
+        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 20 }}>Choose a language to fill the PTP form</div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <button onClick={() => openLink(marathiLink)}
+            style={{ padding: "12px", borderRadius: 10, border: "none", background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "white", fontSize: 14, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>
+            मराठी
+          </button>
+          <button onClick={() => openLink(englishLink)}
+            style={{ padding: "12px", borderRadius: 10, border: "1px solid #f59e0b", background: "white", color: "#92400e", fontSize: 14, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>
+            English
+          </button>
+        </div>
+
+        <button onClick={onClose} style={{ marginTop: 20, width: "100%", padding: "10px", borderRadius: 10, border: "1px solid #e5e7eb", background: "white", color: "#6b7280", fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+// End: PTP Form Link feature
 
 /* Returns teacher's real photo URL or DiceBear fallback */
 const getTeacherPhotoUrl = (teacher) => {
@@ -1707,7 +1754,7 @@ function ProfileTab({ user, onWorkingCenterChange, onUserUpdate }) {
         let photoUrl = uploadRes.asset.publicUrl;
 
         if (photoUrl.startsWith("/uploads/")) {
-          const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+          const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
           photoUrl = `${API_BASE_URL}${photoUrl}`;
         }
 
@@ -2431,6 +2478,10 @@ function ParentCapacityBuildingTab({ user, setToast }) {
 
   const selectedModule = modules.find(m => m._id === selectedModuleId);
 
+  // Start: PTP Form Link feature — language picker for the currently selected module
+  const [formModalOpen, setFormModalOpen] = useState(false);
+  // End: PTP Form Link feature
+
   // Snehal change: real per-teacher session status, fetched from backend
   const [sessionAssignments, setSessionAssignments] = useState([]);
   const [assignmentsLoading, setAssignmentsLoading] = useState(false);
@@ -2554,26 +2605,44 @@ function ParentCapacityBuildingTab({ user, setToast }) {
       <h1 style={S.pageTitle}>Parent Capacity Building</h1>
       <p style={S.pageSub}>Sessions assigned to you by the admin</p>
 
-      <div style={{ marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <select
-          style={{ ...S.input, maxWidth: 340, border: "1.5px solid #e2e8f0", borderRadius: 10, padding: "10px 14px", background: "white", fontWeight: 600, fontSize: 13, color: "#1c1917", boxShadow: "0 1px 3px rgba(0,0,0,0.04)", cursor: "pointer", outline: "none" }}
-          value={selectedModuleId}
-          onChange={e => setSelectedModuleId(e.target.value)}
-        >
-          {modules.map(m => (
-            <option key={m._id} value={m._id}>Module {m.moduleNumber}: {m.title}</option>
-          ))}
-        </select>
+      <div style={{ marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <select
+            style={{ ...S.input, maxWidth: 340, border: "1.5px solid #e2e8f0", borderRadius: 10, padding: "10px 14px", background: "white", fontWeight: 600, fontSize: 13, color: "#1c1917", boxShadow: "0 1px 3px rgba(0,0,0,0.04)", cursor: "pointer", outline: "none" }}
+            value={selectedModuleId}
+            onChange={e => setSelectedModuleId(e.target.value)}
+          >
+            {modules.map(m => (
+              <option key={m._id} value={m._id}>Module {m.moduleNumber}: {m.title}</option>
+            ))}
+          </select>
 
-        <select
-          style={{ ...S.input, maxWidth: 160, border: "1.5px solid #e2e8f0", borderRadius: 10, padding: "10px 14px", background: "white", fontWeight: 600, fontSize: 13, color: "#1c1917", boxShadow: "0 1px 3px rgba(0,0,0,0.04)", cursor: "pointer", outline: "none" }}
-          value={sessionLang}
-          onChange={e => setSessionLang(e.target.value)}
-        >
-          <option value="en">English</option>
-          <option value="hi">हिंदी</option>
-          <option value="mr">मराठी</option>
-        </select>
+          <select
+            style={{ ...S.input, maxWidth: 160, border: "1.5px solid #e2e8f0", borderRadius: 10, padding: "10px 14px", background: "white", fontWeight: 600, fontSize: 13, color: "#1c1917", boxShadow: "0 1px 3px rgba(0,0,0,0.04)", cursor: "pointer", outline: "none" }}
+            value={sessionLang}
+            onChange={e => setSessionLang(e.target.value)}
+          >
+            <option value="en">English</option>
+            <option value="hi">हिंदी</option>
+            <option value="mr">मराठी</option>
+          </select>
+        </div>
+
+        {/* Start: PTP Form Link feature — same button/functionality as admin side */}
+        {selectedModule && (
+          <button
+            onClick={() => setFormModalOpen(true)}
+            style={{
+              padding: "10px 18px", borderRadius: 10, border: "none",
+              background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "white",
+              fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.08)", whiteSpace: "nowrap"
+            }}
+          >
+            📝 Fill PTP Form
+          </button>
+        )}
+        {/* End: PTP Form Link feature */}
       </div>
 
       {selectedModule && (
@@ -2769,6 +2838,15 @@ function ParentCapacityBuildingTab({ user, setToast }) {
           </div>
         </div>
       )}
+
+      {/* Start: PTP Form Link feature — language picker modal for the selected module */}
+      {formModalOpen && selectedModule && (
+        <FormLanguageModal
+          mod={selectedModule}
+          onClose={() => setFormModalOpen(false)}
+        />
+      )}
+      {/* End: PTP Form Link feature */}
     </div>
   );
 }

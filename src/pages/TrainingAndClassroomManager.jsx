@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { Modal, S, StatCard, StatusBadge, Toast, SearchBar, SectionCard } from "../components/Shared";
-import { getTeacherLessonPlans, submitLessonCompletion, uploadFile, getActivityBank, uploadActivityBank, getActivitySubmissions, submitActivityCompletion, deleteActivity, createActivityBank } from "../services/api";
+import { getTeacherLessonPlans, submitLessonCompletion, uploadFile, getActivityBank, uploadActivityBank, getActivitySubmissions, submitActivityCompletion, deleteActivity, createActivityBank, getChildren, getTeacherChildren } from "../services/api";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 const formatDate = (value) => {
   if (!value) return "Not scheduled";
@@ -374,29 +376,26 @@ function ActivityDetailModal({ activity, onClose }) {
           border="#fed7aa"
         />
       )}
-
-      {activity.notes && (
-        <Section
-          icon="💡"
-          label="Notes"
-          value={activity.notes}
-          color="#475569"
-          bg="#f8fafc"
-          border="#e2e8f0"
-        />
-      )}
-
-      {/* Footer */}
-      <div style={{ marginTop: 16, padding: "10px 14px", background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11, color: "#9ca3af" }}>
-        <span>📅 Created: {formatDate(activity.createdAt)}</span>
-        {activity.sourceRowNumber && <span>Row #{activity.sourceRowNumber}</span>}
-      </div>
     </Modal>
   );
 }
 
+const DOMAIN_OPTIONS = [
+  { id: "Cognitive", label: "🧠 Cognitive", bg: "#faf5ff", color: "#7c3aed", border: "#c084fc" },
+  { id: "Language & Literacy", label: "💬 Language & Literacy", bg: "#eff6ff", color: "#2563eb", border: "#60a5fa" },
+  { id: "Fine Motor", label: "🖐️ Fine Motor", bg: "#f0fdf4", color: "#166534", border: "#4ade80" },
+  { id: "Gross Motor", label: "🏃 Gross Motor", bg: "#fff7ed", color: "#c2410c", border: "#fb923c" },
+  { id: "Socio-Emotional", label: "🤝 Socio-Emotional", bg: "#fdf2f8", color: "#db2777", border: "#f472b6" }
+];
+
+/* ── Helper to resolve child's display name ── */
+const getChildName = (c) => {
+  if (!c) return "Student";
+  return c.fullName || c.name || c.childName || (c.rollNo ? `Student (${c.rollNo})` : "Student");
+};
+
 /* ── Mark Complete Modal (requires proof submission) ── */
-function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
+export function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
   const [description, setDescription] = useState("");
   const [photos, setPhotos] = useState([]);
   const [docFiles, setDocFiles] = useState([]);
@@ -405,31 +404,216 @@ function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // ECE Parameters State
+  const [selectedDomains, setSelectedDomains] = useState(["Cognitive"]);
+  const [groupMastery, setGroupMastery] = useState("Developing");
+  const [followUpAction, setFollowUpAction] = useState("proceed_next");
+  const [flaggedChildren, setFlaggedChildren] = useState([]);
+
+  // Search-As-You-Type Roster Autocomplete State
+  const [roster, setRoster] = useState([]);
+  const [childSearchQuery, setChildSearchQuery] = useState("");
+  const [selectedChildId, setSelectedChildId] = useState("");
+  const [showRosterDropdown, setShowRosterDropdown] = useState(false);
+  const [childStatus, setChildStatus] = useState("needs_support");
+  const [childNote, setChildNote] = useState("");
+  const autocompleteRef = useRef(null);
+
+  // STT Voice Speech Recognition State
+  const [isRecording, setIsRecording] = useState(false);
+  const [speechLanguage, setSpeechLanguage] = useState("en-IN");
+  const recognitionRef = useRef(null);
+  const baseNotesRef = useRef("");
+
   const userCenter = user?.teacherProfile?.center?._id || user?.teacherProfile?.center?.id || user?.teacherProfile?.center || "";
   const userClass = (user?.teacherProfile?.classes || [])[0]?._id || (user?.teacherProfile?.classes || [])[0]?.id || (user?.teacherProfile?.classes || [])[0] || "";
+
+  // Auto-close search dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (autocompleteRef.current && !autocompleteRef.current.contains(event.target)) {
+        setShowRosterDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Fetch Class Student Roster with Fallbacks
+  useEffect(() => {
+    async function fetchRoster() {
+      try {
+        let list = [];
+        if (userClass) {
+          const res = await getTeacherChildren(userClass);
+          list = res?.children || res?.data || [];
+        }
+        if (!list || list.length === 0) {
+          const adminRes = await getChildren();
+          list = adminRes?.children || adminRes?.data || [];
+        }
+        setRoster(list || []);
+      } catch (err) {
+        console.warn("Failed to fetch class roster:", err);
+      }
+    }
+    fetchRoster();
+  }, [userClass]);
+
+  // Pre-fill initial domain if activity has default
+  useEffect(() => {
+    if (activity?.developmentalDomain) {
+      const initial = Array.isArray(activity.developmentalDomain)
+        ? activity.developmentalDomain
+        : [activity.developmentalDomain];
+      setSelectedDomains(initial);
+    }
+  }, [activity]);
+
+  // STT Voice Mic Handler (Clean, Bulletproof Real-Time Speech Recognition)
+  const toggleSpeechRecognition = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Speech recognition is not supported in your browser. Please use Chrome or Edge.");
+      return;
+    }
+
+    if (isRecording) {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch (e) {}
+      }
+      setIsRecording(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = speechLanguage || "en-US";
+      recognition.interimResults = true;
+      recognition.continuous = true;
+
+      const baseText = roughNotes ? roughNotes.trim() + " " : "";
+
+      recognition.onstart = () => {
+        setIsRecording(true);
+      };
+
+      recognition.onresult = (event) => {
+        let finalStr = "";
+        let interimStr = "";
+
+        for (let i = 0; i < event.results.length; i++) {
+          const res = event.results[i];
+          const text = res[0]?.transcript || "";
+          if (res.isFinal) {
+            finalStr += text + " ";
+          } else {
+            interimStr += text;
+          }
+        }
+
+        setRoughNotes((baseText + finalStr + interimStr).trim());
+      };
+
+      recognition.onerror = (e) => {
+        console.warn("Speech error:", e.error);
+        setIsRecording(false);
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (e) {
+      console.error("Speech Recognition Error:", e);
+      setIsRecording(false);
+    }
+  };
+
+  const toggleDomainChip = (domainId) => {
+    setSelectedDomains((prev) =>
+      prev.includes(domainId) ? prev.filter((d) => d !== domainId) : [...prev, domainId]
+    );
+  };
+
+  const safeSearchQuery = (childSearchQuery || "").toLowerCase();
+  const filteredRoster = roster.filter((c) =>
+    getChildName(c).toLowerCase().includes(safeSearchQuery)
+  );
+
+  const handleSelectRosterChild = (childObj) => {
+    const name = getChildName(childObj);
+    setChildSearchQuery(name);
+    setSelectedChildId(childObj._id || childObj.id);
+    setShowRosterDropdown(false);
+  };
+
+  const handleSelectFromSelectDropdown = (idVal) => {
+    setSelectedChildId(idVal);
+    if (!idVal) {
+      setChildSearchQuery("");
+      return;
+    }
+    const found = roster.find((c) => (c._id || c.id) === idVal);
+    if (found) {
+      setChildSearchQuery(getChildName(found));
+    }
+  };
+
+  const handleAddFlaggedChild = () => {
+    const name = childSearchQuery.trim();
+    if (!name) {
+      setError("Please select a student from roster or enter a name for exception tagging.");
+      return;
+    }
+
+    setFlaggedChildren((prev) => [
+      ...prev,
+      { child: selectedChildId || null, childName: name, status: childStatus, note: childNote.trim() }
+    ]);
+
+    setChildSearchQuery("");
+    setSelectedChildId("");
+    setChildNote("");
+    setError("");
+  };
+
+  const handleRemoveFlaggedChild = (index) => {
+    setFlaggedChildren((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const handleDraftWithAI = async () => {
     if (!roughNotes.trim()) return;
     setIsDrafting(true);
     setError("");
     try {
-      const response = await fetch("http://localhost:5000/api/teacher/reports/draft-ai", {
+      const response = await fetch(`${API_BASE_URL}/api/teacher/reports/draft-ai`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${localStorage.getItem("spaceece_auth_token")}`
+          Authorization: `Bearer ${localStorage.getItem("spaceece_auth_token")}`
         },
         body: JSON.stringify({ roughNotes })
       });
       const data = await response.json();
       if (response.ok) {
         setDescription(data.text || data.topic);
+        if (data.groupMastery) setGroupMastery(data.groupMastery);
+        if (data.followUpAction) setFollowUpAction(data.followUpAction);
+        if (Array.isArray(data.developmentalDomain) && data.developmentalDomain.length > 0) {
+          setSelectedDomains(data.developmentalDomain);
+        }
+        if (Array.isArray(data.flaggedChildren) && data.flaggedChildren.length > 0) {
+          setFlaggedChildren((prev) => [...prev, ...data.flaggedChildren]);
+        }
         setRoughNotes("");
       } else {
         setError(data.detail || data.message || "Failed to generate AI draft.");
       }
     } catch (err) {
-      setError("Error connecting to server. Make sure the backend is running.");
+      setError("Error connecting to server. Make sure backend is running.");
     } finally {
       setIsDrafting(false);
     }
@@ -444,7 +628,6 @@ function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
     setSubmitting(true);
     setError("");
     try {
-      // Upload all files first
       const fileIds = [];
       const allFiles = [...photos, ...docFiles];
       for (const f of allFiles) {
@@ -456,8 +639,8 @@ function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
           console.warn("File upload failed:", ue);
         }
       }
-      // --- PRAJWAL EDIT: START — submitActivityCompletion no longer takes assignmentId/taskId, just activityId + payload ---
-      await submitActivityCompletion(
+
+      const res = await submitActivityCompletion(
         activity._id || activity.id,
         {
           center: userCenter,
@@ -465,34 +648,26 @@ function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
           description,
           activityDate: new Date().toISOString(),
           activityBank: activity._id || activity.id,
-          activityName: activity.activityName,
+          activityName: activity.activityName || activity.title,
           duration: activity.duration,
           level: activity.level,
-          type: activity.type || activity.developmentalDomain,
+          type: activity.type || "activity",
           ageGroup: activity.ageGroup,
           milestone: activity.milestone,
-          developmentalDomain: activity.developmentalDomain,
-          purposeOfActivity: activity.purposeOfActivity,
-          howToConduct: activity.howToConduct,
-          facilitatorRole: activity.facilitatorRole,
-          materialsRequired: activity.materialsRequired,
-          expectedLearningOutcomes: activity.expectedLearningOutcomes,
+          developmentalDomain: selectedDomains,
+          groupMastery,
+          flaggedChildren,
+          followUpAction,
           dayNumber: activity.dayNumber,
-          learningObjectives: activity.learningObjectives,
-          activities: activity.activities,
-          resources: activity.resources,
-          instructions: activity.instructions,
-          expectedOutput: activity.expectedOutput,
           notes: activity.notes,
           files: fileIds
         }
       );
-      // --- PRAJWAL EDIT: END ---
 
-      onSubmit(res?.submission || {
+      onSubmit?.(res?.submission || {
         _id: Date.now().toString(),
         activityBank: activity._id || activity.id,
-        activityName: activity.activityName,
+        activityName: activity.activityName || activity.title,
         dayNumber: activity.dayNumber
       });
       onClose();
@@ -504,75 +679,308 @@ function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
   };
 
   return (
-    <Modal title={`✅ Mark Complete: ${activity.activityName}`} onClose={onClose}>
-      <form onSubmit={handleSubmit}>
-        {error && <div style={{ padding: "8px 12px", background: "#fef2f2", color: "#991b1b", borderRadius: 8, fontSize: 12, marginBottom: 12 }}>{error}</div>}
+    <Modal title={`✅ Mark Complete: ${activity.activityName || activity.title}`} onClose={onClose}>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {error && (
+          <div style={{ padding: "8px 12px", background: "#fef2f2", color: "#991b1b", borderRadius: 8, fontSize: 12 }}>
+            {error}
+          </div>
+        )}
 
-        <div style={{ padding: "10px 14px", background: "#fffbeb", borderRadius: 10, border: "1px solid #fde68a", marginBottom: 16, fontSize: 12, color: "#92400e", lineHeight: 1.5 }}>
-          ⚠️ Please provide proof of completion. Upload activity photos, documents, and a written description of what was accomplished.
+        {/* Read-Only Pre-populated Metadata Header Card */}
+        <div style={{ padding: "12px 16px", background: "#f8fafc", borderRadius: 12, border: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: "#0f172a" }}>{activity.activityName || activity.title}</div>
+            <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
+              {activity.dayNumber && <span>Day {activity.dayNumber} · </span>}
+              {activity.duration && <span>⏱️ {activity.duration} · </span>}
+              <span>Level: {activity.level || "Foundation"}</span>
+            </div>
+          </div>
+          <span style={{ fontSize: 10, fontWeight: 800, padding: "4px 10px", borderRadius: 20, background: "#dbeafe", color: "#1d4ed8" }}>
+            {activity.type || "Activity"}
+          </span>
         </div>
 
-        {/* AI Drafting Assistant Notepad */}
-        <div style={{ marginBottom: 16, padding: 12, background: "#fffbeb", border: "1px dashed #fbbf24", borderRadius: 10 }}>
-          <label style={{ ...S.label, color: "#92400e", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span>AI Drafting Assistant ✨</span>
-            <button 
-              type="button"
-              onClick={handleDraftWithAI} 
-              disabled={isDrafting || !roughNotes.trim()}
-              style={{ 
-                border: "none", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 800, cursor: "pointer",
-                background: roughNotes.trim() ? "#d97706" : "#cbd5e1",
-                color: "white", transition: "all 0.2s"
-              }}
-            >
-              {isDrafting ? "Structuring..." : "Draft with AI ✨"}
-            </button>
-          </label>
+        {/* AI Voice Assistant & Notepad (Toolbar layout - NO overlapping mic) */}
+        <div style={{ padding: 14, background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: "#92400e", display: "flex", alignItems: "center", gap: 6 }}>
+              ✨ AI Voice & Text Assistant
+            </span>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <select
+                value={speechLanguage}
+                onChange={(e) => setSpeechLanguage(e.target.value)}
+                style={{ background: "white", border: "1px solid #fbbf24", borderRadius: 6, fontSize: 11, padding: "3px 6px", color: "#92400e", outline: "none" }}
+              >
+                <option value="en-IN">🇮🇳 English (India)</option>
+                <option value="en-US">🌐 English (Global/US)</option>
+                <option value="hi-IN">🇮🇳 Hindi (हिंदी)</option>
+                <option value="gu-IN">🇮🇳 Gujarati (ગુજરાતી)</option>
+                <option value="mr-IN">🇮🇳 Marathi (मराठी)</option>
+                <option value="kn-IN">🇮🇳 Kannada (ಕನ್ನಡ)</option>
+                <option value="te-IN">🇮🇳 Telugu (తెలుగు)</option>
+                <option value="ta-IN">🇮🇳 Tamil (தமிழ்)</option>
+              </select>
+
+              <button
+                type="button"
+                onClick={toggleSpeechRecognition}
+                style={{
+                  padding: "4px 10px", borderRadius: 6, border: "none",
+                  background: isRecording ? "#ef4444" : "#f59e0b", color: "white",
+                  fontSize: 11, fontWeight: 800, cursor: "pointer", display: "flex", alignItems: "center", gap: 4
+                }}
+                title={isRecording ? "Stop Voice Recording" : "Start Voice Recording"}
+              >
+                {isRecording ? "⏹️ Recording..." : "🎙️ Voice Mic"}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDraftWithAI}
+                disabled={isDrafting || !roughNotes.trim()}
+                style={{
+                  border: "none", borderRadius: 6, padding: "4px 12px", fontSize: 11, fontWeight: 800, cursor: "pointer",
+                  background: roughNotes.trim() ? "#d97706" : "#cbd5e1", color: "white"
+                }}
+              >
+                {isDrafting ? "Structuring..." : "Draft with AI ✨"}
+              </button>
+            </div>
+          </div>
+
           <textarea
-            style={{ ...S.input, height: 50, resize: "none", background: "white", border: "1px solid #fcd34d", marginTop: 6 }}
+            style={{ ...S.input, height: 60, resize: "none", background: "white", border: "1px solid #fcd34d", fontSize: 12, margin: 0 }}
             value={roughNotes}
             onChange={(e) => setRoughNotes(e.target.value)}
-            placeholder="Type rough, messy notes here (e.g. 'Raj subtracted correctly with blocks. Priya was sharing pencil.')"
+            placeholder={isRecording ? "🎙️ Listening... speak observations now." : "Speak or type rough notes (e.g. 'Raj subtracted correctly with blocks. Priya needs support with numbers.')"}
           />
         </div>
 
-        <label style={S.label}>Activity Description / Summary *</label>
-        <textarea
-          style={{ ...S.input, height: 90, resize: "none", marginBottom: 12 }}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Describe the activity you completed, how students participated, key observations..."
-          required
-        />
+        {/* 🧠 Target Developmental Domains (Multi-Select Chips) */}
+        <div>
+          <label style={{ ...S.label, marginBottom: 6 }}>Target Developmental Domains (Multi-Select)</label>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {DOMAIN_OPTIONS.map((d) => {
+              const isSelected = selectedDomains.includes(d.id);
+              return (
+                <button
+                  type="button"
+                  key={d.id}
+                  onClick={() => toggleDomainChip(d.id)}
+                  style={{
+                    padding: "6px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                    background: isSelected ? d.bg : "#ffffff",
+                    color: isSelected ? d.color : "#64748b",
+                    border: `1.5px solid ${isSelected ? d.border : "#e2e8f0"}`,
+                    boxShadow: isSelected ? `0 2px 6px ${d.border}50` : "none",
+                    transition: "all 0.15s ease"
+                  }}
+                >
+                  {d.label} {isSelected ? "✓" : "+"}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-        <label style={S.label}>Upload Activity Photos</label>
-        <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Select one or more photos as proof of activity</div>
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={(e) => setPhotos(Array.from(e.target.files))}
-          style={{ marginBottom: 12, width: "100%", fontSize: 13 }}
-        />
-        {photos.length > 0 && (
-          <div style={{ fontSize: 11, color: "#10b981", marginBottom: 12 }}>📷 {photos.length} photo(s) selected</div>
-        )}
+        {/* 🏅 Overall Group Mastery Rubric */}
+        <div>
+          <label style={{ ...S.label, marginBottom: 6 }}>Overall Group Mastery Rubric</label>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+            {[
+              { id: "Emerging", label: "🔴 Emerging", hint: "Class needs practice", bg: "#fef2f2", color: "#991b1b", border: "#fca5a5" },
+              { id: "Developing", label: "🟡 Developing", hint: "Moderate understanding", bg: "#fffbeb", color: "#92400e", border: "#fde68a" },
+              { id: "Mastered", label: "🟢 Mastered", hint: "Class grasps skill", bg: "#ecfdf5", color: "#065f46", border: "#6ee7b7" }
+            ].map((m) => {
+              const isSelected = groupMastery === m.id;
+              return (
+                <button
+                  type="button"
+                  key={m.id}
+                  onClick={() => setGroupMastery(m.id)}
+                  style={{
+                    padding: "10px 6px", borderRadius: 10, textAlign: "center", cursor: "pointer",
+                    background: isSelected ? m.bg : "#ffffff",
+                    border: `2px solid ${isSelected ? m.border : "#e2e8f0"}`,
+                    transition: "all 0.15s ease"
+                  }}
+                >
+                  <div style={{ fontSize: 12, fontWeight: 800, color: isSelected ? m.color : "#334155" }}>{m.label}</div>
+                  <div style={{ fontSize: 9, color: "#64748b", marginTop: 2 }}>{m.hint}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-        <label style={S.label}>Upload Documents / Supporting Files (Optional)</label>
-        <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>PDF, Excel, Word, etc.</div>
-        <input
-          type="file"
-          multiple
-          onChange={(e) => setDocFiles(Array.from(e.target.files))}
-          style={{ marginBottom: 20, width: "100%", fontSize: 13 }}
-        />
-        {docFiles.length > 0 && (
-          <div style={{ fontSize: 11, color: "#10b981", marginBottom: 12 }}>📎 {docFiles.length} document(s) selected</div>
-        )}
+        {/* 🔁 Next Planned Step Tag (followUpAction) */}
+        <div>
+          <label style={S.label}>Next Planned Step Tag (followUpAction)</label>
+          <select
+            value={followUpAction}
+            onChange={(e) => setFollowUpAction(e.target.value)}
+            style={{ ...S.input, height: 38, fontSize: 12, fontWeight: 600 }}
+          >
+            <option value="proceed_next">🟢 Proceed to Next Activity (Whole class ready)</option>
+            <option value="repeat_activity">🟡 Repeat Activity Tomorrow (Whole class needs practice)</option>
+            <option value="remediate_subgroup">🔴 Remediate Flagged Subgroup (Class moves on, 1-on-1 for tagged kids)</option>
+          </select>
+        </div>
 
-        <button type="submit" disabled={submitting} style={{ ...S.primaryBtn, width: "100%" }}>
-          {submitting ? "Submitting..." : "📤 Submit Completion Report"}
+        {/* ⚠️ Dual Roster Select & Autocomplete Child Tagger */}
+        <div style={{ padding: 14, background: "#f8fafc", borderRadius: 12, border: "1px solid #e2e8f0" }}>
+          <label style={{ ...S.label, marginBottom: 6 }}>Tag Exception Children (Lagging or Excelling)</label>
+
+          {/* Quick Select Dropdown */}
+          <div style={{ marginBottom: 8 }}>
+            <select
+              value={selectedChildId}
+              onChange={(e) => handleSelectFromSelectDropdown(e.target.value)}
+              style={{ ...S.input, height: 36, fontSize: 12, margin: 0, fontWeight: 600 }}
+            >
+              <option value="">Select Student from Class Roster...</option>
+              {roster.map((c) => (
+                <option key={c._id || c.id} value={c._id || c.id}>
+                  👦 {getChildName(c)} {c.rollNo ? `(${c.rollNo})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Autocomplete Input with Click-Outside Ref */}
+          <div style={{ display: "flex", gap: 8, alignItems: "center", position: "relative", marginBottom: 8 }} ref={autocompleteRef}>
+            <div style={{ flex: 1, position: "relative" }}>
+              <input
+                type="text"
+                placeholder="Or type student name manually..."
+                value={childSearchQuery}
+                onFocus={() => setShowRosterDropdown(true)}
+                onChange={(e) => {
+                  setChildSearchQuery(e.target.value);
+                  setSelectedChildId("");
+                  setShowRosterDropdown(true);
+                }}
+                style={{ ...S.input, height: 36, fontSize: 12, margin: 0 }}
+              />
+
+              {/* Floating Autocomplete Suggestions */}
+              {showRosterDropdown && filteredRoster.length > 0 && (
+                <div
+                  style={{
+                    position: "absolute", top: 40, left: 0, right: 0, background: "white", border: "1px solid #cbd5e1",
+                    borderRadius: 8, boxShadow: "0 8px 16px rgba(0,0,0,0.1)", zIndex: 100, maxHeight: 160, overflowY: "auto"
+                  }}
+                >
+                  {filteredRoster.map((c) => (
+                    <div
+                      key={c._id || c.id}
+                      onClick={() => handleSelectRosterChild(c)}
+                      style={{ padding: "8px 12px", fontSize: 12, cursor: "pointer", borderBottom: "1px solid #f1f5f9", fontWeight: 600, color: "#1e293b" }}
+                    >
+                      👦 {getChildName(c)} {c.rollNo ? `(${c.rollNo})` : ""}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <select
+              value={childStatus}
+              onChange={(e) => setChildStatus(e.target.value)}
+              style={{ ...S.input, height: 36, width: 140, fontSize: 11, fontWeight: 700, margin: 0 }}
+            >
+              <option value="needs_support">🔴 Needs Support</option>
+              <option value="advanced">🟢 Advanced / Excelling</option>
+            </select>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              type="text"
+              placeholder="Observation note (e.g. Needs help with counting)..."
+              value={childNote}
+              onChange={(e) => setChildNote(e.target.value)}
+              style={{ ...S.input, height: 36, flex: 1, fontSize: 12, margin: 0 }}
+            />
+            <button
+              type="button"
+              onClick={handleAddFlaggedChild}
+              style={{ padding: "8px 14px", borderRadius: 8, background: "#0f172a", color: "white", fontSize: 11, fontWeight: 800, border: "none", cursor: "pointer" }}
+            >
+              + Tag Child
+            </button>
+          </div>
+
+          {/* List of Flagged Children Badges */}
+          {flaggedChildren.length > 0 && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+              {flaggedChildren.map((f, i) => (
+                <span
+                  key={i}
+                  style={{
+                    padding: "4px 10px", borderRadius: 16, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", gap: 6,
+                    background: f.status === "advanced" ? "#d1fae5" : "#fee2e2",
+                    color: f.status === "advanced" ? "#065f46" : "#991b1b",
+                    border: `1px solid ${f.status === "advanced" ? "#6ee7b7" : "#fca5a5"}`
+                  }}
+                >
+                  <span>{f.status === "advanced" ? "🌟" : "⚠️"} {f.childName} ({f.status === "advanced" ? "Advanced" : "Needs Help"}{f.note ? `: ${f.note}` : ""})</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveFlaggedChild(i)}
+                    style={{ border: "none", background: "transparent", cursor: "pointer", color: "#64748b", fontWeight: 800, fontSize: 12 }}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Observation Description Summary */}
+        <div>
+          <label style={S.label}>Activity Description / Summary *</label>
+          <textarea
+            style={{ ...S.input, height: 70, resize: "none", margin: 0 }}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Describe the completed activity, student observations, and key takeaways..."
+            required
+          />
+        </div>
+
+        {/* Proof Photo Uploads (Optional) */}
+        <div>
+          <label style={{ ...S.label, marginBottom: 4 }}>Upload Activity Photos (Optional)</label>
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(e) => setPhotos(Array.from(e.target.files))}
+            style={{ width: "100%", fontSize: 11 }}
+          />
+          {photos.length > 0 && <div style={{ fontSize: 11, color: "#10b981", marginTop: 4 }}>📷 {photos.length} photo(s) selected</div>}
+        </div>
+
+        {/* Supporting Documents Uploads (Optional) */}
+        <div>
+          <label style={{ ...S.label, marginBottom: 4 }}>Upload Documents (Optional)</label>
+          <input
+            type="file"
+            multiple
+            onChange={(e) => setDocFiles(Array.from(e.target.files))}
+            style={{ width: "100%", fontSize: 11 }}
+          />
+          {docFiles.length > 0 && <div style={{ fontSize: 11, color: "#10b981", marginTop: 4 }}>📎 {docFiles.length} document(s) selected</div>}
+        </div>
+
+        <button type="submit" disabled={submitting} style={{ ...S.primaryBtn, width: "100%", padding: 12, fontSize: 13, fontWeight: 800, marginTop: 6 }}>
+          {submitting ? "Submitting Report..." : "📤 Submit Completion Report"}
         </button>
       </form>
     </Modal>
@@ -596,7 +1004,7 @@ function LessonDetailModal({ assignment, onClose, onSubmitComplete }) {
           <span style={{ fontSize: 12, color: "#6b7280" }}>📅 {formatDate(act.activityDate || act.createdAt)}</span>
           {act.class?.name && <span style={{ fontSize: 12, color: "#6b7280" }}>🎒 {act.class.name}</span>}
         </div>
-        
+
         <div style={{ marginBottom: 12, padding: "10px 12px", background: "#f9fafb", borderRadius: 10, border: "1px solid #f3f4f6" }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", marginBottom: 4 }}>
             📝 Description
@@ -613,9 +1021,9 @@ function LessonDetailModal({ assignment, onClose, onSubmitComplete }) {
               const isImage = f.mimeType?.startsWith("image/") || /\.(png|jpe?g|gif|webp)$/i.test(f.originalName || "");
               return (
                 <div key={i} style={{ marginBottom: 12 }}>
-                  <a 
-                    href={`http://localhost:5000${f.publicUrl}`} 
-                    target="_blank" 
+                  <a
+                    href={`${API_BASE_URL}${f.publicUrl}`}
+                    target="_blank"
                     rel="noopener noreferrer"
                     style={{ display: "inline-flex", alignItems: "center", gap: "6px", padding: "6px 12px", background: "#fff", border: "1px solid #10b981", borderRadius: 6, fontSize: 12, color: "#10b981", textDecoration: "none", fontWeight: 600 }}
                   >
@@ -623,7 +1031,7 @@ function LessonDetailModal({ assignment, onClose, onSubmitComplete }) {
                   </a>
                   {isImage && (
                     <div style={{ marginTop: 8 }}>
-                      <img src={`http://localhost:5000${f.publicUrl}`} alt={f.originalName} style={{ maxWidth: "100%", maxHeight: "200px", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                      <img src={`${API_BASE_URL}${f.publicUrl}`} alt={f.originalName} style={{ maxWidth: "100%", maxHeight: "200px", borderRadius: 8, border: "1px solid #e5e7eb" }} />
                     </div>
                   )}
                 </div>
@@ -666,7 +1074,7 @@ function LessonDetailModal({ assignment, onClose, onSubmitComplete }) {
           <div style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", marginBottom: 4 }}>
             {s.icon} {s.label}
           </div>
-          <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{s.val || "—"}</div>
+          <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.6 }}>{s.val || "—"}</div>
         </div>
       ))}
       {assignment.adminFeedback && (
@@ -711,8 +1119,8 @@ function CompleteLessonModal({ assignment, onSubmit, onClose }) {
           throw new Error("File upload failed.");
         }
       }
-      await onSubmit(assignment._id || assignment.id, { 
-        teachingNotes, 
+      await onSubmit(assignment._id || assignment.id, {
+        teachingNotes,
         activityDescription,
         files: fileId ? [fileId] : []
       });
@@ -773,7 +1181,7 @@ function formatReportText(text) {
 
   // Split by specific bold headings (**Heading**:)
   const sections = text.split(/\*\*(Activity Summary|Student Observations|Next Steps & Action Plan)\*\*:/g);
-  
+
   if (sections.length < 2) {
     return <p style={{ fontSize: "12.5px", color: "#374151", whiteSpace: "pre-line", margin: 0, lineHeight: "1.5" }}>{text}</p>;
   }
@@ -782,7 +1190,7 @@ function formatReportText(text) {
   for (let i = 1; i < sections.length; i += 2) {
     const heading = sections[i];
     const content = sections[i + 1] || "";
-    
+
     // Split by newlines, dashes, or asterisks followed by spaces
     const bullets = content
       .split(/(?:\r?\n)?\s*[-*]\s+/)
@@ -1213,9 +1621,9 @@ export default function TrainingAndClassroomManager({ user }) {
 
       {/* View Details: Lesson Plan assignment */}
       {detailAssignment && (
-        <LessonDetailModal 
-          assignment={detailAssignment} 
-          onClose={() => setDetailAssignment(null)} 
+        <LessonDetailModal
+          assignment={detailAssignment}
+          onClose={() => setDetailAssignment(null)}
           onSubmitComplete={handleCompleteSubmit}
         />
       )}
@@ -1269,7 +1677,7 @@ export default function TrainingAndClassroomManager({ user }) {
       )}
 
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
         <div>
           <h1 style={S.pageTitle}>Training & Classroom Portal</h1>
           <p style={S.pageSub}>Access assigned courses, monitor training pathways, upload activities, and submit teaching notes.</p>
@@ -1284,40 +1692,12 @@ export default function TrainingAndClassroomManager({ user }) {
         </div>
       </div>
 
-      {/* Sub-Tab Navigation Bar */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, borderBottom: "1px solid #e2e8f0", paddingBottom: "8px" }}>
-        {[
-          { key: "courses", label: "📚 Courses & Lesson Plans", icon: "🎓" },
-          { key: "reports", label: "📝 Notes & Teaching Reports", icon: "📋" }
-        ].map(sub => (
-          <button
-            key={sub.key}
-            onClick={() => setActiveSubTab(sub.key)}
-            style={{
-              background: activeSubTab === sub.key ? "#f59e0b" : "transparent",
-              color: activeSubTab === sub.key ? "white" : "#64748b",
-              border: "none",
-              borderRadius: "8px",
-              padding: "8px 16px",
-              fontSize: "12.5px",
-              fontWeight: "700",
-              cursor: "pointer",
-              transition: "all 0.2s"
-            }}
-          >
-            {sub.label}
-          </button>
-        ))}
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 16, marginBottom: 20 }}>
+        <StatCard icon="📋" label="Total Cards" val={allItems.length} color="#3b82f6" bg="#dbeafe" />
+        <StatCard icon="⏳" label="Pending" val={pendingCount} color="#f59e0b" bg="#fef3c7" />
+        <StatCard icon="✅" label="Completed" val={completedCount} color="#10b981" bg="#d1fae5" />
       </div>
-
-      {activeSubTab === "courses" && (
-        <>
-          {/* Stats */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 16, marginBottom: 20 }}>
-            <StatCard icon="📋" label="Total Cards" val={allItems.length} color="#3b82f6" bg="#dbeafe" />
-            <StatCard icon="⏳" label="Pending" val={pendingCount} color="#f59e0b" bg="#fef3c7" />
-            <StatCard icon="✅" label="Completed" val={completedCount} color="#10b981" bg="#d1fae5" />
-          </div>
 
           {/* Filters + Search */}
           <div style={{ background: "white", borderRadius: 14, padding: "14px 18px", border: "1px solid #f1f5f9", marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
@@ -1428,124 +1808,6 @@ export default function TrainingAndClassroomManager({ user }) {
               })}
             </div>
           )}
-        </>
-      )}
-
-      {activeSubTab === "reports" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1.3fr", gap: 20 }}>
-          <SectionCard title="✍️ Draft Teaching Note / Progress Report">
-            {reportError && (
-              <div style={{ padding: "8px 12px", background: "#fef2f2", color: "#991b1b", borderRadius: 8, fontSize: 12, marginBottom: 12 }}>
-                {reportError}
-              </div>
-            )}
-            
-            {/* AI Drafting Assistant Notepad */}
-            <div style={{ marginBottom: 16, padding: 12, background: "#fffbeb", border: "1px dashed #fbbf24", borderRadius: 10 }}>
-              <label style={{ ...S.label, color: "#92400e", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span>AI Drafting Assistant ✨</span>
-                  <select
-                    value={speechLanguage}
-                    onChange={(e) => setSpeechLanguage(e.target.value)}
-                    style={{
-                      background: "white",
-                      border: "1.5px solid #fbbf24",
-                      borderRadius: 6,
-                      fontSize: 10,
-                      fontWeight: 600,
-                      color: "#92400e",
-                      padding: "2px 4px",
-                      cursor: "pointer",
-                      outline: "none"
-                    }}
-                    title="Voice Typing Language"
-                  >
-                    <option value="en-IN">🇮🇳 English (India)</option>
-                    <option value="hi-IN">🇮🇳 Hindi (हिंदी)</option>
-                    <option value="mr-IN">🇮🇳 Marathi (मराठी)</option>
-                    <option value="kn-IN">🇮🇳 Kannada (ಕನ್ನಡ)</option>
-                    <option value="te-IN">🇮🇳 Telugu (తెలుగు)</option>
-                    <option value="ta-IN">🇮🇳 Tamil (தமிழ்)</option>
-                  </select>
-                </span>
-                <button 
-                  type="button"
-                  onClick={handleDraftWithAIForTab} 
-                  disabled={isTabDrafting || !tabRoughNotes.trim()}
-                  style={{ 
-                    border: "none", borderRadius: 8, padding: "4px 10px", fontSize: 11, fontWeight: 800, cursor: "pointer",
-                    background: tabRoughNotes.trim() ? "#d97706" : "#cbd5e1",
-                    color: "white", transition: "all 0.2s"
-                  }}
-                >
-                  {isTabDrafting ? "Structuring..." : "Draft with AI ✨"}
-                </button>
-              </label>
-              <div style={{ position: "relative", marginTop: 6 }}>
-                <textarea
-                  rows={5}
-                  style={{ ...S.input, height: "auto", minHeight: "110px", resize: "vertical", background: "white", border: "1px solid #fcd34d", paddingRight: "44px" }}
-                  value={tabRoughNotes}
-                  onChange={(e) => setTabRoughNotes(e.target.value)}
-                  placeholder={activeRecordingField === "roughNotes" ? "Listening... Speak now." : "Type rough, messy observations here (e.g. 'Raj subtracted correctly with blocks. Priya was sharing pencil.')"}
-                />
-                {renderMicButton("roughNotes")}
-              </div>
-            </div>
-
-            <form onSubmit={handleAddReport}>
-              <div style={{ marginBottom: 12 }}>
-                <label style={S.label}>Report Core Subject / Focus Topic</label>
-                <div style={{ position: "relative" }}>
-                  <input 
-                    required 
-                    value={reportTopic} 
-                    onChange={e => setReportTopic(e.target.value)} 
-                    style={{ ...S.input, paddingRight: "44px" }} 
-                    placeholder={activeRecordingField === "topic" ? "Listening... Speak now." : "e.g., Weekly Class Performance Log"} 
-                  />
-                  {renderMicButton("topic")}
-                </div>
-              </div>
-              <div style={{ marginBottom: 16 }}>
-                <label style={S.label}>Observation Summary Details</label>
-                <div style={{ position: "relative" }}>
-                  <textarea 
-                    required 
-                    value={reportText} 
-                    onChange={e => setReportText(e.target.value)} 
-                    style={{ ...S.input, height: "110px", resize: "none", paddingRight: "44px" }} 
-                    placeholder={activeRecordingField === "text" ? "Listening... Speak now." : "Type detailed class notes or performance reports here..."} 
-                  />
-                  {renderMicButton("text")}
-                </div>
-              </div>
-              <button type="submit" style={{ ...S.primaryBtn, width: "100%" }}>Save Report Entry</button>
-            </form>
-          </SectionCard>
-
-          <SectionCard title="🗃️ Historic Saved Notebook Logs">
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {reports.length === 0 ? (
-                <div style={{ padding: 30, textAlign: "center", border: "1px dashed #cbd5e1", borderRadius: 12, color: "#94a3b8", fontSize: 12 }}>
-                  No reports saved yet. Draft and save your first log above.
-                </div>
-              ) : (
-                reports.map(rep => (
-                  <div key={rep.id} style={{ padding: "14px", background: "white", border: "1px solid #f1f5f9", borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.02)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                      <span style={{ fontSize: "13px", fontWeight: "800", color: "#d97706" }}>📌 {rep.topic}</span>
-                      <span style={{ fontSize: "11px", color: "#94a3b8" }}>{rep.date}</span>
-                    </div>
-                    <div style={{ marginTop: 10 }}>{formatReportText(rep.text)}</div>
-                  </div>
-                ))
-              )}
-            </div>
-          </SectionCard>
-        </div>
-      )}
     </div>
   );
 }
