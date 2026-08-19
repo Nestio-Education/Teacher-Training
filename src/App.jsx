@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import LandingPage      from "./pages/LandingPage";
 import LoginPage        from "./pages/LoginPage";
 import AdminDashboard   from "./pages/AdminDashboard";
 import TeacherDashboard from "./pages/TeacherDashboard";
@@ -10,12 +11,14 @@ import { SocketProvider } from "./context/SocketContext";
 export default function App() {
   const [initialSession] = useState(getStoredSession);
   const [screen, setScreen] = useState(() => {
-    if (!initialSession) return "login";
+    if (!initialSession) return "landing";
     if (initialSession.user.role === "admin") return "admin";
     if (initialSession.user.role === "mentor") return "mentor";
     return "teacher";
   });
   const [currentUser, setCurrentUser] = useState(initialSession?.user || null);
+  const [preselectedRole, setPreselectedRole] = useState(null);
+
   // Language key forces re-render of entire tree when language changes
   const [langKey, setLangKey] = useState(
     localStorage.getItem("spaceece_default_language") || "English"
@@ -63,7 +66,8 @@ export default function App() {
   const handleLogout = () => {
     clearSession();
     setCurrentUser(null);
-    setScreen("login");
+    setPreselectedRole(null);
+    setScreen("landing");
   };
 
   const dashboardContent = (
@@ -74,7 +78,18 @@ export default function App() {
     </>
   );
 
-  if (screen === "login") return <LoginPage onLogin={handleLogin}/>;
+  if (screen === "landing") {
+    return (
+      <LandingPage
+        onGoToLogin={() => setScreen("login")}
+        onSelectRole={(role) => setPreselectedRole(role)}
+      />
+    );
+  }
+
+  if (screen === "login") {
+    return <LoginPage onLogin={handleLogin} initialRole={preselectedRole} />;
+  }
 
   return (
     <SocketProvider>
