@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Modal, S, StatCard, StatusBadge, Toast, SearchBar, SectionCard } from "../components/Shared";
-import { getTeacherLessonPlans, submitLessonCompletion, uploadFile, getActivityBank, uploadActivityBank, getActivitySubmissions, submitActivityCompletion, deleteActivity, createActivityBank, getChildren } from "../services/api";
+import { getTeacherLessonPlans, submitLessonCompletion, uploadFile, getActivityBank, uploadActivityBank, getActivitySubmissions, submitActivityCompletion, deleteActivity, createActivityBank, getChildren, getTeacherChildren } from "../services/api";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
