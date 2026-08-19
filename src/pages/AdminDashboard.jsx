@@ -3,7 +3,7 @@ import { Logo, Toast, globalCSS } from "../components/Shared";
 import { t, getCurrentLanguageCode, LANG_CHANGE_EVENT } from "../services/i18n";
 import OverviewTab from "../admin/OverviewTab";
 import CenterManagementTab from "../admin/CenterManagementTab";
-import TeacherManagementTab from "../admin/TeacherManagementTab";
+//import TeacherManagementTab from "../admin/TeacherManagementTab";
 import CurriculumTrainingTab from "../admin/CurriculumTrainingTab";
 import ActivityMonitoringTab from "../admin/ActivityMonitoringTab";
 import ChildrenManagementTab from "../admin/ChildrenManagement";
@@ -90,7 +90,7 @@ export default function AdminDashboard({ user, onLogout }) {
   const navItems = [
     { key:"overview",     label:t("Admin Dashboard"),          icon:"\uD83D\uDCCA" },
     { key:"centers",      label:t("Center Management"), icon:"\uD83C\uDFEB" },
-    { key:"teacherMgmt",  label:t("Teacher Management"), icon:"\uD83D\uDC69\u200D\uD83C\uDFEB" },
+    //{ key:"teacherMgmt",  label:t("Teacher Management"), icon:"\uD83D\uDC69\u200D\uD83C\uDFEB" },
     { key:"mentorMgmt",   label:t("Mentor Management"),  icon:"👨‍🏫" },
     { key: "curriculum", label:t("Course Management"), icon: "📚" },
     { key: "delivery", label:t("Delivery Monitoring"), icon: "📋" },
@@ -124,7 +124,7 @@ export default function AdminDashboard({ user, onLogout }) {
     switch(activeTab) {
       case "overview":     return <OverviewTab teachers={teachers} courses={courses} batches={[]} sessions={[]}/>;
       case "centers": return <CenterManagementTab allTeachers={teachers} setToast={setToast}/>;
-      case "teacherMgmt": return <TeacherManagementTab setToast={setToast} role="admin"/>;
+      //case "teacherMgmt": return <TeacherManagementTab setToast={setToast} role="admin"/>;
       case "curriculum": return <CurriculumTrainingTab setToast={setToast}/>;
       case "delivery": return <DeliveryMonitoringTab setToast={setToast}/>;
       // case "assessments": return <AssessmentResultsTab setToast={setToast}/>;
@@ -237,7 +237,7 @@ export default function AdminDashboard({ user, onLogout }) {
       <div style={{ flex:1, padding:"28px 32px", overflowY:"auto", maxHeight:"100vh" }}>
         {/* Top bar: User Guide button + Admin 3-dot menu, top-right corner */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginBottom:16, position:"relative" }}>
-            <a href="/landing-pages/Teacher-Training-Program/" style={{ display:"flex", alignItems:"center", gap:6, fontSize:13, fontWeight:700, color:"#d97706", textDecoration:"none" }}>
+            <a href="https://teacher-training-six.vercel.app/" style={{ display:"flex", alignItems:"center", gap:6, fontSize:13, fontWeight:700, color:"#d97706", textDecoration:"none" }}>
               <span>&larr;</span> Back to website
             </a>
             <div style={{ display:"flex", gap:10 }}>
