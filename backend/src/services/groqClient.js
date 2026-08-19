@@ -3,7 +3,6 @@
 // header-aware pacing + exponential backoff on 429s.
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const DEFAULT_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
 function isUsableKey(key) {
   if (!key) return false;
@@ -37,7 +36,7 @@ export async function callGroq({ systemPrompt, userPrompt, temperature = 0.4, ma
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: DEFAULT_MODEL,
+        model: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
         temperature,
         messages: [
           { role: "system", content: systemPrompt },
