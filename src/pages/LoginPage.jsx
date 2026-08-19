@@ -1100,12 +1100,12 @@ export default function LoginPage({ onLogin }) {
       <style>{globalCSS}</style>
 
       {/* Site header - shown on Login, Register, Forgot & Reset views */}
-      <header style={ls.header}>
-        <a href="/landing-pages/Teacher-Training-Program/" style={ls.headerBrand}>
+            <header style={ls.header}>
+        <a href="https://teacher-training-six.vercel.app/" style={ls.headerBrand}>
           <Logo size={40} />
           <span style={ls.headerBrandText}>SpacECE India Foundation</span>
         </a>
-        <a href="/landing-pages/Teacher-Training-Program/" style={ls.headerBack}>
+        <a href="https://teacher-training-six.vercel.app/" style={ls.headerBack}>
           Back to website
         </a>
       </header>
