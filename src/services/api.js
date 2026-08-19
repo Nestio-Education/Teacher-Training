@@ -957,6 +957,25 @@ export function autoAssignCourse(courseId) {
   });
 }
 
+// Reminder Automation APIs (AI risk prediction + 24h-before deadline reminders)
+export function getReminderRiskReport() {
+  return request("/api/reminder-automation/risk-report");
+}
+
+export function getUpcomingDeadlineReminders() {
+  return request("/api/reminder-automation/upcoming");
+}
+
+export function sendDueReminders() {
+  return request("/api/reminder-automation/send-reminders", {
+    method: "POST",
+  });
+}
+
+export function getTasksForTeacher(teacherId) {
+  return request(`/api/teacher-tasks/for-teacher/${teacherId}`);
+}
+
 // Reports/Analytics API
 export function getAdminDashboard() {
   return request("/api/admin/dashboard");

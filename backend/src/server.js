@@ -83,6 +83,8 @@ import { generateAILessonPlan, generateAIActivitySchedule } from "./services/aiL
 import dailyTaskAutomationRoutes from "./routes/dailyTaskAutomationRoutes.js";
 import teacherTasksRouter from "./routes/teacherTasks.js";
 import { startDailyTaskAutomationCron } from "./cron/dailyTaskCron.js";
+import reminderAutomationRoutes from "./routes/reminderAutomationRoutes.js";
+import { startReminderAutomationCron } from "./cron/reminderCron.js";
 import { User } from "./models/User.js";
 import { TeacherTask } from "./models/TeacherTask.js";
 import { Center } from "./models/Center.js";
@@ -618,6 +620,7 @@ app.use(
 app.use(express.json({ limit: "2mb" }));
 
 app.use("/api/daily-task-automation", dailyTaskAutomationRoutes);
+app.use("/api/reminder-automation", reminderAutomationRoutes);
 
 const bypassRoutes = [
   "/health",
@@ -5644,14 +5647,24 @@ app.post("/api/automation/attendance-reminders", requireAuth, requireRole("admin
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Get all approved teachers
-    const allTeachers = await User.find({ role: "teacher", status: "approved" }).select("_id name email phone language");
+    // Get all approved teachers, mentors AND fellows — mam wants everyone
+    // who marks attendance to show up here, not just teachers.
+    const allTeachers = await User.find({ role: { $in: ["teacher", "mentor", "fellow"] }, status: "approved" }).select("_id name email phone language role");
 
-    // Get teachers who already marked attendance today
-    const attendedToday = await TeacherAttendanceRecord.find({
-      attendanceDate: { $gte: today, $lte: new Date(today.getTime() + 86400000) }
-    }).select("teacher");
-    const attendedIds = new Set(attendedToday.map(r => r.teacher.toString()));
+    // Get users who already marked attendance today — teachers use TeacherAttendanceRecord,
+    // mentors/fellows use MentorAttendanceRecord (different model, different field name)
+    const [teacherAttended, mentorAttended] = await Promise.all([
+      TeacherAttendanceRecord.find({
+        attendanceDate: { $gte: today, $lte: new Date(today.getTime() + 86400000) }
+      }).select("teacher"),
+      MentorAttendanceRecord.find({
+        attendanceDate: { $gte: today, $lte: new Date(today.getTime() + 86400000) }
+      }).select("mentor"),
+    ]);
+    const attendedIds = new Set([
+      ...teacherAttended.map(r => r.teacher.toString()),
+      ...mentorAttended.map(r => r.mentor.toString()),
+    ]);
 
     // Filter teachers who haven't attended
     const pendingTeachers = allTeachers.filter(t => !attendedIds.has(t._id.toString()));
@@ -5662,21 +5675,54 @@ app.post("/api/automation/attendance-reminders", requireAuth, requireRole("admin
 
     // Send reminders via preferred channel
     const channel = req.body.channel || "in_app";
-    const results = await broadcastNotification({
-      recipientIds: pendingTeachers.map(t => t._id),
-      templateKey: "attendance_reminder",
-      channel,
-      priority: "high",
-      metadata: { automation: true, type: "attendance_reminder" },
-    });
+    
+    // Send individually to capture per-user errors
+    const sendResults = await Promise.allSettled(
+      pendingTeachers.map(async (teacher) => {
+        try {
+          const r = await sendNotification({
+            recipientId: teacher._id,
+            templateKey: "attendance_reminder",
+            channel,
+            priority: "high",
+            metadata: { automation: true, type: "attendance_reminder" },
+          });
+          if (!r.success) {
+            console.warn("[automation] attendance_reminder failed for", teacher.name,
+              r.channelErrors?.join(", ") || JSON.stringify(r.results));
+          }
+          return { teacher, success: r.success, channelErrors: r.channelErrors };
+        } catch (err) {
+          console.error("[automation] attendance_reminder error for", teacher.name, err.message);
+          return { teacher, success: false, error: err.message };
+        }
+      })
+    );
 
-    console.log("[automation] attendance_reminders", JSON.stringify({ sent: results.success, pending: pendingTeachers.length }));
+    const sentTeachers = sendResults
+      .filter(r => r.status === "fulfilled" && r.value.success)
+      .map(r => r.value.teacher);
+
+    // Collect unique channel errors to tell admin exactly what failed
+    const allChannelErrors = [...new Set(
+      sendResults
+        .filter(r => r.status === "fulfilled" && r.value.channelErrors?.length)
+        .flatMap(r => r.value.channelErrors)
+    )];
+
+    console.log("[automation] attendance_reminders", JSON.stringify({ 
+      sent: sentTeachers.length, 
+      pending: pendingTeachers.length,
+      channelErrors: allChannelErrors,
+    }));
 
     res.json({
-      message: `Attendance reminders sent to ${results.success} teachers`,
+      message: `Attendance reminders sent to ${sentTeachers.length} (teachers/mentors/fellows)`,
       totalPending: pendingTeachers.length,
-      sent: results.success,
-      failed: results.failed,
+      sent: sentTeachers.length,
+      failed: pendingTeachers.length - sentTeachers.length,
+      channelErrors: allChannelErrors,
+      sentTo: sentTeachers.map(t => ({ id: t._id, name: t.name, role: t.role })),
     });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
@@ -5715,21 +5761,23 @@ app.post("/api/automation/auto-assign-courses", requireAuth, requireRole("admin"
     const course = await Course.findById(courseId);
     if (!course) return res.status(404).json({ message: "Course not found" });
 
-    // Find teachers with matching subject or unassigned
+    // Find teachers, mentors AND fellows with matching subject or unassigned —
+    // mam wants everyone with a matching specialization to be caught, not just teachers.
     const teachers = await User.find({
-      role: "teacher",
+      role: { $in: ["teacher", "mentor", "fellow"] },
       status: "approved",
       $or: [
         { "teacherProfile.subject": { $regex: course.category || "", $options: "i" } },
         { "teacherProfile.subject": { $exists: false } },
       ],
-    }).select("_id name email phone language");
+    }).select("_id name email phone language role");
 
     if (teachers.length === 0) {
       return res.json({ message: "No matching teachers found for this course", assigned: 0 });
     }
 
     let assignedCount = 0;
+    const assignedTo = [];
     for (const teacher of teachers) {
       const existing = await CourseAssignment.findOne({ course: courseId, teacher: teacher._id });
       if (!existing) {
@@ -5741,7 +5789,7 @@ app.post("/api/automation/auto-assign-courses", requireAuth, requireRole("admin"
           progressPercent: 0,
         });
 
-        // Notify teacher
+        // Notify teacher/mentor/fellow
         await sendNotification({
           recipientId: teacher._id,
           templateKey: "course_assigned",
@@ -5751,15 +5799,18 @@ app.post("/api/automation/auto-assign-courses", requireAuth, requireRole("admin"
         });
 
         assignedCount++;
+        assignedTo.push({ id: teacher._id, name: teacher.name, role: teacher.role });
       }
     }
 
     console.log("[automation] auto_assign_courses", JSON.stringify({ courseId, assigned: assignedCount }));
 
     res.json({
-      message: `Course auto-assigned to ${assignedCount} teachers`,
+      message: `Course auto-assigned to ${assignedCount} (teachers/mentors/fellows)`,
       assigned: assignedCount,
       total: teachers.length,
+      // Names + roles of everyone the course was actually assigned to.
+      assignedTo,
     });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
@@ -5778,8 +5829,11 @@ app.get("/api/automation/status", requireAuth, requireRole("admin"), async (req,
       pendingAssignments,
       unreadNotifications,
     ] = await Promise.all([
-      User.countDocuments({ role: "teacher", status: "approved" }),
-      TeacherAttendanceRecord.countDocuments({ attendanceDate: { $gte: today } }),
+      User.countDocuments({ role: { $in: ["teacher", "mentor", "fellow"] }, status: "approved" }),
+      Promise.all([
+        TeacherAttendanceRecord.countDocuments({ attendanceDate: { $gte: today } }),
+        MentorAttendanceRecord.countDocuments({ attendanceDate: { $gte: today } }),
+      ]).then(([t, m]) => t + m),
       CourseAssignment.countDocuments({ status: "assigned" }),
       Notification.countDocuments({ read: false }),
     ]);
@@ -6672,6 +6726,7 @@ const server = http.createServer(app);
 const io = initSocket(server);
 
 startDailyTaskAutomationCron();
+startReminderAutomationCron();
 
 server.listen(port, () => {
   console.log(`API running on http://localhost:${port}`);

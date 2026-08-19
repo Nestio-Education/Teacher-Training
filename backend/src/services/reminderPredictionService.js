@@ -168,6 +168,7 @@ export const calculateTeacherRisk = async (user) => {
   return {
     teacherId: String(teacherId),
     teacherName: user.name,
+    role: user.role || "teacher",
     riskLevel,
     riskScore,
     reasons,
@@ -182,8 +183,12 @@ export const calculateTeacherRisk = async (user) => {
  * Risk report for all approved teachers — used by the admin dashboard.
  */
 export const getRiskReport = async () => {
-  const teachers = await User.find({ role: "teacher", status: "approved" })
-    .select("name teacherProfile.completionRate assignedMentor")
+  // Includes teachers, mentors AND fellows — mam wants everyone's name visible
+  // here, not just teachers. Mentors/fellows won't always have
+  // teacherProfile.completionRate, so calculateTeacherRisk treats a missing
+  // profile as neutral (0 risk from that factor).
+  const teachers = await User.find({ role: { $in: ["teacher", "mentor", "fellow"] }, status: "approved" })
+    .select("name role teacherProfile.completionRate assignedMentor")
     .lean();
 
   const report = await Promise.all(teachers.map((t) => calculateTeacherRisk(t)));
@@ -210,7 +215,9 @@ export const getRiskReport = async () => {
  * route the alert to) rather than broadcast to all mentors.
  */
 export const getFellowsNeedingMentorAttention = async () => {
-  const teachers = await User.find({ role: "teacher", status: "approved" })
+  // Includes both "teacher" and "fellow" roles — fellows with an assignedMentor
+  // were being skipped before since only role:"teacher" was queried.
+  const teachers = await User.find({ role: { $in: ["teacher", "fellow"] }, status: "approved" })
     .select("name teacherProfile.completionRate assignedMentor")
     .lean();
 
