@@ -529,17 +529,18 @@ export default function MentorDashboard({ user, onLogout }) {
   
   const unreadCount = notifications.filter(n=>!n.read).length;
   
+  // ── UPDATED: added per-tab accent colors to match Teacher Dashboard nav styling ──
   const navItems = [
-    { key: "overview", label: "Overview", icon: "📊" },
-    { key: "mentees", label: "Teacher Management", icon: "👥", badge: pendingApprovalsCount },
-    { key: "fellow_attendance", label: "Teacher Attendance", icon: "📅" },
-    { key: "my_attendance", label: "My Attendance", icon: "📍" },
-    { key: "activities", label: "Fellow Activities", icon: "📝" },
-    { key: "curriculum", label: "Curriculum Management", icon: "📚" },
-    { key: "lesson_plans", label: "Lesson Plans", icon: "📋" },
-    { key: "impact", label: "Impact & Capstone", icon: "🏆" },
-    { key: "documentation", label: "Growth Cycle", icon: "📝" },
-    { key: "feedback", label: "Feedback", icon: "💬" },
+    { key: "overview", label: "Overview", icon: "📊", color: "#3b82f6" },
+    { key: "mentees", label: "Teacher Management", icon: "👥", color: "#22c55e", badge: pendingApprovalsCount },
+    { key: "fellow_attendance", label: "Teacher Attendance", icon: "📅", color: "#ec4899" },
+    { key: "my_attendance", label: "My Attendance", icon: "📍", color: "#06b6d4" },
+    { key: "activities", label: "Fellow Activities", icon: "📝", color: "#8b5cf6" },
+    { key: "curriculum", label: "Curriculum Management", icon: "📚", color: "#14b8a6" },
+    { key: "lesson_plans", label: "Lesson Plans", icon: "📋", color: "#f59e0b" },
+    { key: "impact", label: "Impact & Capstone", icon: "🏆", color: "#eab308" },
+    { key: "documentation", label: "Growth Cycle", icon: "📝", color: "#6366f1" },
+    { key: "feedback", label: "Feedback", icon: "💬", color: "#ef4444" },
   ];
 
   const renderContent = () => {
@@ -579,15 +580,44 @@ export default function MentorDashboard({ user, onLogout }) {
             🎓 {t("Mentor Panel")}
           </div>
         </div>
+
+        {/* ── UPDATED: nav buttons now use per-item accent color, colored left border,
+            tinted active background, and icon-chip swap — same pattern as TeacherDashboard ── */}
         <nav style={{ padding: "4px 10px", flex: 1, overflowY: "auto", marginBottom: 80 }}>
-          {navItems.map(item=>(
-            <button key={item.key} onClick={()=>setActiveTab(item.key)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", border: "none", borderRadius: 10, background: activeTab===item.key?"#dbeafe":"transparent", color: activeTab===item.key?"#1e40af":"#6b7280", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", textAlign: "left", marginBottom: 2, transition: "all 0.18s" }}>
-              <span style={{ fontSize: 15 }}>{item.icon}</span>
-              <span style={{ flex: 1 }}>{t(item.label)}</span>
-              {item.badge > 0 && <span style={{ background: "#ef4444", color: "white", borderRadius: 20, fontSize: 10, fontWeight: 800, padding: "1px 7px" }}>{item.badge}</span>}
-            </button>
-          ))}
+          {navItems.map(item => {
+            const isActive = activeTab === item.key;
+            const accent = item.color || "#3b82f6";
+            return (
+              <button
+                key={item.key}
+                onClick={() => setActiveTab(item.key)}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: 10,
+                  padding: "8px 10px", border: "none",
+                  borderLeft: isActive ? `3px solid ${accent}` : "3px solid transparent",
+                  borderRadius: 10,
+                  background: isActive ? `${accent}14` : "transparent",
+                  color: isActive ? accent : "#6b7280",
+                  fontSize: 12, fontWeight: isActive ? 800 : 600, cursor: "pointer",
+                  fontFamily: "inherit", textAlign: "left", marginBottom: 2, transition: "all 0.18s"
+                }}
+              >
+                <span style={{
+                  width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+                  background: isActive ? accent : `${accent}1A`,
+                  color: isActive ? "white" : accent,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 13, transition: "all 0.18s"
+                }}>
+                  {item.icon}
+                </span>
+                <span style={{ flex: 1 }}>{t(item.label)}</span>
+                {item.badge > 0 && <span style={{ background: "#ef4444", color: "white", borderRadius: 20, fontSize: 10, fontWeight: 800, padding: "1px 7px" }}>{item.badge}</span>}
+              </button>
+            );
+          })}
         </nav>
+
         <div style={{ 
           position: "fixed", bottom: 0, left: 0, width: 240,
           padding: "12px 16px", borderTop: "1px solid #f1f5f9", 
