@@ -47,7 +47,7 @@ import { onSocketEvent } from "../services/socket";
 // End: Dnyaneshwari Thorat
 
 /* Resolve a profile photo path to a full URL */
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 // Start: PTP Form Link feature — fallback links used when a module hasn't set its own yet
 const DEFAULT_FORM_LINKS = {
@@ -1755,7 +1755,7 @@ function ProfileTab({ user, onWorkingCenterChange, onUserUpdate }) {
         let photoUrl = uploadRes.asset.publicUrl;
 
         if (photoUrl.startsWith("/uploads/")) {
-          const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
+          const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
           photoUrl = `${API_BASE_URL}${photoUrl}`;
         }
 
