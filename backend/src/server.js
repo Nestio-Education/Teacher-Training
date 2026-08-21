@@ -132,7 +132,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
 const app = express();
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 5001;
 const databaseModels = [
   ActivityBank,
   AutomationTeacher,
@@ -1480,7 +1480,7 @@ app.get("/api/admin/teachers", requireAuth, requireRole("admin", "mentor"), asyn
     }
     const teachers = await User.find(query)
       .select("-passwordHash")
-      .populate("teacherProfile.center", "name city")
+      .populate("teacherProfile.center", "name city type gradeBands")
       .populate("teacherProfile.classes", "name ageGroup curriculumLevel schedule")
       .populate("assignedMentor", "name email")
       .sort({ createdAt: -1 });
@@ -1852,7 +1852,7 @@ app.get("/api/teacher/me", requireAuth, requireRole("teacher", "fellow"), async 
   try {
     const teacher = await User.findById(req.user.id)
       .select("-passwordHash")
-      .populate("teacherProfile.center", "name address city pincode contactPerson phone email")
+      .populate("teacherProfile.center", "name address city pincode contactPerson phone email type gradeBands")
       .populate("teacherProfile.classes", "name ageGroup curriculumLevel schedule")
       .populate("assignedMentor", "name email phone photoUrl mentorProfile.qualification mentorProfile.specialization");
 
@@ -1901,7 +1901,7 @@ app.patch("/api/teacher/me", requireAuth, requireRole("teacher", "fellow"), asyn
 
     const teacher = await User.findByIdAndUpdate(req.user.id, { $set: update }, { new: true })
       .select("-passwordHash")
-      .populate("teacherProfile.center", "name address city pincode contactPerson phone email")
+      .populate("teacherProfile.center", "name address city pincode contactPerson phone email type gradeBands")
       .populate("teacherProfile.classes", "name ageGroup curriculumLevel schedule");
 
     res.json({ teacher });
@@ -2040,7 +2040,7 @@ app.get("/api/mentor/fellows", requireAuth, requireRole("mentor"), async (req, r
       ]
     })
       .select("-passwordHash")
-      .populate("teacherProfile.center", "name city")
+      .populate("teacherProfile.center", "name city type gradeBands")
       .populate("teacherProfile.classes", "name")
       .populate("assignedMentor", "name email")
       .sort({ createdAt: -1 });
@@ -3205,7 +3205,7 @@ app.post("/api/teacher/chatbot", requireAuth, requireRole("teacher", "fellow"), 
     const [teacher, courseCount, pendingLessons, pendingActivities, notifications] = await Promise.all([
       User.findById(req.user.id)
         .select("-passwordHash")
-        .populate("teacherProfile.center", "name city")
+        .populate("teacherProfile.center", "name city type gradeBands")
         .populate("teacherProfile.classes", "name schedule"),
       CourseAssignment.countDocuments({ teacher: req.user.id }),
       LessonPlanAssignment.countDocuments({ teacher: req.user.id, status: "pending" }),
@@ -3756,7 +3756,7 @@ app.patch("/api/admin/teachers/:id", requireAuth, requireRole("admin"), async (r
     }
     const teacher = await User.findByIdAndUpdate(req.params.id, updateData, { new: true })
       .select("-passwordHash")
-      .populate("teacherProfile.center", "name city")
+      .populate("teacherProfile.center", "name city type gradeBands")
       .populate("teacherProfile.classes", "name ageGroup curriculumLevel schedule");
 
     if (teacher && teacherProfile) {
@@ -3824,7 +3824,7 @@ app.patch("/api/admin/teachers/:id/assign-center", requireAuth, requireRole("adm
 
     const teacher = await User.findByIdAndUpdate(req.params.id, updateData, { new: true })
       .select("-passwordHash")
-      .populate("teacherProfile.center", "name address city pincode contactPerson phone email")
+      .populate("teacherProfile.center", "name address city pincode contactPerson phone email type gradeBands")
       .populate("teacherProfile.classes", "name ageGroup curriculumLevel schedule");
     if (!teacher) return res.status(404).json({ message: "Teacher not found." });
 
@@ -6788,6 +6788,8 @@ import mentorTrackingRouter from "./routes/mentorTracking.js";
 import mentorCurriculumRouter from "./routes/mentorCurriculum.js";
 app.use("/api/mentor/tracking", requireAuth, requireRole("mentor"), mentorTrackingRouter);
 app.use("/api/mentor/curriculum", requireAuth, mentorCurriculumRouter);
+import { createMentorLessonPlansRouter } from "./routes/mentorLessonPlans.js";
+app.use("/api/mentor/lesson-plans", requireAuth, requireRole("mentor"), createMentorLessonPlansRouter(upload));
 
 app.post("/api/teacher/reports/draft-ai", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
