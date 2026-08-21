@@ -6791,6 +6791,58 @@ app.use("/api/mentor/curriculum", requireAuth, mentorCurriculumRouter);
 import { createMentorLessonPlansRouter } from "./routes/mentorLessonPlans.js";
 app.use("/api/mentor/lesson-plans", requireAuth, requireRole("mentor"), createMentorLessonPlansRouter(upload));
 
+import pdcaGenerateRouter from "./routes/pdcaGenerate.js";
+app.use("/api/pdca", requireAuth, pdcaGenerateRouter);
+
+// ── Teacher/Fellow: View goals set by Mentor (My Goals panel) ──
+app.get("/api/teacher/goals", requireAuth, (req, res, next) => {
+  if (!req.user || !(["teacher", "fellow"].includes(req.user.role))) {
+    return res.status(403).json({ success: false, message: "Access denied." });
+  }
+  next();
+}, async (req, res, next) => {
+  try {
+    const { PDCACycle } = await import("./models/MentorTracking.js");
+    const goals = await PDCACycle.find({ menteeId: req.user.id })
+      .populate("mentorId", "name email")
+      .sort({ createdAt: -1 });
+    res.json({ success: true, goals });
+  } catch (err) { next(err); }
+});
+
+// ── Teacher/Fellow: Submit weekly progress report on a specific goal ──
+app.post("/api/teacher/goals/:cycleId/weekly-report", requireAuth, (req, res, next) => {
+  if (!req.user || !(["teacher", "fellow"].includes(req.user.role))) {
+    return res.status(403).json({ success: false, message: "Access denied." });
+  }
+  next();
+}, async (req, res, next) => {
+  try {
+    const { PDCACycle, WeeklyReport } = await import("./models/MentorTracking.js");
+    const { report, weekOf } = req.body;
+    if (!report || !report.trim()) {
+      return res.status(400).json({ success: false, message: "Report text is required." });
+    }
+    const cycle = await PDCACycle.findOne({ _id: req.params.cycleId, menteeId: req.user.id });
+    if (!cycle) return res.status(404).json({ success: false, message: "Goal not found." });
+
+    const weekDate = weekOf ? new Date(weekOf) : (() => {
+      const d = new Date();
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      return new Date(d.setDate(diff));
+    })();
+
+    const weeklyReport = await WeeklyReport.create({
+      cycleId: req.params.cycleId,
+      teacherId: req.user.id,
+      weekOf: weekDate,
+      report: report.trim(),
+    });
+    res.status(201).json({ success: true, weeklyReport });
+  } catch (err) { next(err); }
+});
+
 app.post("/api/teacher/reports/draft-ai", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { roughNotes } = req.body;

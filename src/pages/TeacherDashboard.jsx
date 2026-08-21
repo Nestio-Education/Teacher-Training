@@ -13,6 +13,7 @@ import TeacherCourseNotes from "./TeacherCourseNotes";    // NEW — replaces th
 import LessonPlannerTab from "./LessonPlannerTab";
 import TeacherUserGuide from "./teacheruserguide";
 import CurriculumTab from "./CurriculumTab";
+import FellowGrowthCycleTab from "./FellowGrowthCycleTab";
 import {
   getTeacherProgress,
   getNotifications,
@@ -3120,6 +3121,7 @@ export default function TeacherDashboard({ user, onLogout }) {
     { key: "training", label: "Training & Lessons", icon: "🎓", color: "#8b5cf6" },
     { key: "planner", label: "AI Lesson Planner", icon: "✏️", color: "#f59e0b" },
     { key: "courses", label: "My Courses", icon: "📚", color: "#06b6d4" },
+    { key: "growth_cycle", label: "Growth Cycle (PDCA)", icon: "📈", color: "#7c3aed" },
     { key: "parent_capacity", label: "Parent Capacity Building", icon: "👪", color: "#f97316" },
     { key: "assessment", label: "Assessments", icon: "📝", color: "#ef4444" },
     { key: "certificates", label: "Certificates", icon: "🏆", color: "#eab308" },
@@ -3169,6 +3171,7 @@ export default function TeacherDashboard({ user, onLogout }) {
       case "geotag": return <GeotagAttendance user={enrichedUser} />;
       case "training": return <TrainingAndClassroomManager user={enrichedUser} />;
       case "planner": return <LessonPlannerTab setToast={setToast} user={enrichedUser} />;
+      case "growth_cycle": return <FellowGrowthCycleTab user={enrichedUser} setToast={setToast} />;
       case "courses":
         return (
           <TeacherCourseNotes
