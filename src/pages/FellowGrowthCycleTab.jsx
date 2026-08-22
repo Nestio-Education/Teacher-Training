@@ -4,6 +4,8 @@ import {
   getFellowPDCAProgress,
   getFellowPDCAMonth,
   updateFellowPDCAChecklist,
+  getFellowAssignedTasks,
+  submitTaskEvidence,
 } from "../services/api";
 import { MONTH_TITLES, SEMESTER_LABELS, semesterOf } from "../mentor/monthMeta";
 import { MONTH_CURRICULA } from "../mentor/monthCurricula";
@@ -14,6 +16,76 @@ const SECTION_META = {
   check: { label: "Check", hint: "Reflections, outcomes, and progress evaluation", color: "#059669", bg: "#ecfdf5" },
   act: { label: "Act", hint: "Next cycle planning and improvements for upcoming month", color: "#dc2626", bg: "#fef2f2" },
 };
+
+// ── Reusable Evidence Form (text + form link + photo) ──
+function EvidenceForm({ onSubmit }) {
+  const [text, setText] = useState("");
+  const [formLink, setFormLink] = useState("");
+  const [photoBase64, setPhotoBase64] = useState("");
+  const [photoName, setPhotoName] = useState("");
+
+  const handlePhoto = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setPhotoBase64(ev.target.result);
+      setPhotoName(file.name);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const canSubmit = text.trim() || formLink.trim() || photoBase64;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <input
+        type="text"
+        placeholder="📝 Describe what you did (required if no photo/link)…"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1.5px solid #fdba74", fontSize: 13, boxSizing: "border-box" }}
+      />
+      <input
+        type="url"
+        placeholder="🔗 Paste Google Form link or any URL…"
+        value={formLink}
+        onChange={(e) => setFormLink(e.target.value)}
+        style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: "1.5px solid #fdba74", fontSize: 13, boxSizing: "border-box" }}
+      />
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <label style={{
+          padding: "7px 14px", borderRadius: 8, border: "1.5px dashed #fdba74",
+          background: "white", color: "#92400e", fontSize: 12, fontWeight: 700, cursor: "pointer",
+        }}>
+          📷 Upload Photo
+          <input type="file" accept="image/*" onChange={handlePhoto} style={{ display: "none" }} />
+        </label>
+        {photoName && <span style={{ fontSize: 12, color: "#059669", fontWeight: 600 }}>✓ {photoName}</span>}
+      </div>
+      {photoBase64 && (
+        <img src={photoBase64} alt="preview" style={{ maxWidth: "100%", maxHeight: 120, borderRadius: 8, border: "1px solid #fed7aa", objectFit: "cover" }} />
+      )}
+      <button
+        type="button"
+        disabled={!canSubmit}
+        onClick={() => onSubmit({ text, formLink, photoBase64 })}
+        style={{
+          padding: "9px 18px", borderRadius: 8, border: "none",
+          background: canSubmit ? "#ea580c" : "#fca974",
+          color: "white", fontWeight: 700, fontSize: 13,
+          cursor: canSubmit ? "pointer" : "not-allowed",
+          alignSelf: "flex-start",
+        }}
+      >
+        Submit Evidence ✓
+      </button>
+      <div style={{ fontSize: 11, color: "#92400e" }}>
+        💡 Submit any one — text, form link, OR photo. Deliverable auto-marks as Met.
+      </div>
+    </div>
+  );
+}
 
 export default function FellowGrowthCycleTab({ user, setToast }) {
   const [monthsSummary, setMonthsSummary] = useState([]);
@@ -27,6 +99,26 @@ export default function FellowGrowthCycleTab({ user, setToast }) {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [activeSemFilter, setActiveSemFilter] = useState("all");
   const [expandedWeek, setExpandedWeek] = useState(null);
+  const [expandedDeliverable, setExpandedDeliverable] = useState(null); // for Change #3 elaboration
+  const [evidenceMap, setEvidenceMap] = useState({}); // { [deliverableId]: { text, file } }
+  const [evidenceInput, setEvidenceInput] = useState(""); // temp input value
+  // Mentor-assigned custom tasks
+  const [mentorTasks, setMentorTasks] = useState([]);
+  const [loadingMentorTasks, setLoadingMentorTasks] = useState(false);
+  // Evidence modal state
+  const [evidenceModal, setEvidenceModal] = useState(null); // { taskId, taskTitle }
+  const [evidenceForm, setEvidenceForm] = useState({ text: "", formLink: "", photoBase64: "" });
+  const [submittingEvidence, setSubmittingEvidence] = useState(false);
+
+  // Load mentor-assigned tasks for selected month
+  useEffect(() => {
+    if (!selectedMonth) return;
+    setLoadingMentorTasks(true);
+    getFellowAssignedTasks({ month: selectedMonth })
+      .then((res) => { if (res.success) setMentorTasks(res.tasks || []); })
+      .catch(() => {})
+      .finally(() => setLoadingMentorTasks(false));
+  }, [selectedMonth]);
 
   // 1. Fetch 24-Month Roadmap Progress
   const fetchRoadmap = useCallback(async () => {
@@ -125,6 +217,48 @@ export default function FellowGrowthCycleTab({ user, setToast }) {
       prev.map((d) => (d.id === id ? { ...d, note: noteText, fellowMarked: true } : d))
     );
     setHasUnsavedChanges(true);
+  };
+
+  // Evidence Submit — auto-marks deliverable as met
+  const handleEvidenceSubmit = (id, evidenceData) => {
+    const { text, formLink, photoBase64 } = evidenceData || {};
+    if (!text?.trim() && !formLink?.trim() && !photoBase64) return;
+    const displayText = text?.trim() || formLink?.trim() || "Photo uploaded";
+    setEvidenceMap((prev) => ({
+      ...prev,
+      [id]: { text: displayText, formLink: formLink?.trim(), photoBase64, submittedAt: new Date().toISOString() },
+    }));
+    // auto-mark as met
+    setDeliverables((prev) =>
+      prev.map((d) =>
+        d.id === id ? { ...d, status: "met", fellowMarked: true, note: `Evidence: ${displayText}` } : d
+      )
+    );
+    setHasUnsavedChanges(true);
+    setToast?.({ msg: "Evidence submitted — deliverable marked as Met ✅", type: "success" });
+  };
+
+  // Submit evidence for mentor-assigned task
+  const handleTaskEvidenceSubmit = async (taskId) => {
+    const { text, formLink, photoBase64 } = evidenceForm;
+    if (!text?.trim() && !formLink?.trim() && !photoBase64) {
+      setToast?.({ msg: "Add at least one piece of evidence.", type: "error" });
+      return;
+    }
+    setSubmittingEvidence(true);
+    try {
+      const res = await submitTaskEvidence(taskId, { text, formLink, photoUrl: photoBase64 });
+      if (res.success) {
+        setMentorTasks((prev) => prev.map((t) => t._id === taskId ? res.task : t));
+        setEvidenceModal(null);
+        setEvidenceForm({ text: "", formLink: "", photoBase64: "" });
+        setToast?.({ msg: "Evidence submitted! Your mentor will review it. ✅", type: "success" });
+      }
+    } catch (err) {
+      setToast?.({ msg: err.message || "Failed to submit evidence.", type: "error" });
+    } finally {
+      setSubmittingEvidence(false);
+    }
   };
 
   // 4. Save Checklist to Backend
@@ -442,137 +576,139 @@ export default function FellowGrowthCycleTab({ user, setToast }) {
                   const isMultiCount = target > 1;
                   const count = item.count || 0;
 
+                  const isExpanded = expandedDeliverable === (item.id || idx);
+                  const evidence = evidenceMap[item.id];
+                  // Elaboration text: use item.description if backend provides, else generate from label
+                  const elaboration = item.description ||
+                    `📌 Task: ${item.label}\n\nHow to complete this deliverable:\n• Review the monthly learning objective and understand the context of this task.\n• Carry out the required field activity or documentation as instructed by your mentor.\n• Collect evidence (photos, form, report, or notes) that shows you completed this task.\n• Submit the evidence below — the deliverable will be automatically marked as Met once evidence is added.`;
+
                   return (
                     <div
                       key={item.id || idx}
                       style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        flexWrap: "wrap",
-                        gap: 12,
-                        padding: "12px 16px",
                         borderRadius: 12,
-                        border: isMet ? "1.5px solid #10b981" : "1px solid #e2e8f0",
-                        background: isMet ? "#f0fdf4" : "white",
+                        border: isMet ? "1.5px solid #10b981" : isExpanded ? "1.5px solid #7c3aed" : "1px solid #e2e8f0",
+                        background: isMet ? "#f0fdf4" : isExpanded ? "#faf5ff" : "white",
                         transition: "all 0.15s ease",
+                        overflow: "hidden",
                       }}
                     >
-                      {/* Left: Title & Status */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 260 }}>
-                        <button
-                          type="button"
-                          onClick={() => !isMultiCount && handleToggleSingle(item.id)}
-                          disabled={isMonthLocked || isMultiCount}
-                          style={{
-                            width: 24,
-                            height: 24,
-                            borderRadius: 6,
-                            border: isMet ? "none" : "2px solid #cbd5e1",
-                            background: isMet ? "#10b981" : "white",
-                            color: "white",
-                            fontSize: 14,
-                            fontWeight: 900,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            cursor: isMonthLocked || isMultiCount ? "default" : "pointer",
-                            transition: "all 0.15s ease",
-                            padding: 0,
-                          }}
-                        >
-                          {isMet ? "✓" : ""}
-                        </button>
-
-                        <div>
-                          <div style={{ fontSize: 13.5, fontWeight: 700, color: isMet ? "#065f46" : "#1e293b" }}>
-                            {item.label}
+                      {/* ── Row Header (always visible) ── */}
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          flexWrap: "wrap",
+                          gap: 12,
+                          padding: "12px 16px",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => setExpandedDeliverable(isExpanded ? null : (item.id || idx))}
+                      >
+                        {/* Left: checkbox + title */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 200 }}>
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Checkbox click only allowed if already met (to uncheck) OR if multiCount
+                              // For non-met single deliverables — must submit evidence first
+                              if (!isMonthLocked && isMultiCount) handleToggleSingle(item.id);
+                              if (!isMonthLocked && !isMultiCount && isMet) handleToggleSingle(item.id); // allow uncheck
+                              if (!isMonthLocked && !isMultiCount && !isMet) {
+                                // expand panel instead of marking met
+                                setExpandedDeliverable(item.id || idx);
+                              }
+                            }}
+                            title={!isMet && !isMultiCount ? "Submit evidence below to mark as Met" : ""}
+                            style={{
+                              width: 24, height: 24, borderRadius: 6, flexShrink: 0,
+                              border: isMet ? "none" : "2px solid #cbd5e1",
+                              background: isMet ? "#10b981" : "white",
+                              color: "white", fontSize: 14, fontWeight: 900,
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              cursor: isMonthLocked ? "not-allowed" : (!isMet && !isMultiCount ? "help" : "pointer"),
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            {isMet ? "✓" : ""}
                           </div>
-                          {item.note && (
-                            <div style={{ fontSize: 11.5, color: "#64748b", marginTop: 2 }}>
-                              📝 <em>{item.note}</em>
+                          <div>
+                            <div style={{ fontSize: 13.5, fontWeight: 700, color: isMet ? "#065f46" : "#1e293b" }}>
+                              {item.label}
                             </div>
+                            {!isMet && !isMultiCount && (
+                              <div style={{ fontSize: 11, color: "#f59e0b", marginTop: 2, fontWeight: 600 }}>
+                                📎 Submit evidence to mark as Met
+                              </div>
+                            )}
+                            {evidence && (
+                              <div style={{ fontSize: 11.5, color: "#7c3aed", marginTop: 2 }}>
+                                📎 Evidence submitted
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Right: counter / status + expand arrow */}
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          {isMultiCount ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }} onClick={(e) => e.stopPropagation()}>
+                              <button type="button" onClick={() => handleAdjustCount(item.id, -1)} disabled={isMonthLocked || count <= 0}
+                                style={{ width: 28, height: 28, borderRadius: 6, border: "1px solid #cbd5e1", background: "white", color: "#475569", fontWeight: 800, fontSize: 14, cursor: isMonthLocked || count <= 0 ? "not-allowed" : "pointer", opacity: count <= 0 ? 0.5 : 1 }}>-</button>
+                              <span style={{ fontSize: 13, fontWeight: 800, minWidth: 50, textAlign: "center", color: isMet ? "#059669" : "#0f172a" }}>{count} / {target}</span>
+                              <button type="button" onClick={() => handleAdjustCount(item.id, 1)} disabled={isMonthLocked}
+                                style={{ width: 28, height: 28, borderRadius: 6, border: "1px solid #cbd5e1", background: "white", color: "#475569", fontWeight: 800, fontSize: 14, cursor: isMonthLocked ? "not-allowed" : "pointer" }}>+</button>
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 6, background: isMet ? "#d1fae5" : "#f1f5f9", color: isMet ? "#065f46" : "#64748b" }}>
+                              {isMet ? "Met ✓" : "Pending"}
+                            </span>
                           )}
+                          <span style={{ fontSize: 12, color: "#94a3b8" }}>{isExpanded ? "▲" : "▼"}</span>
                         </div>
                       </div>
 
-                      {/* Right: Counter or Actions */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        {isMultiCount ? (
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <button
-                              type="button"
-                              onClick={() => handleAdjustCount(item.id, -1)}
-                              disabled={isMonthLocked || count <= 0}
-                              style={{
-                                width: 28,
-                                height: 28,
-                                borderRadius: 6,
-                                border: "1px solid #cbd5e1",
-                                background: "white",
-                                color: "#475569",
-                                fontWeight: 800,
-                                fontSize: 14,
-                                cursor: isMonthLocked || count <= 0 ? "not-allowed" : "pointer",
-                                opacity: count <= 0 ? 0.5 : 1,
-                              }}
-                            >
-                              -
-                            </button>
-                            <span style={{ fontSize: 13, fontWeight: 800, minWidth: 50, textAlign: "center", color: isMet ? "#059669" : "#0f172a" }}>
-                              {count} / {target}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleAdjustCount(item.id, 1)}
-                              disabled={isMonthLocked}
-                              style={{
-                                width: 28,
-                                height: 28,
-                                borderRadius: 6,
-                                border: "1px solid #cbd5e1",
-                                background: "white",
-                                color: "#475569",
-                                fontWeight: 800,
-                                fontSize: 14,
-                                cursor: isMonthLocked ? "not-allowed" : "pointer",
-                              }}
-                            >
-                              +
-                            </button>
+                      {/* ── Expanded Panel: Elaboration + Evidence ── */}
+                      {isExpanded && (
+                        <div style={{ padding: "0 16px 16px", borderTop: "1px solid #e2e8f0" }}>
+                          {/* Elaboration */}
+                          <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 10, padding: "12px 14px", marginTop: 12, marginBottom: 14 }}>
+                            <div style={{ fontSize: 11, fontWeight: 800, color: "#0369a1", textTransform: "uppercase", marginBottom: 6 }}>
+                              📖 How to Complete This Deliverable
+                            </div>
+                            <div style={{ fontSize: 13, color: "#1e293b", lineHeight: 1.6, whiteSpace: "pre-line" }}>
+                              {elaboration}
+                            </div>
                           </div>
-                        ) : (
-                          <span style={{ fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 6, background: isMet ? "#d1fae5" : "#f1f5f9", color: isMet ? "#065f46" : "#64748b" }}>
-                            {isMet ? "Met ✓" : "Pending"}
-                          </span>
-                        )}
 
-                        {/* Optional note prompt for Fellow */}
-                        {!isMonthLocked && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const currentNote = item.note || "";
-                              const newNote = prompt(`Add a quick note or evidence location for "${item.label}":`, currentNote);
-                              if (newNote !== null) {
-                                handleNoteChange(item.id, newNote);
-                              }
-                            }}
-                            title="Add note/evidence link"
-                            style={{
-                              background: "none",
-                              border: "none",
-                              cursor: "pointer",
-                              fontSize: 13,
-                              color: "#64748b",
-                              padding: "4px 8px",
-                              borderRadius: 6,
-                            }}
-                          >
-                            ✏️ Note
-                          </button>
-                        )}
-                      </div>
+                          {/* Evidence Section */}
+                          {!isMonthLocked && (
+                            <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 10, padding: "12px 14px" }}>
+                              <div style={{ fontSize: 11, fontWeight: 800, color: "#c2410c", textTransform: "uppercase", marginBottom: 8 }}>
+                                📋 Submit Evidence {evidence ? "— ✅ Submitted" : "(Required to mark as Met)"}
+                              </div>
+                              {evidence ? (
+                                <div style={{ fontSize: 13, color: "#7c2d12", lineHeight: 1.6 }}>
+                                  {evidence.text && <div>📝 {evidence.text}</div>}
+                                  {evidence.formLink && <div>🔗 <a href={evidence.formLink} target="_blank" rel="noreferrer" style={{ color: "#4f46e5" }}>{evidence.formLink}</a></div>}
+                                  {evidence.photoBase64 && <img src={evidence.photoBase64} alt="evidence" style={{ marginTop: 6, maxWidth: "100%", maxHeight: 160, borderRadius: 8, border: "1px solid #fed7aa" }} />}
+                                  <div style={{ fontSize: 11, color: "#92400e", marginTop: 4 }}>Submitted at {new Date(evidence.submittedAt).toLocaleString("en-IN")}</div>
+                                </div>
+                              ) : (
+                                <EvidenceForm onSubmit={(data) => handleEvidenceSubmit(item.id, data)} />
+                              )}
+                            </div>
+                          )}
+
+                          {/* Locked state evidence view */}
+                          {isMonthLocked && evidence && (
+                            <div style={{ fontSize: 12, color: "#065f46", background: "#d1fae5", borderRadius: 8, padding: "8px 12px" }}>
+                              📎 Evidence on record: {evidence.text}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -580,6 +716,143 @@ export default function FellowGrowthCycleTab({ user, setToast }) {
             )}
           </div>
         </div>
+
+        {/* ── Mentor-Assigned Tasks ── */}
+        {(loadingMentorTasks || mentorTasks.length > 0) && (
+          <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 16, padding: "20px 24px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+            <h3 style={{ fontSize: 15, fontWeight: 800, color: "#0f172a", margin: "0 0 4px", display: "flex", alignItems: "center", gap: 8 }}>
+              📌 Mentor-Assigned Tasks — Month {selectedMonth}
+            </h3>
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 14 }}>
+              Tasks your mentor has specifically assigned to you this month.
+            </div>
+
+            {loadingMentorTasks ? (
+              <div style={{ color: "#94a3b8", fontSize: 13 }}>Loading tasks…</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {mentorTasks.map((task) => {
+                  const isSubmitted = task.status === "submitted" || task.status === "approved";
+                  const isApproved = task.status === "approved";
+                  return (
+                    <div key={task._id} style={{
+                      border: isApproved ? "1.5px solid #10b981" : isSubmitted ? "1.5px solid #f59e0b" : "1px solid #e2e8f0",
+                      borderRadius: 12, background: isApproved ? "#f0fdf4" : isSubmitted ? "#fffbeb" : "white",
+                      overflow: "hidden",
+                    }}>
+                      {/* Task header */}
+                      <div style={{ padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 800, color: "#1e293b", marginBottom: 3 }}>{task.title}</div>
+                          {task.description && <div style={{ fontSize: 12.5, color: "#475569", lineHeight: 1.5 }}>{task.description}</div>}
+                        </div>
+                        <span style={{
+                          fontSize: 11, fontWeight: 800, padding: "3px 10px", borderRadius: 6, whiteSpace: "nowrap", flexShrink: 0,
+                          background: isApproved ? "#d1fae5" : isSubmitted ? "#fef3c7" : "#f1f5f9",
+                          color: isApproved ? "#065f46" : isSubmitted ? "#92400e" : "#64748b",
+                        }}>
+                          {isApproved ? "✓ Approved" : isSubmitted ? "⏳ Pending Review" : "Pending"}
+                        </span>
+                      </div>
+
+                      {/* Submitted evidence view */}
+                      {isSubmitted && task.evidence?.submittedAt && (
+                        <div style={{ margin: "0 16px 12px", background: "#f8fafc", borderRadius: 8, padding: "10px 12px", fontSize: 12 }}>
+                          <div style={{ fontWeight: 700, color: "#334155", marginBottom: 4 }}>Your submitted evidence:</div>
+                          {task.evidence.text && <div style={{ color: "#475569" }}>📝 {task.evidence.text}</div>}
+                          {task.evidence.formLink && <div>🔗 <a href={task.evidence.formLink} target="_blank" rel="noreferrer" style={{ color: "#4f46e5", fontSize: 12 }}>{task.evidence.formLink}</a></div>}
+                          {task.evidence.photoUrl && <div style={{ color: "#475569", marginTop: 4 }}>📷 Photo submitted</div>}
+                        </div>
+                      )}
+
+                      {/* Submit evidence button */}
+                      {!isSubmitted && (
+                        <div style={{ padding: "0 16px 14px" }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEvidenceModal({ taskId: task._id, taskTitle: task.title });
+                              setEvidenceForm({ text: "", formLink: "", photoBase64: "" });
+                            }}
+                            style={{
+                              padding: "8px 18px", borderRadius: 8, border: "none",
+                              background: "#4f46e5", color: "white", fontWeight: 700, fontSize: 13, cursor: "pointer",
+                            }}
+                          >
+                            📤 Submit Evidence
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Evidence Modal for mentor tasks */}
+        {evidenceModal && (
+          <div style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999,
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+          }}>
+            <div style={{ background: "white", borderRadius: 16, padding: 24, maxWidth: 480, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: "#0f172a" }}>
+                  📤 Submit Evidence
+                </h3>
+                <button type="button" onClick={() => setEvidenceModal(null)} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#64748b" }}>✕</button>
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#475569", marginBottom: 14, background: "#f1f5f9", padding: "8px 12px", borderRadius: 8 }}>
+                Task: {evidenceModal.taskTitle}
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "#374151" }}>📝 Description / Notes</label>
+                <input type="text" placeholder="What did you do? Describe briefly…"
+                  value={evidenceForm.text} onChange={(e) => setEvidenceForm((f) => ({ ...f, text: e.target.value }))}
+                  style={{ padding: "9px 12px", borderRadius: 8, border: "1.5px solid #e2e8f0", fontSize: 13 }} />
+
+                <label style={{ fontSize: 11, fontWeight: 700, color: "#374151" }}>🔗 Form Link / Google Form URL</label>
+                <input type="url" placeholder="https://forms.gle/…"
+                  value={evidenceForm.formLink} onChange={(e) => setEvidenceForm((f) => ({ ...f, formLink: e.target.value }))}
+                  style={{ padding: "9px 12px", borderRadius: 8, border: "1.5px solid #e2e8f0", fontSize: 13 }} />
+
+                <label style={{ fontSize: 11, fontWeight: 700, color: "#374151" }}>📷 Photo Upload</label>
+                <label style={{ padding: "10px 16px", borderRadius: 8, border: "2px dashed #c7d2fe", background: "#f5f7ff", color: "#4338ca", fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "center" }}>
+                  {evidenceForm.photoBase64 ? "✅ Photo selected — click to change" : "Click to upload a photo"}
+                  <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (ev) => setEvidenceForm((f) => ({ ...f, photoBase64: ev.target.result }));
+                    reader.readAsDataURL(file);
+                  }} />
+                </label>
+                {evidenceForm.photoBase64 && (
+                  <img src={evidenceForm.photoBase64} alt="preview" style={{ maxWidth: "100%", maxHeight: 140, borderRadius: 10, objectFit: "cover", border: "1px solid #e2e8f0" }} />
+                )}
+              </div>
+
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                <button type="button" onClick={() => setEvidenceModal(null)}
+                  style={{ padding: "9px 18px", borderRadius: 8, border: "1px solid #e2e8f0", background: "white", fontWeight: 700, fontSize: 13, cursor: "pointer", color: "#64748b" }}>
+                  Cancel
+                </button>
+                <button type="button"
+                  disabled={submittingEvidence || (!evidenceForm.text.trim() && !evidenceForm.formLink.trim() && !evidenceForm.photoBase64)}
+                  onClick={() => handleTaskEvidenceSubmit(evidenceModal.taskId)}
+                  style={{
+                    padding: "9px 22px", borderRadius: 8, border: "none", fontWeight: 700, fontSize: 13, cursor: "pointer",
+                    background: "#4f46e5", color: "white", opacity: submittingEvidence ? 0.7 : 1,
+                  }}>
+                  {submittingEvidence ? "Submitting…" : "Submit Evidence ✓"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Official PDCA Report from Mentor (Read-Only) ── */}
         <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 16, padding: "20px 24px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>

@@ -3,6 +3,8 @@ import {
   generatePDCADraft,
   approvePDCAReport,
   getPDCAReport,
+  createMentorTask,
+  getMentorTasks,
 } from "../services/api";
 import { MONTH_TITLES, SEMESTER_LABELS, semesterOf } from "./monthMeta";
 import { MONTH_CURRICULA } from "./monthCurricula";
@@ -38,6 +40,11 @@ export default function PDCAGenerator({ mentees = [], setToast, onApproved }) {
   const [aiAvailable, setAiAvailable] = useState(true);
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [showContext, setShowContext] = useState(false);
+  const [activeTab, setActiveTab] = useState("pdca"); // "pdca" | "addTask"
+  const [customTasks, setCustomTasks] = useState([]);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [taskForm, setTaskForm] = useState({ title: "", description: "", assignedTo: "" });
+  const [taskSaving, setTaskSaving] = useState(false);
   // Static lookup — no API call, no database, no publish step. See
   // src/mentor/monthCurricula.js.
   const curriculumMeta = MONTH_CURRICULA[selectedMonth] || null;
@@ -61,6 +68,16 @@ export default function PDCAGenerator({ mentees = [], setToast, onApproved }) {
       act: r.sections?.act?.mentorText || r.sections?.act?.aiText || "",
     });
   };
+
+  // Load mentor tasks from backend when Add Task tab opens
+  useEffect(() => {
+    if (activeTab !== "addTask") return;
+    setLoadingTasks(true);
+    getMentorTasks({ month: selectedMonth })
+      .then((res) => { if (res.success) setCustomTasks(res.tasks || []); })
+      .catch(() => {})
+      .finally(() => setLoadingTasks(false));
+  }, [activeTab, selectedMonth]);
 
   // Whenever the fellow or month changes, try to load any existing
   // draft/approved report for that combination instead of starting blank.
@@ -192,6 +209,185 @@ export default function PDCAGenerator({ mentees = [], setToast, onApproved }) {
           </select>
         </div>
       </div>
+
+      {/* ── Tab Switcher ── */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+        {[
+          { id: "pdca", label: "📊 PDCA Report" },
+          { id: "addTask", label: "➕ Add Task" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            style={{
+              padding: "7px 18px",
+              borderRadius: 8,
+              border: activeTab === tab.id ? "1.5px solid #4f46e5" : "1.5px solid #e2e8f0",
+              background: activeTab === tab.id ? "#eef2ff" : "white",
+              color: activeTab === tab.id ? "#4338ca" : "#64748b",
+              fontWeight: 700,
+              fontSize: 13,
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Add Task Panel ── */}
+      {activeTab === "addTask" && (
+        <div style={{ border: "1px solid #e0e7ff", borderRadius: 12, padding: 16, background: "#f5f7ff", marginBottom: 16 }}>
+          <h4 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 800, color: "#3730a3" }}>
+            ➕ Add Learning Module / Task
+          </h4>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "#475569", display: "block", marginBottom: 4 }}>
+                Task Title *
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Anganwadi Visit Documentation"
+                value={taskForm.title}
+                onChange={(e) => setTaskForm((f) => ({ ...f, title: e.target.value }))}
+                style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1.5px solid #c7d2fe", fontSize: 13, boxSizing: "border-box" }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "#475569", display: "block", marginBottom: 4 }}>
+                Description / Instructions
+              </label>
+              <textarea
+                placeholder="Explain what the fellow needs to do, how to do it, and what evidence is needed…"
+                value={taskForm.description}
+                onChange={(e) => setTaskForm((f) => ({ ...f, description: e.target.value }))}
+                style={{ width: "100%", minHeight: 80, padding: "9px 12px", borderRadius: 8, border: "1.5px solid #c7d2fe", fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }}
+              />
+            </div>
+
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "#475569", display: "block", marginBottom: 4 }}>
+                Assign To Fellow
+              </label>
+              <select
+                value={taskForm.assignedTo}
+                onChange={(e) => setTaskForm((f) => ({ ...f, assignedTo: e.target.value }))}
+                style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1.5px solid #c7d2fe", fontSize: 13 }}
+              >
+                <option value="">— Select Fellow —</option>
+                {mentees.map((m, i) => (
+                  <option key={m._id || i} value={m._id || m.id || ""}>
+                    {m.name || `Fellow ${i + 1}`} {m.email ? `(${m.email})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              type="button"
+              disabled={!taskForm.title.trim() || !taskForm.assignedTo || taskSaving}
+              onClick={async () => {
+                if (!taskForm.title.trim() || !taskForm.assignedTo) return;
+                setTaskSaving(true);
+                try {
+                  const res = await createMentorTask({
+                    fellowId: taskForm.assignedTo,
+                    month: selectedMonth,
+                    title: taskForm.title.trim(),
+                    description: taskForm.description.trim(),
+                  });
+                  if (res.success) {
+                    // Attach fellow name locally so it shows immediately without re-fetch
+                    const assignedName = mentees.find((m) => (m._id || m.id) === taskForm.assignedTo)?.name || "Fellow";
+                    const taskWithName = {
+                      ...res.task,
+                      fellowId: { _id: taskForm.assignedTo, name: assignedName },
+                    };
+                    setCustomTasks((prev) => [taskWithName, ...prev]);
+                    setTaskForm({ title: "", description: "", assignedTo: "" });
+                    setToast?.({ msg: `Task "${res.task.title}" assigned to ${assignedName} ✅`, type: "success" });
+                  }
+                } catch (err) {
+                  setToast?.({ msg: err.message || "Failed to save task.", type: "error" });
+                } finally {
+                  setTaskSaving(false);
+                }
+              }}
+              style={{
+                padding: "10px 20px",
+                borderRadius: 8,
+                border: "none",
+                background: !taskForm.title.trim() || !taskForm.assignedTo ? "#c7d2fe" : "#4f46e5",
+                color: "white",
+                fontWeight: 700,
+                fontSize: 13,
+                cursor: !taskForm.title.trim() || !taskForm.assignedTo ? "not-allowed" : "pointer",
+                alignSelf: "flex-start",
+              }}
+            >
+              {taskSaving ? "Adding…" : "➕ Add Task"}
+            </button>
+          </div>
+
+          {/* Added Tasks List */}
+          {loadingTasks ? (
+            <div style={{ marginTop: 12, color: "#6b7280", fontSize: 13 }}>Loading tasks…</div>
+          ) : customTasks.filter((t) => t.month === selectedMonth).length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: "#3730a3", marginBottom: 8, textTransform: "uppercase" }}>
+                Tasks Added — Month {selectedMonth}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {customTasks
+                  .filter((t) => t.month === selectedMonth)
+                  .map((t) => {
+                    const fellowName = t.fellowId?.name
+                      || mentees.find((m) => (m._id || m.id) === (t.fellowId?._id || t.fellowId))?.name
+                      || "Fellow";
+                    const badgeColor = t.status === "approved" ? "#059669" : t.status === "submitted" ? "#d97706" : "#6d28d9";
+                    const badgeBg = t.status === "approved" ? "#d1fae5" : t.status === "submitted" ? "#fef3c7" : "#ede9fe";
+                    const badgeLabel = t.status === "approved" ? "Approved ✓" : t.status === "submitted" ? "Evidence Submitted" : "Pending";
+                    return (
+                      <div key={t._id || t.id} style={{ background: "white", border: "1px solid #e0e7ff", borderRadius: 10, padding: "10px 14px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>{t.title}</span>
+                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                            <span style={{ fontSize: 11, color: badgeColor, background: badgeBg, padding: "2px 8px", borderRadius: 6, fontWeight: 700 }}>
+                              {badgeLabel}
+                            </span>
+                            <span style={{ fontSize: 11, color: "#6d28d9", background: "#ede9fe", padding: "2px 8px", borderRadius: 6, fontWeight: 700 }}>
+                              → {fellowName}
+                            </span>
+                          </div>
+                        </div>
+                        {t.description && (
+                          <div style={{ fontSize: 12, color: "#475569", lineHeight: 1.4, marginBottom: t.evidence?.submittedAt ? 6 : 0 }}>{t.description}</div>
+                        )}
+                        {/* Show fellow's submitted evidence */}
+                        {t.evidence?.submittedAt && (
+                          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "8px 10px", marginTop: 6, fontSize: 12 }}>
+                            <div style={{ fontWeight: 700, color: "#065f46", marginBottom: 3 }}>📎 Fellow Evidence:</div>
+                            {t.evidence.text && <div style={{ color: "#374151" }}>📝 {t.evidence.text}</div>}
+                            {t.evidence.formLink && <div style={{ color: "#374151" }}>🔗 <a href={t.evidence.formLink} target="_blank" rel="noreferrer" style={{ color: "#4f46e5" }}>{t.evidence.formLink}</a></div>}
+                            {t.evidence.photoUrl && <div style={{ color: "#374151" }}>📷 Photo uploaded</div>}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── PDCA Tab content only shown when activeTab === "pdca" ── */}
+      {activeTab === "pdca" && <>
 
       {/* Curriculum context (collapsible) */}
       {curriculumMeta && (
@@ -361,6 +557,8 @@ export default function PDCAGenerator({ mentees = [], setToast, onApproved }) {
             : "Select a fellow and click Generate Draft."}
         </div>
       )}
+
+      </> /* end pdca tab */ }
     </div>
   );
 }

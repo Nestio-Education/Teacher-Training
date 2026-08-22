@@ -1626,3 +1626,38 @@ export function submitWeeklyReport(cycleId, payload) {
     body: JSON.stringify(payload),
   });
 }
+
+// ── Mentor-assigned Custom Tasks (MentorTask) ──
+export function createMentorTask({ fellowId, month, title, description }) {
+  return request("/api/mentor-tasks", {
+    method: "POST",
+    body: JSON.stringify({ fellowId, month, title, description }),
+  });
+}
+
+export function getMentorTasks({ fellowId, month } = {}) {
+  const params = new URLSearchParams();
+  if (fellowId) params.set("fellowId", fellowId);
+  if (month) params.set("month", month);
+  return request(`/api/mentor-tasks?${params.toString()}`);
+}
+
+export function getFellowAssignedTasks({ month } = {}) {
+  const params = new URLSearchParams();
+  if (month) params.set("month", month);
+  return request(`/api/mentor-tasks/fellow?${params.toString()}`);
+}
+
+export function submitTaskEvidence(taskId, { text, photoUrl, formLink }) {
+  return request(`/api/mentor-tasks/${taskId}/evidence`, {
+    method: "PUT",
+    body: JSON.stringify({ text, photoUrl, formLink }),
+  });
+}
+
+export function reviewMentorTask(taskId, status) {
+  return request(`/api/mentor-tasks/${taskId}/review`, {
+    method: "PUT",
+    body: JSON.stringify({ status }),
+  });
+}
