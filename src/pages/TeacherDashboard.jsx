@@ -13,6 +13,7 @@ import TeacherCourseNotes from "./TeacherCourseNotes";    // NEW — replaces th
 import LessonPlannerTab from "./LessonPlannerTab";
 import TeacherUserGuide from "./teacheruserguide";
 import CurriculumTab from "./CurriculumTab";
+import FellowGrowthCycleTab from "./FellowGrowthCycleTab";
 import {
   getTeacherProgress,
   getNotifications,
@@ -46,7 +47,7 @@ import { onSocketEvent } from "../services/socket";
 // End: Dnyaneshwari Thorat
 
 /* Resolve a profile photo path to a full URL */
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 // Start: PTP Form Link feature — fallback links used when a module hasn't set its own yet
 const DEFAULT_FORM_LINKS = {
@@ -1754,7 +1755,7 @@ function ProfileTab({ user, onWorkingCenterChange, onUserUpdate }) {
         let photoUrl = uploadRes.asset.publicUrl;
 
         if (photoUrl.startsWith("/uploads/")) {
-          const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
+          const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
           photoUrl = `${API_BASE_URL}${photoUrl}`;
         }
 
@@ -3120,6 +3121,7 @@ export default function TeacherDashboard({ user, onLogout }) {
     { key: "training", label: "Training & Lessons", icon: "🎓", color: "#8b5cf6" },
     { key: "planner", label: "AI Lesson Planner", icon: "✏️", color: "#f59e0b" },
     { key: "courses", label: "My Courses", icon: "📚", color: "#06b6d4" },
+    { key: "growth_cycle", label: "Growth Cycle (PDCA)", icon: "📈", color: "#7c3aed" },
     { key: "parent_capacity", label: "Parent Capacity Building", icon: "👪", color: "#f97316" },
     { key: "assessment", label: "Assessments", icon: "📝", color: "#ef4444" },
     { key: "certificates", label: "Certificates", icon: "🏆", color: "#eab308" },
@@ -3140,7 +3142,7 @@ export default function TeacherDashboard({ user, onLogout }) {
   // Every other page shows an "Under Construction" placeholder instead.
   // "courses" and "assessment" are now notes/assessment based (no video) —
   // both are fully wired, so they're included here.
-  const WORKING_TABS = new Set(["overview", "children_att", "geotag", "profile", "training", "courses", "assessment", "certificates", "notifications", "feedback", "lesson_planner", "parent_capacity", "curriculum", "planner"]);
+  const WORKING_TABS = new Set(["growth_cycle", "overview", "children_att", "geotag", "profile", "training", "courses", "assessment", "certificates", "notifications", "feedback", "lesson_planner", "parent_capacity", "curriculum", "planner"]);
 
   const renderContent = () => {
     if (loading) {
@@ -3169,6 +3171,7 @@ export default function TeacherDashboard({ user, onLogout }) {
       case "geotag": return <GeotagAttendance user={enrichedUser} />;
       case "training": return <TrainingAndClassroomManager user={enrichedUser} />;
       case "planner": return <LessonPlannerTab setToast={setToast} user={enrichedUser} />;
+      case "growth_cycle": return <FellowGrowthCycleTab user={enrichedUser} setToast={setToast} />;
       case "courses":
         return (
           <TeacherCourseNotes

@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5001").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
 
 async function request(path, options = {}) {
   const token = localStorage.getItem("spaceece_auth_token");
@@ -1575,4 +1575,54 @@ export function getMentorFellowsAttendance(params = {}) {
 // Public: used by the registration form (no auth required)
 export function getPublicCenters() {
   return request("/api/public/centers");
+}
+// ── AI PDCA Growth Cycle Generator (AI draft + mentor approval) ──
+export function generatePDCADraft(fellowId, month = 1) {
+  return request("/api/pdca/generate", {
+    method: "POST",
+    body: JSON.stringify({ fellowId, month }),
+  });
+}
+
+export function getPDCAReport(fellowId, month = 1) {
+  return request(`/api/pdca/${fellowId}?month=${month}`);
+}
+
+export function approvePDCAReport(fellowId, { plan, doAction, check, act, deliverablesStatus, month = 1 }) {
+  return request(`/api/pdca/${fellowId}/approve`, {
+    method: "POST",
+    body: JSON.stringify({ plan, do: doAction, check, act, deliverablesStatus, month }),
+  });
+}
+
+export function getMentorPDCAReports() {
+  return request("/api/pdca/mentor/reports");
+}
+
+// ── Fellow PDCA Growth Cycle Checklist & Progress ──
+export function getFellowPDCAProgress() {
+  return request("/api/pdca/fellow/progress");
+}
+
+export function getFellowPDCAMonth(month = 1) {
+  return request(`/api/pdca/fellow/month/${month}`);
+}
+
+export function updateFellowPDCAChecklist(month, deliverablesStatus) {
+  return request(`/api/pdca/fellow/month/${month}/checklist`, {
+    method: "PUT",
+    body: JSON.stringify({ deliverablesStatus }),
+  });
+}
+
+// ── Goals & Weekly Reports ──
+export function getMyGoals() {
+  return request("/api/teacher/goals");
+}
+
+export function submitWeeklyReport(cycleId, payload) {
+  return request(`/api/teacher/goals/${cycleId}/weekly-report`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }

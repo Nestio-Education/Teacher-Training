@@ -1,8 +1,9 @@
+import PDCAGenerator from "./PDCAGenerator";
 import { useState, useEffect, useRef } from "react";
 import { S, SectionCard, Toast, StatCard, StatusBadge, SearchBar, Modal } from "../components/Shared";
 import { uploadFile, submitFeedback, getFeedbacks, updateMentorMe, changeMentorPassword, recordMenteeObservation, getMenteeObservations, submitCapstoneMilestone, getCapstoneSubmissions, submitPDCACycle, getPDCACycles, getMentorFellows, updateFellowStatus, getMentorMe, updateMenteeTracking, claimFellow, unclaimFellow, deleteMentorFellow, getMentorAttendance } from "../services/api";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 const getMentorPhotoUrl = (user) => {
   const photo = user?.mentorProfile?.profilePhoto || user?.mentorProfile?.photo || user?.photoUrl || user?.profilePhoto;
@@ -1653,6 +1654,30 @@ export function PDCATab({ user, setToast, onUserUpdate }) {
     <div style={{ animation: "fadeIn 0.3s ease" }}>
       <h1 style={S.pageTitle}>Growth Cycle</h1>
       <p style={S.pageSub}>Assign Plan–Do–Check–Act growth cycles to your fellows and track their progress.</p>
+      {/* ── AI-generated official Month 1-24 report (always visible) ── */}
+      <div style={{ marginBottom: 24, marginTop: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <span style={{
+            fontSize: 11, fontWeight: 800, color: "#5b21b6", background: "#ede9fe",
+            border: "1px solid #c4b5fd", borderRadius: 999, padding: "2px 10px",
+          }}>
+            🤖 AI-GENERATED
+          </span>
+          <span style={{ fontSize: 12, color: "#6b7280" }}>
+            Official report for any of the 24 Fellowship months — grounded in real logged data. Review and approve here to send to Admin.
+          </span>
+        </div>
+        <PDCAGenerator mentees={mentees} setToast={setToast} onApproved={fetchCycles} />
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "28px 0 20px" }}>
+        <div style={{ flex: 1, height: 1, background: "#e5e7eb" }} />
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.5 }}>
+          Custom / Other Growth Cycles
+        </span>
+        <div style={{ flex: 1, height: 1, background: "#e5e7eb" }} />
+      </div>
+
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
         <SectionCard title="🔄 New Growth Cycle">
