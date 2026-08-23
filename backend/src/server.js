@@ -6794,6 +6794,9 @@ app.use("/api/mentor/lesson-plans", requireAuth, requireRole("mentor"), createMe
 import pdcaGenerateRouter from "./routes/pdcaGenerate.js";
 app.use("/api/pdca", requireAuth, pdcaGenerateRouter);
 
+import mentorTasksRouter from "./routes/mentorTasks.js";
+app.use("/api/mentor-tasks", requireAuth, mentorTasksRouter);
+
 // ── Teacher/Fellow: View goals set by Mentor (My Goals panel) ──
 app.get("/api/teacher/goals", requireAuth, (req, res, next) => {
   if (!req.user || !(["teacher", "fellow"].includes(req.user.role))) {
