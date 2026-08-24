@@ -1,4 +1,4 @@
-﻿// CenterManagementTab.jsx
+// CenterManagementTab.jsx
 import { t } from "../services/i18n";
 import { useState, useEffect } from "react";
 import { Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
@@ -52,6 +52,7 @@ function CenterFormModal({ center, allTeachers = [], onSave, onClose, setToast }
   const [form, setForm] = useState(center ? { ...center } : { ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
   const [allMentors, setAllMentors] = useState([]);
+  const [activeStep, setActiveStep] = useState(1);
 
   useEffect(() => {
     getAdminMentors()
@@ -117,7 +118,8 @@ function CenterFormModal({ center, allTeachers = [], onSave, onClose, setToast }
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.name || !form.location || !form.phone) {
-      setToast({ msg: "Please fill all required fields.", type: "error" });
+      setToast({ msg: "Please fill all required fields (Name, Location, Phone).", type: "error" });
+      setActiveStep(1); // Jump to step 1 where required fields are
       return;
     }
     
@@ -214,12 +216,10 @@ function CenterFormModal({ center, allTeachers = [], onSave, onClose, setToast }
       const teacherCenterId = t.teacherProfile?.center?._id || t.teacherProfile?.center;
       const teacherCenterName = t.teacherProfile?.center?.name || "";
       
-      // No classes = fully available
       if (teacherClasses.length === 0) {
         return { ...t, available: true, reason: "" };
       }
       
-      // Teacher belongs to this center
       if (teacherCenterId && currentCenterId && String(teacherCenterId) === String(currentCenterId)) {
         const classNames = teacherClasses.map(c => c?.name).filter(Boolean);
         return { 
@@ -229,7 +229,6 @@ function CenterFormModal({ center, allTeachers = [], onSave, onClose, setToast }
         };
       }
       
-      // Teacher belongs to another center — show as available with cross-center warning
       if (teacherCenterId && teacherCenterId !== String(currentCenterId || "")) {
         const classNames = teacherClasses.map(c => c?.name).filter(Boolean);
         return { 
@@ -240,421 +239,537 @@ function CenterFormModal({ center, allTeachers = [], onSave, onClose, setToast }
         };
       }
       
-      // Teacher has classes but no center set
       const classNames = teacherClasses.map(c => c?.name).filter(Boolean);
-      // Start: Dnyaneshwari Thorat
       return { 
         ...t, 
         available: true, 
         reason: classNames.length > 0 ? `Assigned: ${classNames.join(", ")}` : "" 
       };
-      // End: Dnyaneshwari Thorat
     });
   };
 
   const teacherAvailability = getTeacherAvailability();
   
-  // Start: Dnyaneshwari Thorat
   const [assignTeacherSearch, setAssignTeacherSearch] = useState("");
   const filteredApprovedTeachers = approvedTeachers.filter(t => 
     t.name.toLowerCase().includes(assignTeacherSearch.toLowerCase()) || 
     t.email.toLowerCase().includes(assignTeacherSearch.toLowerCase())
   );
-  // End: Dnyaneshwari Thorat
 
   const availableTeachers = teacherAvailability.filter(t => t.available);
 
-  // Get available teachers for a specific class (all approved teachers are selectable)
-  const getAvailableTeachersForClass = (currentIndex) => {
-    return teacherAvailability.filter(t => t.available);
-  };
-
   return (
-    <Modal title={isEdit ? "✏️ Edit Center" : "➕ Add New Center"} onClose={onClose}>
+    <Modal title={isEdit ? "✏️ Edit Center" : "➕ Add New Center"} onClose={onClose} width={780}>
+      {/* ── Step Tabs ── */}
+      <div style={{ display: "flex", borderBottom: "2px solid #f1f5f9", marginBottom: 18, gap: 4 }}>
+        {[
+          { step: 1, label: "Center Details", icon: "📋" },
+          { step: 2, label: "Classes", icon: "🏛️", count: classesList.length },
+          { step: 3, label: "Assign Teachers", icon: "👩‍🏫", count: form.teachers.length },
+        ].map(tab => (
+          <button
+            key={tab.step}
+            type="button"
+            onClick={() => setActiveStep(tab.step)}
+            style={{
+              flex: 1,
+              padding: "10px 12px",
+              borderRadius: "10px 10px 0 0",
+              border: "none",
+              borderBottom: activeStep === tab.step ? "3px solid #f59e0b" : "3px solid transparent",
+              background: activeStep === tab.step ? "#fef3c7" : "transparent",
+              color: activeStep === tab.step ? "#92400e" : "#64748b",
+              fontWeight: activeStep === tab.step ? 700 : 600,
+              fontSize: 13,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              transition: "all 0.15s ease"
+            }}
+          >
+            <span>{tab.icon}</span>
+            <span>{tab.label}</span>
+            {tab.count > 0 && (
+              <span style={{
+                background: activeStep === tab.step ? "#f59e0b" : "#cbd5e1",
+                color: "white",
+                borderRadius: 10,
+                padding: "1px 6px",
+                fontSize: 10,
+                fontWeight: 700
+              }}>
+                {tab.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
       <form onSubmit={handleSubmit}>
-        <label style={S.label}>Center Name *</label>
-        <input style={{ ...S.input, marginBottom: 12 }} value={form.name}
-          onChange={e => setForm({ ...form, name: e.target.value })}
-          placeholder="e.g. SpacECE Preschool — Pune Central" />
+        {/* ── Step 1: Basic Center Info & Location ── */}
+        {activeStep === 1 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
+              <div>
+                <label style={S.label}>Center Name *</label>
+                <input style={S.input} value={form.name}
+                  onChange={e => setForm({ ...form, name: e.target.value })}
+                  placeholder="e.g. SpacECE Preschool — Pune Central" />
+              </div>
+              <div>
+                <label style={S.label}>Contact Person</label>
+                <input style={S.input} value={form.contactPerson}
+                  onChange={e => setForm({ ...form, contactPerson: e.target.value })}
+                  placeholder="e.g. Mrs. Rekha Iyer" />
+              </div>
+            </div>
 
-        <label style={S.label}>Full Address *</label>
-        <textarea style={{ ...S.input, height: 60, resize: "none", marginBottom: 12 }}
-          value={form.location}
-          onChange={e => setForm({ ...form, location: e.target.value })}
-          placeholder="Street, Area, City - Pincode" />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+              <div>
+                <label style={S.label}>Phone *</label>
+                <input style={S.input} value={form.phone}
+                  onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="+91 98765 43210" />
+              </div>
+              <div>
+                <label style={S.label}>Email</label>
+                <input style={S.input} type="email" value={form.email}
+                  onChange={e => setForm({ ...form, email: e.target.value })} placeholder="center@spaceece.in" />
+              </div>
+              <div>
+                <label style={S.label}>{t("Status")}</label>
+                <select style={S.input} value={form.status}
+                  onChange={e => setForm({ ...form, status: e.target.value })}>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+            </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-          <div>
-            <label style={S.label}>City</label>
-            <input style={S.input} value={form.city}
-              onChange={e => setForm({ ...form, city: e.target.value })} placeholder="e.g. Pune" />
-          </div>
-          <div>
-            <label style={S.label}>Pincode</label>
-            <input style={S.input} value={form.pincode}
-              onChange={e => setForm({ ...form, pincode: e.target.value })} placeholder="e.g. 411005" />
-          </div>
-        </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <label style={S.label}>Institution Type</label>
+                <select style={S.input} value={form.type}
+                  onChange={e => setForm({ ...form, type: e.target.value, gradeBands: e.target.value === "preschool" ? [] : form.gradeBands })}>
+                  <option value="preschool">Preschool</option>
+                  <option value="school">School</option>
+                </select>
+              </div>
+              <div>
+                <label style={S.label}>Center Mentor / Admin</label>
+                <select style={S.input} value={form.mentor || ""}
+                  onChange={e => setForm({ ...form, mentor: e.target.value || null })}>
+                  <option value="">-- No Mentor Assigned --</option>
+                  {allMentors.map(m => (
+                    <option key={m._id || m.id} value={m._id || m.id}>
+                      {m.name} ({m.email})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-          <div>
-            <label style={S.label}>Phone *</label>
-            <input style={S.input} value={form.phone}
-              onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="+91 98765 43210" />
-          </div>
-          <div>
-            <label style={S.label}>Email</label>
-            <input style={S.input} type="email" value={form.email}
-              onChange={e => setForm({ ...form, email: e.target.value })} placeholder="center@spaceece.in" />
-          </div>
-        </div>
+            {form.type === "school" && (
+              <div>
+                <label style={S.label}>Grade Bands Offered</label>
+                <div style={{ display: "flex", gap: 16, marginTop: 4 }}>
+                  {["1-3", "4-7", "1-9"].map(band => (
+                    <label key={band} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={form.gradeBands.includes(band)}
+                        onChange={e => {
+                          setForm(prev => ({
+                            ...prev,
+                            gradeBands: e.target.checked
+                              ? [...prev.gradeBands, band]
+                              : prev.gradeBands.filter(b => b !== band),
+                          }));
+                        }}
+                      />
+                      {band === "1-9" ? "1-9 (combined)" : band}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
 
-        <label style={S.label}>Contact Person</label>
-        <input style={{ ...S.input, marginBottom: 12 }} value={form.contactPerson}
-          onChange={e => setForm({ ...form, contactPerson: e.target.value })}
-          placeholder="e.g. Mrs. Rekha Iyer" />
-
-        <label style={S.label}>Institution Type</label>
-        <select style={{ ...S.input, marginBottom: 12 }} value={form.type}
-          onChange={e => setForm({ ...form, type: e.target.value, gradeBands: e.target.value === "preschool" ? [] : form.gradeBands })}>
-          <option value="preschool">Preschool</option>
-          <option value="school">School</option>
-        </select>
-
-        {form.type === "school" && (
-          <div style={{ marginBottom: 12 }}>
-            <label style={S.label}>Grade Bands Offered</label>
-            <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
-              {["1-3", "4-7", "1-9"].map(band => (
-                <label key={band} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13 }}>
-                  <input
-                    type="checkbox"
-                    checked={form.gradeBands.includes(band)}
-                    onChange={e => {
-                      setForm(prev => ({
-                        ...prev,
-                        gradeBands: e.target.checked
-                          ? [...prev.gradeBands, band]
-                          : prev.gradeBands.filter(b => b !== band),
-                      }));
-                    }}
-                  />
-                  {band === "1-9" ? "1-9 (combined)" : band}
-                </label>
-              ))}
+            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 12 }}>
+              <div>
+                <label style={S.label}>Full Address *</label>
+                <input style={S.input} value={form.location}
+                  onChange={e => setForm({ ...form, location: e.target.value })}
+                  placeholder="Street, Area, Landmark" />
+              </div>
+              <div>
+                <label style={S.label}>City</label>
+                <input style={S.input} value={form.city}
+                  onChange={e => setForm({ ...form, city: e.target.value })} placeholder="e.g. Pune" />
+              </div>
+              <div>
+                <label style={S.label}>Pincode</label>
+                <input style={S.input} value={form.pincode}
+                  onChange={e => setForm({ ...form, pincode: e.target.value })} placeholder="e.g. 411005" />
+              </div>
             </div>
           </div>
         )}
 
-        <label style={S.label}>Center Mentor / Admin</label>
-        <select style={{ ...S.input, marginBottom: 12 }} value={form.mentor || ""}
-          onChange={e => setForm({ ...form, mentor: e.target.value || null })}>
-          <option value="">-- No Mentor Assigned --</option>
-          {allMentors.map(m => (
-            <option key={m._id || m.id} value={m._id || m.id}>
-              {m.name} ({m.email})
-            </option>
-          ))}
-        </select>
-
-        <label style={S.label}>{t("Status")}</label>
-        <select style={{ ...S.input, marginBottom: 16 }} value={form.status}
-          onChange={e => setForm({ ...form, status: e.target.value })}>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </select>
-
-        {/* ── Classes Section ── */}
-        <div style={{
-          background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12,
-          padding: "16px", marginBottom: 16
-        }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div>
-              <label style={{ ...S.label, marginBottom: 0, color: "#065f46" }}>
-                🏛️ Classes for this Center
-              </label>
-              <div style={{ fontSize: 11, color: "#059669", marginTop: 2 }}>
-                Create classes and assign teachers (multiple teachers per class allowed)
-              </div>
-            </div>
-            <button type="button" onClick={() => setShowClassForm(true)}
-              style={{
-                padding: "6px 12px", borderRadius: 8, border: "1.5px solid #10b981",
-                background: "#d1fae5", color: "#065f46", fontSize: 12, fontWeight: 600,
-                cursor: "pointer", fontFamily: "inherit"
-              }}>
-              + Add Class
-            </button>
-          </div>
-
-          {/* Class Form */}
-          {showClassForm && (
-            <div style={{
-              background: "white", borderRadius: 10, padding: "12px",
-              border: "1px solid #d1fae5", marginBottom: 12
-            }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                <div>
-                  <label style={{ ...S.label, fontSize: 11 }}>Class Name *</label>
-                  <input
-                    style={{ ...S.input, fontSize: 12 }}
-                    value={newClass.name}
-                    onChange={e => setNewClass({ ...newClass, name: e.target.value })}
-                    placeholder="e.g. Nursery A"
-                  />
-                </div>
-                <div>
-                  <label style={{ ...S.label, fontSize: 11 }}>{t("Age Group")}</label>
-                  <input
-                    style={{ ...S.input, fontSize: 12 }}
-                    value={newClass.ageGroup}
-                    onChange={e => setNewClass({ ...newClass, ageGroup: e.target.value })}
-                    placeholder="e.g. 3-4 years"
-                  />
-                </div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                <div>
-                  <label style={{ ...S.label, fontSize: 11 }}>{t("Curriculum Level")}</label>
-                  <input
-                    style={{ ...S.input, fontSize: 12 }}
-                    value={newClass.curriculumLevel}
-                    onChange={e => setNewClass({ ...newClass, curriculumLevel: e.target.value })}
-                    placeholder="e.g. Foundation"
-                  />
-                </div>
-                <div>
-                  <label style={{ ...S.label, fontSize: 11 }}>Schedule</label>
-                  <input
-                    style={{ ...S.input, fontSize: 12 }}
-                    value={newClass.schedule}
-                    onChange={e => setNewClass({ ...newClass, schedule: e.target.value })}
-                    placeholder="e.g. Mon-Fri 9AM-12PM"
-                  />
-                </div>
-              </div>
-              <div style={{ marginBottom: 10 }}>
-                <label style={{ ...S.label, fontSize: 11 }}>Capacity (max students)</label>
-                <input
-                  style={{ ...S.input, fontSize: 12 }}
-                  type="number"
-                  min="0"
-                  value={newClass.capacity}
-                  onChange={e => setNewClass({ ...newClass, capacity: parseInt(e.target.value) || 0 })}
-                  placeholder="e.g. 30"
-                />
-              </div>
-              <div style={{ marginBottom: 10 }}>
-                <label style={{ ...S.label, fontSize: 11 }}>
-                  Assign Teacher
+        {/* ── Step 2: Classes Section ── */}
+        {activeStep === 2 && (
+          <div style={{
+            background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12,
+            padding: "14px"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div>
+                <label style={{ ...S.label, marginBottom: 0, color: "#065f46" }}>
+                  🏛️ Classes for this Center
                 </label>
-                <select
-                  style={{ ...S.input, fontSize: 12 }}
-                  value={newClass.teacherId}
-                  onChange={e => setNewClass({ ...newClass, teacherId: e.target.value })}
-                >
-                  <option value="">No teacher assigned</option>
-                  {teacherAvailability.filter(t => t.available).map(t => (
-                    <option key={t._id || t.id} value={t._id || t.id}>
-                      {t.name} {t.reason ? `(${t.reason})` : ""} {t.crossCenter ? "⚠️" : ""}
-                    </option>
-                  ))}
-                </select>
-                {availableTeachers.length === 0 && (
-                  <div style={{ fontSize: 10, color: "#dc2626", marginTop: 4 }}>
-                    No teachers available. Please create teachers first.
+                <div style={{ fontSize: 11, color: "#059669", marginTop: 2 }}>
+                  Create classes and assign teachers to each class
+                </div>
+              </div>
+              <button type="button" onClick={() => setShowClassForm(true)}
+                style={{
+                  padding: "6px 14px", borderRadius: 8, border: "1.5px solid #10b981",
+                  background: "#d1fae5", color: "#065f46", fontSize: 12, fontWeight: 700,
+                  cursor: "pointer", fontFamily: "inherit"
+                }}>
+                + Add Class
+              </button>
+            </div>
+
+            {/* Class Form */}
+            {showClassForm && (
+              <div style={{
+                background: "white", borderRadius: 10, padding: "12px 14px",
+                border: "1px solid #d1fae5", marginBottom: 12
+              }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+                  <div>
+                    <label style={{ ...S.label, fontSize: 11 }}>Class Name *</label>
+                    <input
+                      style={{ ...S.input, fontSize: 12 }}
+                      value={newClass.name}
+                      onChange={e => setNewClass({ ...newClass, name: e.target.value })}
+                      placeholder="e.g. Nursery A"
+                    />
                   </div>
+                  <div>
+                    <label style={{ ...S.label, fontSize: 11 }}>{t("Age Group")}</label>
+                    <select
+                      style={{ ...S.input, fontSize: 12 }}
+                      value={newClass.ageGroup}
+                      onChange={e => setNewClass({ ...newClass, ageGroup: e.target.value })}
+                    >
+                      <option value="">Select age group</option>
+                      {["1-2", "2-3", "3-4", "4-5", "5-6", "6-7", "7-8", "8-9"].map(ag => (
+                        <option key={ag} value={ag}>{ag}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ ...S.label, fontSize: 11 }}>{t("Curriculum Level")}</label>
+                    <input
+                      style={{ ...S.input, fontSize: 12 }}
+                      value={newClass.curriculumLevel}
+                      onChange={e => setNewClass({ ...newClass, curriculumLevel: e.target.value })}
+                      placeholder="e.g. Foundation"
+                    />
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+                  <div>
+                    <label style={{ ...S.label, fontSize: 11 }}>Schedule</label>
+                    <input
+                      style={{ ...S.input, fontSize: 12 }}
+                      value={newClass.schedule}
+                      onChange={e => setNewClass({ ...newClass, schedule: e.target.value })}
+                      placeholder="e.g. Mon-Fri 9AM-12PM"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ ...S.label, fontSize: 11 }}>Capacity (max students)</label>
+                    <input
+                      style={{ ...S.input, fontSize: 12 }}
+                      type="number"
+                      min="0"
+                      value={newClass.capacity}
+                      onChange={e => setNewClass({ ...newClass, capacity: parseInt(e.target.value) || 0 })}
+                      placeholder="e.g. 30"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ ...S.label, fontSize: 11 }}>Assign Teacher</label>
+                    <select
+                      style={{ ...S.input, fontSize: 12 }}
+                      value={newClass.teacherId}
+                      onChange={e => setNewClass({ ...newClass, teacherId: e.target.value })}
+                    >
+                      <option value="">No teacher assigned</option>
+                      {teacherAvailability.filter(t => t.available).map(t => (
+                        <option key={t._id || t.id} value={t._id || t.id}>
+                          {t.name} {t.reason ? `(${t.reason})` : ""} {t.crossCenter ? "⚠️" : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button type="button" onClick={addClass}
+                    style={{
+                      padding: "6px 14px", borderRadius: 6, border: "none",
+                      background: "#10b981", color: "white", fontSize: 12, fontWeight: 600,
+                      cursor: "pointer"
+                    }}>{t("Add Class")}</button>
+                  <button type="button" onClick={() => setShowClassForm(false)}
+                    style={{
+                      padding: "6px 14px", borderRadius: 6, border: "1px solid #e5e7eb",
+                      background: "white", color: "#6b7280", fontSize: 12, fontWeight: 600,
+                      cursor: "pointer"
+                    }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Classes List */}
+            {classesList.length > 0 ? (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, maxHeight: 220, overflowY: "auto" }}>
+                {classesList.map((cls, index) => {
+                  const assignedTeacher = cls.teacherId 
+                    ? approvedTeachers.find(t => (t._id || t.id) === cls.teacherId)
+                    : null;
+                  
+                  return (
+                    <div key={index} style={{
+                      background: "white", borderRadius: 10, padding: "10px 12px",
+                      border: "1px solid #e5e7eb"
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "#1c1917" }}>{cls.name}</div>
+                          <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>
+                            {cls.ageGroup && <span>👶 {cls.ageGroup}</span>}
+                            {cls.ageGroup && cls.curriculumLevel && <span> · </span>}
+                            {cls.curriculumLevel && <span>📚 {cls.curriculumLevel}</span>}
+                            {cls.capacity > 0 && <span> · 👥 {cls.capacity}</span>}
+                            {cls.schedule && <div style={{ marginTop: 2 }}>⏰ {cls.schedule}</div>}
+                          </div>
+                        </div>
+                        <button type="button" onClick={() => removeClass(index)}
+                          style={{
+                            padding: "3px 7px", borderRadius: 4, border: "1px solid #fecaca",
+                            background: "#fef2f2", color: "#dc2626", fontSize: 11, fontWeight: 600,
+                            cursor: "pointer"
+                          }}>
+                          ✕
+                        </button>
+                      </div>
+                      
+                      {/* Teacher Assignment */}
+                      <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 11, color: "#6b7280" }}>👩‍🏫 Teacher:</span>
+                        <select
+                          style={{
+                            ...S.input, fontSize: 11, padding: "4px 8px", flex: 1,
+                            borderColor: assignedTeacher ? "#10b981" : "#e5e7eb"
+                          }}
+                          value={cls.teacherId}
+                          onChange={e => updateClassTeacher(index, e.target.value)}
+                        >
+                          <option value="">No teacher</option>
+                          {teacherAvailability.filter(t => t.available).map(t => (
+                            <option key={t._id || t.id} value={t._id || t.id}>
+                              {t.name} {t.reason ? `(${t.reason})` : ""} {t.crossCenter ? "⚠️" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div style={{
+                padding: "20px", textAlign: "center", color: "#059669", fontSize: 12,
+                background: "white", borderRadius: 8, border: "1px dashed #bbf7d0"
+              }}>
+                No classes added yet. Click "+ Add Class" to create classes for this center.
+              </div>
+            )}
+            
+            {classesList.length > 0 && (
+              <div style={{
+                marginTop: 10, padding: "8px 10px", background: "#ecfdf5", borderRadius: 6,
+                fontSize: 11, color: "#065f46"
+              }}>
+                📊 <b>{classesList.length} class(es)</b> will be created. 
+                {classesList.filter(c => c.teacherId).length > 0 && (
+                  <span> <b>{classesList.filter(c => c.teacherId).length}</b> teacher(s) assigned.</span>
                 )}
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button type="button" onClick={addClass}
-                  style={{
-                    padding: "6px 14px", borderRadius: 6, border: "none",
-                    background: "#10b981", color: "white", fontSize: 12, fontWeight: 600,
-                    cursor: "pointer"
-                  }}>{t("Add Class")}</button>
-                <button type="button" onClick={() => setShowClassForm(false)}
-                  style={{
-                    padding: "6px 14px", borderRadius: 6, border: "1px solid #e5e7eb",
-                    background: "white", color: "#6b7280", fontSize: 12, fontWeight: 600,
-                    cursor: "pointer"
-                  }}>
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
+        )}
 
-          {/* Classes List */}
-          {classesList.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {classesList.map((cls, index) => {
-                const assignedTeacher = cls.teacherId 
-                  ? approvedTeachers.find(t => (t._id || t.id) === cls.teacherId)
-                  : null;
-                
+        {/* ── Step 3: Teachers Section ── */}
+        {activeStep === 3 && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div>
+                <label style={{ ...S.label, margin: 0 }}>
+                  Assign Teachers Directly to Center
+                </label>
+                <div style={{ fontSize: 11, color: "#6b7280" }}>
+                  Selected teachers will have this center set on their dashboard automatically
+                </div>
+              </div>
+              {approvedTeachers.length > 0 && (
+                <input
+                  type="text"
+                  placeholder="Search teachers..."
+                  value={assignTeacherSearch}
+                  onChange={e => setAssignTeacherSearch(e.target.value)}
+                  style={{
+                    padding: "5px 10px",
+                    fontSize: 12,
+                    borderRadius: 8,
+                    border: "1px solid #cbd5e1",
+                    outline: "none",
+                    width: 180
+                  }}
+                />
+              )}
+            </div>
+
+            <div style={{
+              display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8,
+              maxHeight: 220, overflowY: "auto",
+              border: "1px solid #e5e7eb", borderRadius: 10, padding: "10px"
+            }}>
+              {filteredApprovedTeachers.length === 0 ? (
+                <div style={{ gridColumn: "1 / -1", padding: 16, fontSize: 12, color: "#9ca3af", textAlign: "center" }}>
+                  No teachers found.
+                </div>
+              ) : filteredApprovedTeachers.map(t => {
+                const teacherId = t._id || t.id;
+                const selected = form.teachers.includes(teacherId);
+                const assignedToClass = classesList.some(c => c.teacherId === teacherId);
                 return (
-                  <div key={index} style={{
-                    background: "white", borderRadius: 10, padding: "10px 12px",
-                    border: "1px solid #e5e7eb"
-                  }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: "#1c1917" }}>{cls.name}</div>
-                        <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>
-                          {cls.ageGroup && <span>👶 {cls.ageGroup}</span>}
-                          {cls.ageGroup && cls.curriculumLevel && <span> · </span>}
-                          {cls.curriculumLevel && <span>📚 {cls.curriculumLevel}</span>}
-                          {cls.capacity > 0 && <span> · 👥 {cls.capacity}</span>}
-                          {cls.schedule && <div style={{ marginTop: 2 }}>⏰ {cls.schedule}</div>}
-                        </div>
-                      </div>
-                      <button type="button" onClick={() => removeClass(index)}
-                        style={{
-                          padding: "4px 8px", borderRadius: 4, border: "1px solid #fecaca",
-                          background: "#fef2f2", color: "#dc2626", fontSize: 11, fontWeight: 600,
-                          cursor: "pointer"
-                        }}>
-                        ✕
-                      </button>
+                  <div key={teacherId} onClick={() => toggleTeacher(teacherId)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      padding: "8px 10px", borderRadius: 8, cursor: "pointer",
+                      border: `1.5px solid ${selected ? "#f59e0b" : assignedToClass ? "#10b981" : "#e5e7eb"}`,
+                      background: selected ? "#fef3c7" : assignedToClass ? "#ecfdf5" : "#f9fafb",
+                      transition: "all 0.15s"
+                    }}>
+                    <div style={{
+                      width: 18, height: 18, borderRadius: 4,
+                      border: `2px solid ${selected ? "#f59e0b" : assignedToClass ? "#10b981" : "#d1d5db"}`,
+                      background: selected ? "#f59e0b" : assignedToClass ? "#10b981" : "white",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 11, color: "white", flexShrink: 0
+                    }}>
+                      {selected ? "✓" : assignedToClass ? "✓" : ""}
                     </div>
-                    
-                    {/* Teacher Assignment */}
-                    <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 11, color: "#6b7280" }}>👩‍🏫 Teacher:</span>
-                      <select
-                        style={{
-                          ...S.input, fontSize: 11, padding: "4px 8px", flex: 1,
-                          borderColor: assignedTeacher ? "#10b981" : "#e5e7eb"
-                        }}
-                        value={cls.teacherId}
-                        onChange={e => updateClassTeacher(index, e.target.value)}
-                      >
-                        <option value="">No teacher</option>
-                        {teacherAvailability.filter(t => t.available).map(t => (
-                          <option key={t._id || t.id} value={t._id || t.id}>
-                            {t.name} {t.reason ? `(${t.reason})` : ""} {t.crossCenter ? "⚠️" : ""}
-                          </option>
-                        ))}
-                      </select>
+                    <img
+                      src={`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(t.name)}`}
+                      alt="" style={{ width: 24, height: 24, borderRadius: "50%", border: "1px solid #e5e7eb" }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <span style={{ fontSize: 12, fontWeight: selected || assignedToClass ? 700 : 500, color: selected ? "#92400e" : assignedToClass ? "#065f46" : "#374151" }}>
+                        {t.name}
+                      </span>
+                      <div style={{ fontSize: 10, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis" }}>{t.email}</div>
                     </div>
+                    <StatusBadge status={t.status} />
                   </div>
                 );
               })}
             </div>
-          ) : (
-            <div style={{
-              padding: "16px", textAlign: "center", color: "#059669", fontSize: 12,
-              background: "white", borderRadius: 8, border: "1px dashed #bbf7d0"
-            }}>
-              No classes added yet. Click "+ Add Class" to create classes for this center.
-            </div>
-          )}
-          
-          {classesList.length > 0 && (
-            <div style={{
-              marginTop: 10, padding: "8px 10px", background: "#ecfdf5", borderRadius: 6,
-              fontSize: 11, color: "#065f46"
-            }}>
-              📊 <b>{classesList.length} class(es)</b> will be created. 
-              {classesList.filter(c => c.teacherId).length > 0 && (
-                <span> <b>{classesList.filter(c => c.teacherId).length}</b> teacher(s) will be assigned.</span>
-              )}
-            </div>
-          )}
-        </div>
 
-        {/* ── Teachers Section ── */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-          <label style={{ ...S.label, margin: 0 }}>
-            Assign Teachers to Center
-            <span style={{ fontSize: 10, color: "#9ca3af", fontWeight: 400, marginLeft: 6 }}>
-              (selected teachers will have this center set on their dashboard)
-            </span>
-          </label>
-          {approvedTeachers.length > 0 && (
-            <input
-              type="text"
-              placeholder="Search teachers..."
-              value={assignTeacherSearch}
-              onChange={e => setAssignTeacherSearch(e.target.value)}
-              style={{
-                padding: "4px 8px",
-                fontSize: 11,
-                borderRadius: 6,
-                border: "1px solid #cbd5e1",
-                outline: "none",
-                width: 150
-              }}
-            />
-          )}
-        </div>
-        <div style={{
-          display: "flex", flexDirection: "column", gap: 6, marginBottom: 20,
-          maxHeight: 180, overflowY: "auto",
-          border: "1px solid #e5e7eb", borderRadius: 10, padding: "8px"
-        }}>
-          {filteredApprovedTeachers.length === 0 ? (
-            <div style={{ padding: 12, fontSize: 12, color: "#9ca3af", textAlign: "center" }}>
-              No teachers found.
-            </div>
-          ) : filteredApprovedTeachers.map(t => {
-            const teacherId = t._id || t.id;
-            const selected = form.teachers.includes(teacherId);
-            const assignedToClass = classesList.some(c => c.teacherId === teacherId);
-            return (
-              <div key={teacherId} onClick={() => toggleTeacher(teacherId)}
-                style={{
-                  display: "flex", alignItems: "center", gap: 10,
-                  padding: "8px 12px", borderRadius: 8, cursor: "pointer",
-                  border: `1.5px solid ${selected ? "#f59e0b" : assignedToClass ? "#10b981" : "#e5e7eb"}`,
-                  background: selected ? "#fef3c7" : assignedToClass ? "#ecfdf5" : "#f9fafb",
-                  transition: "all 0.15s"
-                }}>
-                <div style={{
-                  width: 18, height: 18, borderRadius: 4,
-                  border: `2px solid ${selected ? "#f59e0b" : assignedToClass ? "#10b981" : "#d1d5db"}`,
-                  background: selected ? "#f59e0b" : assignedToClass ? "#10b981" : "white",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 11, color: "white", flexShrink: 0
-                }}>
-                  {selected ? "✓" : assignedToClass ? "✓" : ""}
-                </div>
-                <img
-                  src={`https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(t.name)}`}
-                  alt="" style={{ width: 26, height: 26, borderRadius: "50%", border: "1px solid #e5e7eb" }}
-                />
-                <div style={{ flex: 1 }}>
-                  <span style={{ fontSize: 13, fontWeight: selected || assignedToClass ? 700 : 500, color: selected ? "#92400e" : assignedToClass ? "#065f46" : "#374151" }}>
-                    {t.name}
-                  </span>
-                  <span style={{ fontSize: 10, color: "#9ca3af", marginLeft: 6 }}>{t.email}</span>
-                  {assignedToClass && !selected && (
-                    <span style={{ fontSize: 10, color: "#10b981", marginLeft: 6, fontWeight: 600 }}>
-                      (Assigned to class)
-                    </span>
-                  )}
-                </div>
-                <StatusBadge status={t.status} />
+            {form.teachers.length > 0 && (
+              <div style={{
+                background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 8,
+                padding: "8px 12px", fontSize: 11, color: "#92400e", marginTop: 12
+              }}>
+                🏫 <b>{form.teachers.length} teacher(s)</b> selected to link with this center.
               </div>
-            );
-          })}
-        </div>
-
-        {form.teachers.length > 0 && (
-          <div style={{
-            background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 8,
-            padding: "8px 12px", fontSize: 11, color: "#92400e", marginBottom: 16
-          }}>
-            🏫 <b>{form.teachers.length} teacher(s)</b> will be linked to this center — it will appear on their dashboard automatically.
+            )}
           </div>
         )}
 
-        <button type="submit" disabled={saving}
-          style={{ ...S.primaryBtn, width: "100%", opacity: saving ? 0.7 : 1 }}>
-          {saving ? "Saving..." : isEdit ? "Update Center →" : "Add Center →"}
-        </button>
+        {/* ── Footer Navigation & Submit Bar ── */}
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginTop: 18,
+          paddingTop: 14,
+          borderTop: "1px solid #f1f5f9"
+        }}>
+          <div>
+            {activeStep > 1 ? (
+              <button
+                type="button"
+                onClick={() => setActiveStep(prev => prev - 1)}
+                style={{
+                  padding: "8px 16px", borderRadius: 8, border: "1px solid #cbd5e1",
+                  background: "white", color: "#475569", fontSize: 13, fontWeight: 600,
+                  cursor: "pointer"
+                }}
+              >
+                ← Back
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onClose}
+                style={{
+                  padding: "8px 16px", borderRadius: 8, border: "1px solid #cbd5e1",
+                  background: "white", color: "#64748b", fontSize: 13, fontWeight: 600,
+                  cursor: "pointer"
+                }}
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: "flex", gap: 10 }}>
+            {activeStep < 3 && (
+              <button
+                type="button"
+                onClick={() => setActiveStep(prev => prev + 1)}
+                style={{
+                  padding: "8px 16px", borderRadius: 8, border: "1.5px solid #f59e0b",
+                  background: "#fffbeb", color: "#d97706", fontSize: 13, fontWeight: 700,
+                  cursor: "pointer"
+                }}
+              >
+                Next Step →
+              </button>
+            )}
+            <button
+              type="submit"
+              disabled={saving}
+              style={{
+                ...S.primaryBtn,
+                padding: "8px 24px",
+                fontSize: 13,
+                fontWeight: 700,
+                opacity: saving ? 0.7 : 1
+              }}
+            >
+              {saving ? "Saving..." : isEdit ? "Update Center ✓" : "Save Center ✓"}
+            </button>
+          </div>
+        </div>
       </form>
     </Modal>
   );
@@ -950,13 +1065,17 @@ function AddClassModal({ centers, onSave, onClose, setToast }) {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
           <div>
-            <label style={S.label}>{t("Age Group")}</label>
-            <input
-              style={S.input}
+            <label style={{ ...S.label, fontSize: 11 }}>{t("Age Group")}</label>
+            <select
+              style={{ ...S.input, fontSize: 12 }}
               value={form.ageGroup}
               onChange={e => setForm({ ...form, ageGroup: e.target.value })}
-              placeholder="e.g. 3-4 years"
-            />
+            >
+              <option value="">Select age group</option>
+              {["1-2", "2-3", "3-4", "4-5", "5-6", "6-7", "7-8", "8-9"].map(ag => (
+                <option key={ag} value={ag}>{ag}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label style={S.label}>{t("Curriculum Level")}</label>
@@ -1629,9 +1748,6 @@ export default function CenterManagementTab({ setToast }) {
             <h2 style={{ fontSize: 18, fontWeight: 800, color: "#1c1917", margin: "0 0 4px" }}>🏛️ All Classes</h2>
             <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>{t("Complete class directory across all centers with teacher assignments")}</p>
           </div>
-          <button onClick={() => setAddClassModal(true)} style={{ ...S.primaryBtn, whiteSpace: "nowrap", background: "#f59e0b", padding: "10px 20px", fontSize: 13, borderRadius: 10, fontWeight: 700 }}>
-            + Add Class
-          </button>
         </div>
 
         <div style={{ overflowX: "auto", border: "1px solid #e5e7eb", borderRadius: 12 }}>
