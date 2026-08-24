@@ -21,11 +21,11 @@ export function Toast({ msg, type, onClose }) {
   if (!msg) return null;
   return (
     <div style={{
-      position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)",
+      position: "fixed", top: 84, left: "50%", transform: "translateX(-50%)",
       padding: "11px 20px", borderRadius: 10, fontSize: 13, fontWeight: 600, color: "white",
       background: type === "success" ? "#10b981" : "#ef4444",
-      display: "flex", alignItems: "center", gap: 10, zIndex: 9999,
-      minWidth: 280, boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+      display: "flex", alignItems: "center", gap: 10, zIndex: 100000,
+      minWidth: 280, boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
       fontFamily: "inherit", animation: "fadeIn 0.3s ease",
     }}>
       <span>{type === "success" ? "✓" : "!"}</span>
