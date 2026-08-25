@@ -45,6 +45,45 @@ const activitySubmissionSchema = new mongoose.Schema(
     adminComments: { type: String },
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     reviewedAt: { type: Date },
+
+    // --- Phase 1: External Field Visit Support ---
+
+    // Unregistered children/families visited during home or Anganwadi visits
+    externalBeneficiaries: [
+      {
+        childName: { type: String, required: true },
+        age: { type: Number },                    // age in years
+        gender: { type: String, enum: ["male", "female", "other"] },
+        parentName: { type: String },
+        contactNumber: { type: String },
+        visitType: {
+          type: String,
+          enum: ["home_visit", "anganwadi_visit", "govt_school_visit"],
+          required: true
+        },
+        centerName: { type: String },             // Anganwadi / school name if applicable
+        notes: { type: String },
+        geotag: {
+          lat: { type: Number },
+          lng: { type: Number }
+        }
+      }
+    ],
+
+    // Aggregate counts for the visit — used for quick reporting and CSV export
+    visitMetrics: {
+      totalChildrenCount: { type: Number, default: 0 },
+      parentsPresent: { type: Number, default: 0 },
+      locationName: { type: String },
+      centerName: { type: String }
+    },
+
+    // Google Sheets sync metadata — populated after export/webhook
+    googleFormSyncStatus: {
+      synced: { type: Boolean, default: false },
+      syncedAt: { type: Date },
+      sheetRowId: { type: String }              // row reference in the linked Google Sheet
+    }
   },
   { timestamps: true }
 );

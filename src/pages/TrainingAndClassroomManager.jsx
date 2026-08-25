@@ -419,6 +419,13 @@ export function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
   const [childNote, setChildNote] = useState("");
   const autocompleteRef = useRef(null);
 
+  // Field Visit Mode State
+  const [isFieldVisit, setIsFieldVisit] = useState(false);
+  const [visitType, setVisitType] = useState("home_visit");
+  const [externalBeneficiaries, setExternalBeneficiaries] = useState([]);
+  const [extChild, setExtChild] = useState({ childName: "", age: "", gender: "", parentName: "", contactNumber: "", notes: "" });
+  const [visitMetrics, setVisitMetrics] = useState({ totalChildrenCount: "", parentsPresent: "", locationName: "", centerName: "" });
+
   // STT Voice Speech Recognition State
   const [isRecording, setIsRecording] = useState(false);
   const [speechLanguage, setSpeechLanguage] = useState("en-IN");
@@ -660,7 +667,12 @@ export function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
           followUpAction,
           dayNumber: activity.dayNumber,
           notes: activity.notes,
-          files: fileIds
+          files: fileIds,
+          externalBeneficiaries: isFieldVisit ? externalBeneficiaries : [],
+          visitMetrics: isFieldVisit ? {
+            ...visitMetrics,
+            totalChildrenCount: Number(visitMetrics.totalChildrenCount) || externalBeneficiaries.length
+          } : undefined
         }
       );
 
@@ -941,6 +953,124 @@ export function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
             </div>
           )}
         </div>
+
+        {/* 🏡 Field Visit Mode Toggle */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: isFieldVisit ? "#eff6ff" : "#f8fafc", borderRadius: 10, border: `1.5px solid ${isFieldVisit ? "#93c5fd" : "#e2e8f0"}`, cursor: "pointer" }} onClick={() => setIsFieldVisit(v => !v)}>
+          <div style={{ width: 38, height: 22, borderRadius: 11, background: isFieldVisit ? "#3b82f6" : "#cbd5e1", position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+            <div style={{ position: "absolute", top: 3, left: isFieldVisit ? 18 : 3, width: 16, height: 16, borderRadius: "50%", background: "white", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 800, color: isFieldVisit ? "#1d4ed8" : "#334155" }}>🏡 Field Visit Mode</div>
+            <div style={{ fontSize: 10, color: "#64748b" }}>Home visit ya Anganwadi visit ke liye — unregistered children ka data capture karo</div>
+          </div>
+        </div>
+
+        {/* Field Visit Form — only visible when toggle is ON */}
+        {isFieldVisit && (
+          <div style={{ padding: 14, background: "#f0f9ff", borderRadius: 12, border: "1.5px solid #bae6fd", display: "flex", flexDirection: "column", gap: 12 }}>
+
+            {/* Visit Type */}
+            <div>
+              <label style={{ ...S.label, marginBottom: 6 }}>Visit Type</label>
+              <div style={{ display: "flex", gap: 8 }}>
+                {[
+                  { id: "home_visit", label: "🏠 Home Visit" },
+                  { id: "anganwadi_visit", label: "🏫 Anganwadi Visit" },
+                  { id: "govt_school_visit", label: "🏛️ Govt School Visit" }
+                ].map(v => (
+                  <button key={v.id} type="button" onClick={() => setVisitType(v.id)}
+                    style={{ flex: 1, padding: "8px 6px", borderRadius: 8, fontSize: 11, fontWeight: 700, cursor: "pointer", border: `2px solid ${visitType === v.id ? "#0ea5e9" : "#e2e8f0"}`, background: visitType === v.id ? "#e0f2fe" : "white", color: visitType === v.id ? "#0369a1" : "#64748b" }}>
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Visit Metrics */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "#0369a1", marginBottom: 4, display: "block" }}>Total Children</label>
+                <input type="number" min="0" placeholder="e.g. 5" value={visitMetrics.totalChildrenCount}
+                  onChange={e => setVisitMetrics(v => ({ ...v, totalChildrenCount: e.target.value }))}
+                  style={{ ...S.input, height: 34, fontSize: 12, margin: 0 }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "#0369a1", marginBottom: 4, display: "block" }}>Parents Present</label>
+                <input type="number" min="0" placeholder="e.g. 3" value={visitMetrics.parentsPresent}
+                  onChange={e => setVisitMetrics(v => ({ ...v, parentsPresent: e.target.value }))}
+                  style={{ ...S.input, height: 34, fontSize: 12, margin: 0 }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "#0369a1", marginBottom: 4, display: "block" }}>Location / Village</label>
+                <input type="text" placeholder="e.g. Sector 4, Ujjain" value={visitMetrics.locationName}
+                  onChange={e => setVisitMetrics(v => ({ ...v, locationName: e.target.value }))}
+                  style={{ ...S.input, height: 34, fontSize: 12, margin: 0 }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "#0369a1", marginBottom: 4, display: "block" }}>Center / AWC Name</label>
+                <input type="text" placeholder="e.g. Anganwadi No. 12" value={visitMetrics.centerName}
+                  onChange={e => setVisitMetrics(v => ({ ...v, centerName: e.target.value }))}
+                  style={{ ...S.input, height: 34, fontSize: 12, margin: 0 }} />
+              </div>
+            </div>
+
+            {/* Add Child Form */}
+            <div style={{ background: "white", borderRadius: 10, padding: 12, border: "1px solid #bae6fd" }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: "#0369a1", marginBottom: 8 }}>+ Add Visited Child</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                <input type="text" placeholder="Child Name *" value={extChild.childName}
+                  onChange={e => setExtChild(c => ({ ...c, childName: e.target.value }))}
+                  style={{ ...S.input, height: 34, fontSize: 12, margin: 0 }} />
+                <input type="number" placeholder="Age (years)" min="0" max="18" value={extChild.age}
+                  onChange={e => setExtChild(c => ({ ...c, age: e.target.value }))}
+                  style={{ ...S.input, height: 34, fontSize: 12, margin: 0 }} />
+                <select value={extChild.gender} onChange={e => setExtChild(c => ({ ...c, gender: e.target.value }))}
+                  style={{ ...S.input, height: 34, fontSize: 12, margin: 0 }}>
+                  <option value="">Gender</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other</option>
+                </select>
+                <input type="text" placeholder="Parent Name" value={extChild.parentName}
+                  onChange={e => setExtChild(c => ({ ...c, parentName: e.target.value }))}
+                  style={{ ...S.input, height: 34, fontSize: 12, margin: 0 }} />
+                <input type="tel" placeholder="Contact Number" value={extChild.contactNumber}
+                  onChange={e => setExtChild(c => ({ ...c, contactNumber: e.target.value }))}
+                  style={{ ...S.input, height: 34, fontSize: 12, margin: 0 }} />
+                <input type="text" placeholder="Notes (optional)" value={extChild.notes}
+                  onChange={e => setExtChild(c => ({ ...c, notes: e.target.value }))}
+                  style={{ ...S.input, height: 34, fontSize: 12, margin: 0 }} />
+              </div>
+              <button type="button"
+                onClick={() => {
+                  if (!extChild.childName.trim()) return;
+                  setExternalBeneficiaries(prev => [...prev, { ...extChild, visitType, age: Number(extChild.age) || undefined }]);
+                  setExtChild({ childName: "", age: "", gender: "", parentName: "", contactNumber: "", notes: "" });
+                }}
+                style={{ padding: "7px 16px", borderRadius: 8, background: "#0ea5e9", color: "white", border: "none", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>
+                + Add Child
+              </button>
+            </div>
+
+            {/* Added Children List */}
+            {externalBeneficiaries.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#0369a1" }}>✅ {externalBeneficiaries.length} child(ren) added:</div>
+                {externalBeneficiaries.map((c, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 10px", background: "white", borderRadius: 8, border: "1px solid #bae6fd", fontSize: 11 }}>
+                    <span style={{ fontWeight: 700, color: "#0f172a" }}>
+                      👶 {c.childName}{c.age ? `, ${c.age}yr` : ""}{c.gender ? ` (${c.gender})` : ""}
+                      {c.parentName ? ` — Parent: ${c.parentName}` : ""}
+                      {c.notes ? ` — ${c.notes}` : ""}
+                    </span>
+                    <button type="button" onClick={() => setExternalBeneficiaries(prev => prev.filter((_, j) => j !== i))}
+                      style={{ border: "none", background: "transparent", color: "#ef4444", fontWeight: 800, cursor: "pointer", fontSize: 14 }}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Observation Description Summary */}
         <div>
