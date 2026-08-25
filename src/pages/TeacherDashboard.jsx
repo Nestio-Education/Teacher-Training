@@ -1,12 +1,13 @@
-﻿import { useState, useEffect, useRef } from "react";
-import { Logo, Toast, Badge, StatusBadge, StatCard, SectionCard, Modal, S, globalCSS } from "../components/Shared";
+import { useState, useEffect, useRef } from "react";
+import UniversalActivityReportModal, { ACTIVITY_CATEGORIES } from "../components/UniversalActivityReportModal";
+import { Logo, Toast, Badge, StatusBadge, StatCard, SectionCard, S, globalCSS } from "../components/Shared";
 import { t, setLanguage, getLanguageList, getCurrentLanguage, LANG_CHANGE_EVENT } from "../services/i18n";
 // Start: Snehal change
 import { updateTeacherNotificationPreference, getParentModules, getParentSessionAssignments, submitParentSessionFeedback } from "../services/api";
 // End: Snehal change
 
 import AttendanceManager from "./AttendanceManager";
-import TrainingAndClassroomManager from "./TrainingAndClassroomManager";
+import TrainingAndClassroomManager, { MarkCompleteModal } from "./TrainingAndClassroomManager";
 import GeotagAttendance from "./GeotagAttendance";
 import ProctoredAssessment from "./Proctoredassessment";      // now reading/notes based, same filename
 import TeacherCourseNotes from "./TeacherCourseNotes";    // NEW — replaces the old video CoursesTab
@@ -262,6 +263,8 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
   const [selectedWeekOffset, setSelectedWeekOffset] = useState(0);
   const [activeTabFilter, setActiveTabFilter] = useState("today");
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportTask, setReportTask] = useState(null);
 
   const storageKey = `teacher_custom_tasks_${user?._id || user?.id || 'default'}`;
   const [customTasks, setCustomTasks] = useState(() => {
@@ -308,7 +311,7 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
 
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [taskTitle, setTaskTitle] = useState("");
-  const [taskCategory, setTaskCategory] = useState("homework");
+  const [taskCategory, setTaskCategory] = useState("class_lesson");
   const [taskDate, setTaskDate] = useState(getTodayLocalDate());
   const [taskStartTime, setTaskStartTime] = useState("11:30");
   const [taskEndTime, setTaskEndTime] = useState("12:30");
@@ -317,7 +320,7 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
   const openCreateModal = () => {
     setEditingTaskId(null);
     setTaskTitle("");
-    setTaskCategory("homework");
+    setTaskCategory("class_lesson");
     setTaskDate(selectedDayDate || getTodayLocalDate());
     setTaskStartTime("11:30");
     setTaskEndTime("12:30");
@@ -430,12 +433,30 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
     deleteTeacherTask(id).catch(err => console.warn("[DB Sync] Delete task failed:", err?.message));
   };
 
+  // Flat pastel block palette — solid fills + a matching darker text tone for contrast.
+  // Local to this component. Independent from ACTIVITY_CATEGORIES (used by the report modal).
+  const categoryBlock = {
+    class_lesson:     { fill: ACTIVITY_CATEGORIES.class_lesson.bg,     text: ACTIVITY_CATEGORIES.class_lesson.color,     icon: "📖" },
+    field_visit:      { fill: ACTIVITY_CATEGORIES.field_visit.bg,      text: ACTIVITY_CATEGORIES.field_visit.color,      icon: "🏕️" },
+    pcb_session:      { fill: ACTIVITY_CATEGORIES.pcb_session.bg,      text: ACTIVITY_CATEGORIES.pcb_session.color,      icon: "🧪" },
+    pdca_deliverable: { fill: ACTIVITY_CATEGORIES.pdca_deliverable.bg, text: ACTIVITY_CATEGORIES.pdca_deliverable.color, icon: "📈" },
+    self_learning:    { fill: ACTIVITY_CATEGORIES.self_learning.bg,    text: ACTIVITY_CATEGORIES.self_learning.color,    icon: "🧠" },
+    custom_task:      { fill: ACTIVITY_CATEGORIES.custom_task.bg,      text: ACTIVITY_CATEGORIES.custom_task.color,      icon: "📝" },
+  };
+
   const categoryMeta = {
+    class_lesson:     { bg: ACTIVITY_CATEGORIES.class_lesson.bg,     border: ACTIVITY_CATEGORIES.class_lesson.border,     color: ACTIVITY_CATEGORIES.class_lesson.color,     label: ACTIVITY_CATEGORIES.class_lesson.label },
+    field_visit:      { bg: ACTIVITY_CATEGORIES.field_visit.bg,      border: ACTIVITY_CATEGORIES.field_visit.border,      color: ACTIVITY_CATEGORIES.field_visit.color,      label: ACTIVITY_CATEGORIES.field_visit.label },
+    pcb_session:      { bg: ACTIVITY_CATEGORIES.pcb_session.bg,      border: ACTIVITY_CATEGORIES.pcb_session.border,      color: ACTIVITY_CATEGORIES.pcb_session.color,      label: ACTIVITY_CATEGORIES.pcb_session.label },
+    pdca_deliverable: { bg: ACTIVITY_CATEGORIES.pdca_deliverable.bg, border: ACTIVITY_CATEGORIES.pdca_deliverable.border, color: ACTIVITY_CATEGORIES.pdca_deliverable.color, label: ACTIVITY_CATEGORIES.pdca_deliverable.label },
+    self_learning:    { bg: ACTIVITY_CATEGORIES.self_learning.bg,    border: ACTIVITY_CATEGORIES.self_learning.border,    color: ACTIVITY_CATEGORIES.self_learning.color,    label: ACTIVITY_CATEGORIES.self_learning.label },
+    custom_task:      { bg: ACTIVITY_CATEGORIES.custom_task.bg,      border: ACTIVITY_CATEGORIES.custom_task.border,      color: ACTIVITY_CATEGORIES.custom_task.color,      label: ACTIVITY_CATEGORIES.custom_task.label },
+    // Legacy fallbacks so old tasks don't break
     homework: { bg: "#fee2e2", border: "#ef4444", color: "#991b1b", label: "Homework" },
-    exam: { bg: "#ffedd5", border: "#f97316", color: "#9a3412", label: "Exam" },
+    exam:     { bg: "#ffedd5", border: "#f97316", color: "#9a3412", label: "Exam" },
     workshop: { bg: "#fef9c3", border: "#eab308", color: "#854d0e", label: "Workshop" },
-    class: { bg: "#dcfce7", border: "#22c55e", color: "#166534", label: "Class" },
-    tech: { bg: "#e0e7ff", border: "#6366f1", color: "#3730a3", label: "Technology" },
+    class:    { bg: "#dcfce7", border: "#22c55e", color: "#166534", label: "Class" },
+    tech:     { bg: "#e0e7ff", border: "#6366f1", color: "#3730a3", label: "Technology" },
     admin_assigned: { bg: "#fef3c7", border: "#f59e0b", color: "#92400e", label: "Admin Task" }
   };
 
@@ -468,7 +489,7 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
     title: a.title || a.course?.title || "Course Assignment",
     date: a.dueDate ? formatLocalDateStr(a.dueDate) : "",
     time: "",
-    category: "exam",
+    category: "class_lesson",
     completed: a.status === "completed" || a.status === "approved",
     isCustom: false,
     isAssignment: true
@@ -480,7 +501,7 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
       title: t.title,
       date: t.date ? formatLocalDateStr(t.date) : "",
       time: t.time || "11:30 - 12:30",
-      category: t.category || "homework",
+      category: t.category || "custom_task",
       completed: t.completed,
       isCustom: true
     })),
@@ -489,7 +510,7 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
       title: l.lessonPlan?.title || "Lesson Session",
       date: l.lessonPlan?.scheduleDate ? formatLocalDateStr(l.lessonPlan.scheduleDate) : "",
       time: l.lessonPlan?.timeSlot || "",
-      category: "class",
+      category: "class_lesson",
       completed: l.status === "completed",
       isCustom: false
     })),
@@ -570,336 +591,487 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
   const scheduleGridEvents = dynamicScheduleEvents;
 
   return (
-    <div style={{ background: "white", borderRadius: 20, border: "1px solid #e2e8f0", padding: 24, marginBottom: 24, boxShadow: "0 4px 20px rgba(0,0,0,0.04)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <h2 style={{ fontSize: 18, fontWeight: 900, color: "#0f172a", margin: 0, letterSpacing: "-0.4px", display: "flex", alignItems: "center", gap: 8 }}>
-            📅 WEEKLY COURSE SCHEDULE & TASK PLANNER
-          </h2>
-          <p style={{ fontSize: 12, color: "#64748b", margin: "2px 0 0" }}>Manage timetable sessions, track upcoming deadlines, and mark tasks as complete</p>
-        </div>
+    <div style={{
+      background: "linear-gradient(160deg,#0f172a 0%,#1e293b 55%,#1e3a8a 100%)",
+      borderRadius: 24,
+      padding: 2,
+      marginBottom: 24,
+      boxShadow: "0 12px 40px rgba(30,58,138,0.25)"
+    }}>
+      <div style={{ background: "white", borderRadius: 22, padding: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h2 style={{ fontSize: 20, fontWeight: 900, color: "#0f172a", margin: 0, letterSpacing: "-0.5px", display: "flex", alignItems: "center", gap: 8 }}>
+              📅 Weekly Course Schedule & Task Planner
+            </h2>
+            <p style={{ fontSize: 12, color: "#64748b", margin: "2px 0 0" }}>Manage timetable sessions, track upcoming deadlines, and mark tasks as complete</p>
+          </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button
-            onClick={() => setSelectedWeekOffset(prev => prev - 1)}
-            style={{ padding: "6px 12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", color: "#334155" }}
-          >
-            ← Prev Week
-          </button>
-          <span style={{ fontSize: 12, fontWeight: 700, color: "#1e293b", padding: "6px 10px", background: "#f1f5f9", borderRadius: 8 }}>
-            {weekDays[0]?.dateNum} {weekDays[0]?.name} - {weekDays[6]?.dateNum} {weekDays[6]?.name}
-          </span>
-          <button
-            onClick={() => setSelectedWeekOffset(prev => prev + 1)}
-            style={{ padding: "6px 12px", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", color: "#334155" }}
-          >
-            Next Week →
-          </button>
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 24 }}>
-        <div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6, marginBottom: 16, textAlign: "center" }}>
-            {weekDays.map((d) => {
-              const isSelected = selectedDayDate === d.fullDate;
-              return (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", background: "#f1f5f9", borderRadius: 10, padding: 3, gap: 2 }}>
+              {["Month", "Week", "Day"].map(mode => (
                 <button
-                  key={d.fullDate}
-                  onClick={() => setSelectedDayDate(d.fullDate)}
+                  key={mode}
+                  onClick={() => { if (mode !== "Week") { /* visual-only: Month/Day view not implemented */ } }}
+                  title={mode !== "Week" ? "Coming soon" : undefined}
                   style={{
-                    padding: "8px 4px",
-                    borderRadius: 12,
-                    border: isSelected ? "2px solid #2563eb" : "1px solid #e2e8f0",
-                    background: isSelected ? "#eff6ff" : d.isToday ? "#fef3c7" : "white",
-                    cursor: "pointer",
-                    transition: "all 0.2s"
+                    padding: "6px 14px", borderRadius: 8, border: "none",
+                    background: mode === "Week" ? "white" : "transparent",
+                    color: mode === "Week" ? "#0f172a" : "#94a3b8",
+                    fontSize: 12, fontWeight: 700, cursor: mode === "Week" ? "default" : "not-allowed",
+                    boxShadow: mode === "Week" ? "0 1px 4px rgba(0,0,0,0.08)" : "none"
                   }}
                 >
-                  <div style={{ fontSize: 11, color: isSelected ? "#1d4ed8" : "#64748b", fontWeight: 600 }}>{d.name}</div>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: isSelected ? "#1e40af" : "#0f172a", marginTop: 2 }}>{d.dateNum}</div>
+                  {mode}
                 </button>
-              );
-            })}
-          </div>
-
-          <div style={{ border: "1px solid #f1f5f9", borderRadius: 16, padding: 16, background: "#fafafa", position: "relative", maxHeight: 420, overflowY: "auto" }}>
-            {timeSlots.map((slotTime) => (
-              <div key={slotTime} style={{ display: "flex", alignItems: "center", borderBottom: "1px dashed #e2e8f0", height: 50 }}>
-                <span style={{ width: 60, fontSize: 11, fontWeight: 700, color: "#94a3b8", flexShrink: 0 }}>{slotTime}</span>
-                <div style={{ flex: 1, height: "100%", position: "relative" }} />
-              </div>
-            ))}
-
-            <div style={{ position: "absolute", top: 16, left: 76, right: 16, bottom: 16, pointerEvents: "none" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6, height: "100%" }}>
-                {weekDays.map((d, dayIdx) => {
-                  const isSelectedDay = d.fullDate === selectedDayDate;
-                  const rawEvents = isSelectedDay ? scheduleGridEvents.filter(ev => ev.dayIdx === dayIdx) : [];
-                  const dayEvents = buildPackedTimelineEvents(rawEvents);
-                  const isRightHalf = false;
-                  return (
-                    <div key={d.fullDate} style={{ position: "relative", height: "100%", display: isSelectedDay ? "block" : "none", gridColumn: isSelectedDay ? "1 / -1" : undefined }}>
-                      {dayEvents.map((ev, evIdx) => {
-                        const meta = categoryMeta[ev.category] || categoryMeta.class;
-                        const baseTop = ev.topOffset !== undefined ? ev.topOffset : (evIdx * 85 + 10);
-                        return (
-                          <div
-                            key={ev.id || evIdx}
-                            style={{
-                              position: "absolute",
-                              top: baseTop,
-                              ...(isRightHalf ? { right: 0 } : { left: 0 }),
-                              minWidth: "200px",
-                              maxWidth: "220px",
-                              minHeight: ev.height,
-                              background: meta.bg,
-                              border: `1.5px solid ${meta.border}`,
-                              borderRadius: 12,
-                              padding: "10px 12px",
-                              boxShadow: "0 6px 16px rgba(0,0,0,0.1)",
-                              pointerEvents: "auto",
-                              zIndex: 10 + (ev.overlapIdx || 0),
-                              transition: "all 0.2s ease"
-                            }}
-                          >
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4, marginBottom: 4 }}>
-                              <span style={{ fontSize: 9, fontWeight: 800, textTransform: "uppercase", background: meta.border, color: "white", padding: "2px 6px", borderRadius: 4, letterSpacing: "0.4px" }}>
-                                {meta.label || ev.category}
-                              </span>
-
-                              <div style={{ fontSize: 11, color: meta.color, opacity: 0.95, fontWeight: 700, marginTop: 5, display: "flex", alignItems: "center", gap: 4 }}>
-                                ⏱ {ev.time}
-                              </div>
-
-                            </div>
-                            <div style={{ fontSize: 13, fontWeight: 800, color: meta.color, lineHeight: "1.3", whiteSpace: "normal", wordBreak: "break-word" }}>
-                              {ev.title}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ background: "#f8fafc", borderRadius: 16, border: "1px solid #e2e8f0", padding: 18, display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div>
-              <h3 style={{ fontSize: 15, fontWeight: 800, color: "#0f172a", margin: 0 }}>Upcoming Events</h3>
-              <span style={{ fontSize: 11, color: "#64748b" }}>Tasks & class schedule</span>
+              ))}
             </div>
 
             <button
-              onClick={openCreateModal}
+              onClick={() => setSelectedWeekOffset(0)}
               style={{
-                padding: "6px 12px", background: "linear-gradient(135deg,#f59e0b,#d97706)",
-                color: "white", border: "none", borderRadius: 8, fontSize: 11, fontWeight: 700,
-                cursor: "pointer", boxShadow: "0 2px 6px rgba(217,119,6,0.2)"
+                padding: "7px 14px", background: "white", border: "1px solid #e2e8f0",
+                borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer", color: "#334155"
               }}
             >
-              + Add Task
+              Today
             </button>
-          </div>
 
-          <div style={{ display: "flex", gap: 4, background: "#e2e8f0", padding: 3, borderRadius: 8, marginBottom: 14 }}>
-            {[
-              { id: "all", label: "All" },
-              { id: "today", label: "Today" },
-              { id: "upcoming", label: "Upcoming" },
-              { id: "completed", label: "Done" }
-            ].map(tab => (
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <button
-                key={tab.id}
-                onClick={() => setActiveTabFilter(tab.id)}
-                style={{
-                  flex: 1, padding: "4px 8px", border: "none", borderRadius: 6,
-                  background: activeTabFilter === tab.id ? "white" : "transparent",
-                  color: activeTabFilter === tab.id ? "#0f172a" : "#64748b",
-                  fontSize: 11, fontWeight: activeTabFilter === tab.id ? 700 : 500,
-                  cursor: "pointer", transition: "all 0.15s"
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+                onClick={() => setSelectedWeekOffset(prev => prev - 1)}
+                style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid #e2e8f0", background: "white", cursor: "pointer", fontSize: 13, color: "#475569" }}
+              >‹</button>
+              <button
+                onClick={() => setSelectedWeekOffset(prev => prev + 1)}
+                style={{ width: 30, height: 30, borderRadius: "50%", border: "1px solid #e2e8f0", background: "white", cursor: "pointer", fontSize: 13, color: "#475569" }}
+              >›</button>
+            </div>
 
-          <div style={{ flex: 1, overflowY: "auto", maxHeight: 340, display: "flex", flexDirection: "column", gap: 10 }}>
-            {displayTasks.length === 0 ? (
-              <div style={{ padding: "24px 12px", textAlign: "center", color: "#94a3b8", fontSize: 12 }}>
-                No events or tasks listed for this view.
-              </div>
-            ) : (
-              displayTasks.map(item => {
-                const meta = categoryMeta[item.category] || categoryMeta.homework;
-                return (
-                  <div
-                    key={item.id}
-                    style={{
-                      background: "white", borderRadius: 12, padding: "12px 14px",
-                      border: "1px solid #e2e8f0", borderLeft: `4px solid ${meta.border}`,
-                      boxShadow: "0 2px 6px rgba(0,0,0,0.02)", transition: "all 0.2s"
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: item.completed ? "#94a3b8" : "#1e293b", textDecoration: item.completed ? "line-through" : "none" }}>
-                          {item.title}
-                        </div>
-                        {(item.date || item.time) ? (
-                          <div style={{ fontSize: 11, color: "#64748b", marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
-                            {item.date && <span>📅 {item.date}</span>}
-                            {item.time && <span>⏱ {item.time}</span>}
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
-                            📘 Course Assignment
-                          </div>
-                        )}
-                      </div>
-
-                      {item.isCustom && (
-                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                          <button
-                            onClick={() => openEditModal(item)}
-                            title="Edit Task"
-                            style={{
-                              padding: "4px 6px", borderRadius: 6, border: "none",
-                              background: "#eff6ff", color: "#2563eb",
-                              fontSize: 10, fontWeight: 700, cursor: "pointer"
-                            }}
-                          >
-                            ✏️
-                          </button>
-                          <button
-                            onClick={() => toggleTaskStatus(item.id)}
-                            style={{
-                              padding: "4px 8px", borderRadius: 6, border: "none",
-                              background: item.completed ? "#d1fae5" : "#fef3c7",
-                              color: item.completed ? "#065f46" : "#92400e",
-                              fontSize: 10, fontWeight: 700, cursor: "pointer"
-                            }}
-                          >
-                            {item.completed ? "✓ Done" : "Mark Done"}
-                          </button>
-                          <button
-                            onClick={() => deleteTask(item.id)}
-                            title="Delete Task"
-                            style={{
-                              padding: "4px 6px", borderRadius: 6, border: "none",
-                              background: "#fee2e2", color: "#ef4444",
-                              fontSize: 10, fontWeight: 700, cursor: "pointer"
-                            }}
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>
+              {weekDays[0]?.dateNum} {weekDays[0]?.name} – {weekDays[6]?.dateNum} {weekDays[6]?.name}
+            </span>
           </div>
         </div>
+
+      {/* ── Full-Width 7-Day Calendar Grid ── */}
+      {(() => {
+        const SLOT_HEIGHT = 90;
+        const TOTAL_HEIGHT = timeSlots.length * SLOT_HEIGHT;
+        const PX_PER_MIN = SLOT_HEIGHT / 60;
+        const GRID_START_HOUR = 9; // 09:00
+
+        // Compute event positions using real pixel math relative to this grid
+        const getEventTopPx = (timeStr) => {
+          if (!timeStr) return 0;
+          const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+          if (!match) return 0;
+          let h = parseInt(match[1], 10);
+          const m = parseInt(match[2], 10);
+          if (h < 8) h += 12;
+          return Math.max(0, ((h - GRID_START_HOUR) * 60 + m) * PX_PER_MIN);
+        };
+
+        const getEventHeightPx = (timeStr) => {
+          const parts = (timeStr || "").split("-").map(s => s.trim());
+          if (parts.length < 2) return SLOT_HEIGHT; // default 1-hour
+          const topStart = getEventTopPx(parts[0]);
+          const topEnd = getEventTopPx(parts[1]);
+          return Math.max(40, topEnd - topStart);
+        };
+
+        return (
+          <div style={{ position: "relative" }}>
+
+            {/* ── Add Event button ── */}
+            <button
+              onClick={openCreateModal}
+              style={{
+                position: "absolute", top: 10, right: 0, zIndex: 30,
+                padding: "9px 18px",
+                background: "linear-gradient(135deg,#f97316,#ea580c)",
+                color: "white", border: "none", borderRadius: 999,
+                fontSize: 12, fontWeight: 800, cursor: "pointer",
+                boxShadow: "0 6px 18px rgba(249,115,22,0.4)",
+                display: "flex", alignItems: "center", gap: 6,
+                letterSpacing: "0.2px"
+              }}
+            >
+              + Add Event
+            </button>
+
+            {/* ── Day Header Row ── */}
+            <div style={{ display: "flex", marginBottom: 0 }}>
+              {/* Time column header */}
+              <div style={{ width: 54, flexShrink: 0 }} />
+              {/* Day headers */}
+              {weekDays.map((d) => {
+                const isSelected = selectedDayDate === d.fullDate;
+                const hasEvents = scheduleGridEvents.some(ev => ev.dayIdx === weekDays.indexOf(d));
+                return (
+                  <button
+                    key={d.fullDate}
+                    onClick={() => setSelectedDayDate(d.fullDate)}
+                    style={{
+                      flex: 1, minWidth: 0,
+                      padding: "10px 2px 6px",
+                      background: "transparent",
+                      border: "none",
+                      borderBottom: isSelected ? "3px solid #2563eb" : "3px solid transparent",
+                      cursor: "pointer",
+                      textAlign: "center",
+                      transition: "all 0.18s"
+                    }}
+                  >
+                    <div style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      padding: "4px 10px",
+                      borderRadius: 8,
+                      border: isSelected ? "1.5px solid #0f172a" : "1.5px solid transparent",
+                    }}>
+                      <span style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>{d.dateNum}</span>
+                      <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.4px", color: "#64748b" }}>
+                        {d.name}
+                      </span>
+                    </div>
+                    {hasEvents && !d.isToday && (
+                      <div style={{ width: 4, height: 4, borderRadius: "50%", background: "#3b82f6", margin: "3px auto 0" }} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* ── Calendar Body: Time column + 7 Day columns ── */}
+            <div style={{
+              display: "flex",
+              border: "1px solid #e2e8f0",
+              borderRadius: 16,
+              overflow: "hidden",
+              background: "white"
+            }}>
+
+              {/* Time labels column */}
+              <div style={{ width: 54, flexShrink: 0, background: "#fafbfc", borderRight: "1px solid #e9ecef" }}>
+                {timeSlots.map((slotTime, si) => (
+                  <div key={slotTime} style={{
+                    height: SLOT_HEIGHT,
+                    display: "flex", alignItems: "flex-start", justifyContent: "flex-end",
+                    padding: "0 6px",
+                    borderBottom: si < timeSlots.length - 1 ? "1px dashed #f1f5f9" : "none"
+                  }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", marginTop: si === 0 ? 6 : -7, lineHeight: 1 }}>
+                      {slotTime}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* 7 Day columns — each is position:relative to contain its events */}
+              {weekDays.map((d, dayIdx) => {
+                const isSelected = selectedDayDate === d.fullDate;
+                const dayEvents = scheduleGridEvents.filter(ev => ev.dayIdx === dayIdx);
+
+                return (
+                  <div
+                    key={d.fullDate}
+                    onClick={() => setSelectedDayDate(d.fullDate)}
+                    style={{
+                      flex: 1, minWidth: 0,
+                      position: "relative",
+                      height: TOTAL_HEIGHT,
+                      borderRight: dayIdx < 6 ? "1px solid #f1f5f9" : "none",
+                      background: d.isToday ? "rgba(37,99,235,0.03)" : isSelected ? "rgba(37,99,235,0.02)" : "transparent",
+                      cursor: "pointer",
+                      overflow: "hidden"           /* ← clips events to column */
+                    }}
+                  >
+                    {/* Horizontal time-slot grid lines */}
+                    {timeSlots.map((_, si) => (
+                      <div key={si} style={{
+                        position: "absolute", left: 0, right: 0,
+                        top: si * SLOT_HEIGHT,
+                        height: SLOT_HEIGHT,
+                        borderBottom: si < timeSlots.length - 1 ? "1px dashed #f1f5f9" : "none",
+                        pointerEvents: "none"
+                      }} />
+                    ))}
+
+                    {/* Event cards — positioned within this column */}
+                    {dayEvents.map((ev, evIdx) => {
+                      const block = categoryBlock[ev.category] || categoryBlock.class_lesson;
+                      const topPx = getEventTopPx(ev.time);
+                      const heightPx = getEventHeightPx(ev.time);
+                      const originalTask = combinedTasks.find(t => (t.id || t._id) === ev.id);
+                      const initials = (user?.name || "T").trim().split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase();
+
+                      return (
+                        <div
+                          key={ev.id || evIdx}
+                          onClick={(e) => { e.stopPropagation(); setSelectedDayDate(d.fullDate); }}
+                          style={{
+                            position: "absolute",
+                            top: topPx,
+                            left: 1, right: 1,
+                            height: heightPx,
+                            background: block.fill,
+                            border: "none",
+                            borderRadius: 14,
+                            padding: "8px 6px",
+                            cursor: "pointer",
+                            zIndex: isSelected ? 20 : 10,
+                            boxShadow: isSelected ? "0 2px 8px rgba(15,23,42,0.12)" : "none",
+                            overflow: "hidden",
+                            display: "flex",
+                            flexDirection: "column",
+                            justifyContent: "space-between"
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: block.text, opacity: 0.8, lineHeight: 1.3 }}>
+                              {ev.time || ""}
+                            </div>
+                            <div style={{
+                              fontSize: 12, fontWeight: 800, color: block.text,
+                              lineHeight: 1.3, overflow: "hidden",
+                              display: "-webkit-box", WebkitLineClamp: heightPx >= 90 ? 3 : 2,
+                              WebkitBoxOrient: "vertical", marginTop: 3
+                            }}>
+                              {block.icon} {ev.title}
+                            </div>
+                          </div>
+
+                          {heightPx >= 56 && (
+                            <div style={{
+                              width: 24, height: 24, borderRadius: "50%",
+                              background: "white", color: block.text,
+                              fontSize: 10, fontWeight: 800,
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              border: `1.5px solid ${block.text}22`
+                            }}>
+                              {initials}
+                            </div>
+                          )}
+
+                          {isSelected && originalTask && (
+                            <div style={{ display: "flex", gap: 4, marginTop: 2, alignItems: "center" }}>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (originalTask.completed) {
+                                    if (originalTask.isCustom) toggleTaskStatus(originalTask.id);
+                                  } else {
+                                    setReportTask(originalTask);
+                                    setShowReportModal(true);
+                                  }
+                                }}
+                                style={{
+                                  padding: "2px 7px", borderRadius: 999, border: "none",
+                                  background: originalTask.completed ? "white" : "rgba(15,23,42,0.85)",
+                                  color: originalTask.completed ? "#059669" : "white",
+                                  fontSize: 8, fontWeight: 800, cursor: "pointer"
+                                }}
+                              >
+                                {originalTask.completed ? "✓" : "📋 Report"}
+                              </button>
+                              {originalTask.isCustom && (
+                                <>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); openEditModal(originalTask); }}
+                                    style={{ padding: "2px 6px", borderRadius: 999, border: "none", background: "rgba(255,255,255,0.85)", color: block.text, fontSize: 8, fontWeight: 700, cursor: "pointer" }}
+                                  >✏️</button>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); deleteTask(originalTask.id); }}
+                                    style={{ padding: "2px 6px", borderRadius: 999, border: "none", background: "rgba(255,255,255,0.85)", color: "#dc2626", fontSize: 8, fontWeight: 700, cursor: "pointer" }}
+                                  >🗑</button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Category Legend ── */}
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 14, padding: "8px 0" }}>
+        {Object.entries(ACTIVITY_CATEGORIES).map(([key]) => {
+          const block = categoryBlock[key] || categoryBlock.class_lesson;
+          return (
+            <div key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 700, color: "#64748b" }}>
+              <div style={{ width: 11, height: 11, borderRadius: "50%", background: block.fill, border: `1.5px solid ${block.text}33` }} />
+              {ACTIVITY_CATEGORIES[key].label}
+            </div>
+          );
+        })}
       </div>
 
       {showAddTaskModal && (
-        <Modal title={editingTaskId ? "Edit Task / Event" : "Add New Task / Event"} onClose={() => setShowAddTaskModal(false)}>
-          <form onSubmit={handleSaveTask} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {formError && (
-              <div style={{ padding: "10px 14px", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 10, color: "#991b1b", fontSize: 12, fontWeight: 700, lineHeight: 1.4 }}>
-                {formError}
-              </div>
-            )}
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(15,23,42,0.35)",
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999
+        }}>
+          <div style={{
+            background: "white", borderRadius: 20, padding: 28, width: "100%", maxWidth: 460,
+            boxShadow: "0 24px 60px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto"
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+              <h3 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                {editingTaskId ? "Edit task" : "New task"}
+              </h3>
+              <button
+                onClick={() => setShowAddTaskModal(false)}
+                style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#94a3b8" }}
+              >✕</button>
+            </div>
 
-            <div>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#334155", marginBottom: 6 }}>Task Title</label>
+            <form onSubmit={handleSaveTask} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {formError && (
+                <div style={{ padding: "10px 14px", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 10, color: "#991b1b", fontSize: 12, fontWeight: 700, lineHeight: 1.4 }}>
+                  {formError}
+                </div>
+              )}
+
               <input
                 type="text"
                 value={taskTitle}
                 onChange={e => setTaskTitle(e.target.value)}
-                placeholder="e.g. Applied Science Homework, Technology Exam..."
+                placeholder="Task title"
                 required
-                style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                style={{ width: "100%", padding: "10px 4px", border: "none", borderBottom: "2px solid #e2e8f0", fontSize: 16, fontWeight: 700, outline: "none", boxSizing: "border-box" }}
               />
-            </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#334155", marginBottom: 6 }}>Date</label>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#f8fafc", borderRadius: 10 }}>
+                <span style={{ fontSize: 14 }}>📅</span>
                 <input
                   type="date"
                   value={taskDate}
                   onChange={e => setTaskDate(e.target.value)}
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                  style={{ flex: 1, border: "none", background: "transparent", fontSize: 13, fontWeight: 600, outline: "none", color: "#334155" }}
                 />
               </div>
 
+              <div style={{ display: "flex", gap: 10 }}>
+                <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#f8fafc", borderRadius: 10 }}>
+                  <span style={{ fontSize: 14 }}>⏱</span>
+                  <input
+                    type="text"
+                    value={taskStartTime}
+                    onChange={e => setTaskStartTime(e.target.value)}
+                    placeholder="09:30"
+                    style={{ flex: 1, border: "none", background: "transparent", fontSize: 13, fontWeight: 600, outline: "none", color: "#334155" }}
+                  />
+                </div>
+                <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#f8fafc", borderRadius: 10 }}>
+                  <span style={{ fontSize: 14 }}>⏱</span>
+                  <input
+                    type="text"
+                    value={taskEndTime}
+                    onChange={e => setTaskEndTime(e.target.value)}
+                    placeholder="11:20"
+                    style={{ flex: 1, border: "none", background: "transparent", fontSize: 13, fontWeight: 600, outline: "none", color: "#334155" }}
+                  />
+                </div>
+              </div>
+
               <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#334155", marginBottom: 6 }}>Category</label>
-                <select
-                  value={taskCategory}
-                  onChange={e => setTaskCategory(e.target.value)}
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 13, outline: "none", boxSizing: "border-box", background: "white" }}
+                <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#94a3b8", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                  Category
+                </label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {Object.entries(ACTIVITY_CATEGORIES).map(([key, cat]) => {
+                    const block = categoryBlock[key] || categoryBlock.class_lesson;
+                    const isActive = taskCategory === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setTaskCategory(key)}
+                        style={{
+                          padding: "7px 14px", borderRadius: 999, cursor: "pointer",
+                          border: isActive ? `1.5px solid ${block.text}` : "1.5px solid transparent",
+                          background: block.fill, color: block.text,
+                          fontSize: 11, fontWeight: 800,
+                          opacity: isActive ? 1 : 0.55,
+                          transition: "opacity 0.15s"
+                        }}
+                      >
+                        {cat.icon} {cat.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddTaskModal(false)}
+                  style={{ padding: "10px 18px", background: "transparent", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", color: "#64748b" }}
                 >
-                  <option value="homework">Urgent / Homework</option>
-                  <option value="exam">Exam / Assessment</option>
-                  <option value="workshop">Workshop / Seminar</option>
-                  <option value="class">Regular Class</option>
-                  <option value="tech">Technology</option>
-                </select>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveTask}
+                  style={{
+                    flex: 1, padding: "12px 20px", background: "#0f172a", border: "none",
+                    borderRadius: 12, fontSize: 13, fontWeight: 800, color: "white", cursor: "pointer"
+                  }}
+                >
+                  {editingTaskId ? "Update event" : "Add event"}
+                </button>
               </div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#334155", marginBottom: 6 }}>Start Time</label>
-                <input
-                  type="text"
-                  value={taskStartTime}
-                  onChange={e => setTaskStartTime(e.target.value)}
-                  placeholder="09:30"
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#334155", marginBottom: 6 }}>End Time</label>
-                <input
-                  type="text"
-                  value={taskEndTime}
-                  onChange={e => setTaskEndTime(e.target.value)}
-                  placeholder="11:20"
-                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 10 }}>
-              <button
-                type="button"
-                onClick={() => setShowAddTaskModal(false)}
-                style={{ padding: "8px 16px", background: "#f1f5f9", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", color: "#475569" }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveTask}
-                style={{ padding: "8px 20px", background: "linear-gradient(135deg,#f59e0b,#d97706)", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, color: "white", cursor: "pointer", boxShadow: "0 2px 6px rgba(217,119,6,0.3)" }}
-              >
-                {editingTaskId ? "Update Task" : "Save Task"}
-              </button>
-            </div>
-          </form>
-        </Modal>
+            </form>
+          </div>
+        </div>
       )}
+
+      {/* ── Universal Activity Report Modal / Mark Complete ── */}
+      {showReportModal && reportTask && (
+        (() => {
+          // Use the rich AI modal for class lessons, custom tasks, pdca, etc.
+          // Leave out home/anganwadi visits (pcb_session, field_visit)
+          const useRichModal = !["field_visit", "pcb_session"].includes(reportTask.category);
+
+          if (useRichModal) {
+            return (
+              <MarkCompleteModal
+                activity={reportTask}
+                itemType="activity"
+                user={user}
+                onSubmit={(payload) => {
+                  toggleTaskStatus(reportTask.id);
+                  setShowReportModal(false);
+                  setReportTask(null);
+                }}
+                onClose={() => { setShowReportModal(false); setReportTask(null); }}
+              />
+            );
+          }
+
+          return (
+            <UniversalActivityReportModal
+              task={reportTask}
+              onClose={() => { setShowReportModal(false); setReportTask(null); }}
+              onSubmitSuccess={(taskId, status) => {
+                if (status === "completed") {
+                  toggleTaskStatus(taskId);
+                }
+              }}
+            />
+          );
+        })()
+      )}
+      </div>
     </div>
   );
 }
