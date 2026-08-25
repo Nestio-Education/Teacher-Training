@@ -269,7 +269,7 @@ function mergeAssessmentResults(assignments = [], apiResults = []) {
    PDF upload), "Document" is the closest valid enum value — it does NOT
    change how the course renders anywhere in the app; TeacherCourseNotes
    reads from `modules[].contents[].notes` regardless of contentType. */
-function buildCoursePayloadFromLibrary(lib) {
+export function buildCoursePayloadFromLibrary(lib) {
   const modules = lib.topics.map((topic, idx) => ({
     title: topic.title,
     description: "",
@@ -305,10 +305,34 @@ function getTopicCount(course) {
 }
 
 /* ── Read-only Notes Preview (admin) ── */
-function NotesPreviewModal({ course, onClose }) {
-  const topics = (course.modules || []).flatMap((m) => m.contents || m.lessons || []);
+export function NotesPreviewModal({ course, onClose }) {
+  const topics = (course.modules || []).flatMap((m, mIdx) => 
+    (m.contents || m.lessons || []).map((c, cIdx) => ({ ...c, mIdx, cIdx }))
+  );
   const [activeIdx, setActiveIdx] = useState(0);
   const active = topics[activeIdx];
+
+  const [dbNotes, setDbNotes] = useState([]);
+
+  useEffect(() => {
+    const cId = course?._id || course?.id;
+    if (cId) {
+      getCourseNotes(cId).then(res => setDbNotes(res.notes || [])).catch(() => {});
+    }
+  }, [course]);
+
+  let displayContent = active?.notes || active?.detailedLearningContent || active?.description || "";
+  let isHtml = !!active?.detailedLearningContent;
+
+  if (active && dbNotes.length > 0) {
+    const matched = dbNotes.find(n => n.moduleIndex === active.mIdx && n.contentIndex === active.cIdx) ||
+                    dbNotes.find(n => n.title === active.title);
+    if (matched && matched.content) {
+      displayContent = matched.content;
+      isHtml = false;
+    }
+  }
+
   return (
     <Modal title={`📖 ${course.title} — Notes Preview`} onClose={onClose}>
       {topics.length === 0 ? (
@@ -335,7 +359,20 @@ function NotesPreviewModal({ course, onClose }) {
             {active && (
               <>
                 <div style={{ fontSize: 15, fontWeight: 800, color: "#1c1917", marginBottom: 10 }}>{active.title}</div>
-                <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.8, whiteSpace: "pre-line" }}>{active.notes}</div>
+                {displayContent ? (
+                  isHtml ? (
+                    <div 
+                      style={{ fontSize: 13, color: "#374151", lineHeight: 1.8 }} 
+                      dangerouslySetInnerHTML={{ __html: displayContent }} 
+                    />
+                  ) : (
+                    <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.8, whiteSpace: "pre-line" }}>
+                      {displayContent}
+                    </div>
+                  )
+                ) : (
+                  <span style={{ color: "#9ca3af" }}>No notes content available for this topic.</span>
+                )}
               </>
             )}
           </div>
@@ -346,7 +383,7 @@ function NotesPreviewModal({ course, onClose }) {
 }
 
 /* ── AI Assessment Preview (admin) ── */
-function AssessmentPreviewModal({ course, onClose, setToast }) {
+export function AssessmentPreviewModal({ course, onClose, setToast }) {
   const [assessment, setAssessment] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -413,7 +450,7 @@ function AssessmentPreviewModal({ course, onClose, setToast }) {
 
 /* ── Course Form Modal: pick a course from the embedded library, OR
    upload a .docx to parse directly (no AI call) ── */
-function CourseLibraryPickerModal({ onClose, onCreated, setToast }) {
+export function CourseLibraryPickerModal({ onClose, onCreated, setToast }) {
   const [mode, setMode] = useState("library"); // "library" | "upload"
 
   /* ── Library mode state (unchanged from the original) ── */
@@ -714,7 +751,7 @@ function CourseLibraryPickerModal({ onClose, onCreated, setToast }) {
 }
 
 /* ── Assign Course Modal (unchanged behaviour, no video references) ── */
-function AssignCourseModal({ course, teachers = [], onClose, onAssigned, setToast }) {
+export function AssignCourseModal({ course, teachers = [], onClose, onAssigned, setToast }) {
   const [teacherId, setTeacherId] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [assigning, setAssigning] = useState(false);
@@ -761,7 +798,7 @@ function AssignCourseModal({ course, teachers = [], onClose, onAssigned, setToas
 }
 
 /* ── Tracking Modal: reading completion + assessment scores per teacher ── */
-function CourseTrackingModal({ course, assignments = [], assessmentResults = [], onClose, setToast }) {
+export function CourseTrackingModal({ course, assignments = [], assessmentResults = [], onClose, setToast }) {
   const courseAssignments = assignments.filter((a) => {
     const cid = a.course?._id || a.course?.id || a.course;
     return cid === course.id;

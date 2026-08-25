@@ -132,7 +132,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
 const app = express();
-const port = process.env.PORT || 5001;
+const port = process.env.PORT || 5000;
 const databaseModels = [
   ActivityBank,
   AutomationTeacher,
@@ -1756,8 +1756,65 @@ app.get("/api/courses", requireAuth, async (req, res, next) => {
   try {
     if (req.user.role === "admin") {
       const [courses, assignmentStats] = await Promise.all([
-        Course.find().sort({ createdAt: -1 }),
+        Course.find({ status: { $ne: "deleted" } }).sort({ createdAt: -1 }),
         CourseAssignment.aggregate([
+          {
+            $group: {
+              _id: "$course",
+              assignedCount: { $sum: 1 },
+              completedCount: {
+                $sum: {
+                  $cond: [
+                    {
+                      $or: [
+                        { $eq: ["$status", "completed"] },
+                        { $eq: ["$status", "approved"] },
+                        { $eq: ["$status", "reviewed"] },
+                        { $eq: ["$progressPercent", 100] },
+                      ],
+                    },
+                    1,
+                    0,
+                  ],
+                },
+              },
+            },
+          },
+        ]),
+      ]);
+
+      const statsByCourseId = new Map(
+        assignmentStats.map((item) => [
+          String(item._id),
+          {
+            assignedCount: item.assignedCount || 0,
+            completedCount: item.completedCount || 0,
+            completion: item.assignedCount > 0 ? Math.round((item.completedCount / item.assignedCount) * 100) : 0,
+          },
+        ])
+      );
+
+      const decoratedCourses = courses.map((course) => {
+        const stats = statsByCourseId.get(String(course._id)) || { assignedCount: 0, completedCount: 0, completion: 0 };
+        return {
+          ...localizeCourse(course, req.query.lang),
+          ...stats,
+        };
+      });
+
+      return res.json({ courses: decoratedCourses });
+    }
+
+    if (req.user.role === "mentor") {
+      // Mentors now have full course management — return all courses except soft-deleted ones,
+      // with assignment stats scoped to the mentor's assigned fellows.
+      const mentorProfile = await User.findById(req.user.id).select("mentorProfile.assignedTeachers").lean();
+      const fellowIds = (mentorProfile?.mentorProfile?.assignedTeachers || []).map(t => t._id || t);
+
+      const [courses, assignmentStats] = await Promise.all([
+        Course.find({ status: { $ne: "deleted" } }).sort({ createdAt: -1 }),
+        CourseAssignment.aggregate([
+          { $match: fellowIds.length > 0 ? { teacher: { $in: fellowIds } } : { teacher: null } },
           {
             $group: {
               _id: "$course",
@@ -1827,7 +1884,7 @@ app.get("/api/courses", requireAuth, async (req, res, next) => {
   }
 });
 
-app.post("/api/courses", requireAuth, requireRole("admin"), async (req, res, next) => {
+app.post("/api/courses", requireAuth, requireRole("admin", "mentor"), async (req, res, next) => {
   try {
     const existing = await Course.findOne({ title: req.body.title, createdBy: req.user.id });
     if (existing) {
@@ -3844,7 +3901,7 @@ app.patch("/api/admin/teachers/:id/assign-center", requireAuth, requireRole("adm
 // ==========================================
 // COURSE MANAGEMENT
 // ==========================================
-app.patch("/api/courses/:id", requireAuth, requireRole("admin"), async (req, res, next) => {
+app.patch("/api/courses/:id", requireAuth, requireRole("admin", "mentor"), async (req, res, next) => {
   try {
     requireObjectId(req.params.id, "course id");
     const course = await Course.findByIdAndUpdate(req.params.id, normalizeCoursePayload(req.body, req.user.id), { new: true });
@@ -3856,13 +3913,17 @@ app.patch("/api/courses/:id", requireAuth, requireRole("admin"), async (req, res
   }
 });
 
-app.delete("/api/courses/:id", requireAuth, requireRole("admin"), async (req, res, next) => {
+app.delete("/api/courses/:id", requireAuth, requireRole("admin", "mentor"), async (req, res, next) => {
   try {
     requireObjectId(req.params.id, "course id");
-    const course = await Course.findByIdAndDelete(req.params.id);
+    // Soft-delete: set status to "deleted" instead of removing from DB
+    const course = await Course.findByIdAndUpdate(
+      req.params.id,
+      { status: "deleted", deletedAt: new Date(), deletedBy: req.user.id },
+      { new: true }
+    );
     if (!course) return res.status(404).json({ message: "Course not found." });
-    await Note.deleteMany({ course: req.params.id });
-    res.json({ success: true });
+    res.json({ success: true, course });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
   }
@@ -3870,7 +3931,7 @@ app.delete("/api/courses/:id", requireAuth, requireRole("admin"), async (req, re
 
 // AI Course Generation (mounted router with auth + admin middleware)
 import courseAiRouter from "./routes/courseAi.js";
-app.use("/api/courses/ai", requireAuth, requireRole("admin"), courseAiRouter);
+app.use("/api/courses/ai", requireAuth, requireRole("admin", "mentor"), courseAiRouter);
 // Grades routes
 import gradesRouter from "./routes/grades.js";
 app.use("/api/grades", gradesRouter);
@@ -3883,11 +3944,28 @@ import certificatesRouter, { autoIssueCertificateForAssignment } from "./routes/
 app.use("/api/certificates", certificatesRouter);
 // End: Dnyaneshwari Thorat
 
-app.post("/api/courses/:id/assign", requireAuth, requireRole("admin"), async (req, res, next) => {
+app.post("/api/courses/:id/assign", requireAuth, requireRole("admin", "mentor"), async (req, res, next) => {
   try {
     const { teacherId, dueDate } = req.body;
     requireObjectId(req.params.id, "course id");
     requireObjectId(teacherId, "teacherId");
+
+    const course = await Course.findById(req.params.id);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found." });
+    }
+
+    if (req.user.role === "mentor") {
+      if (course.status !== "published") {
+        return res.status(400).json({ message: "Mentors can only assign published courses." });
+      }
+      const mentor = await User.findById(req.user.id).select("mentorProfile.assignedTeachers");
+      const claimedIds = (mentor?.mentorProfile?.assignedTeachers || []).map((id) => String(id));
+      if (!claimedIds.includes(String(teacherId))) {
+        return res.status(403).json({ message: "You can only assign courses to fellows you have claimed." });
+      }
+    }
+
     const assignment = await CourseAssignment.findOneAndUpdate(
       { course: req.params.id, teacher: teacherId },
       {
@@ -3897,15 +3975,15 @@ app.post("/api/courses/:id/assign", requireAuth, requireRole("admin"), async (re
         dueDate,
         status: "assigned",
         progressPercent: 0,
-        completedContent: []
+        completedContent: [],
+        locked: false
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
-    // Real-time notification via socket
     await createAndEmitNotification({
       recipientId: teacherId,
       title: "New course assigned",
-      body: "A training course has been assigned to your teacher portal.",
+      body: "A training course has been assigned to your portal.",
       type: "course",
       metadata: { courseId: req.params.id, assignmentId: assignment._id },
     });
@@ -3917,8 +3995,12 @@ app.post("/api/courses/:id/assign", requireAuth, requireRole("admin"), async (re
 
 app.get("/api/admin/courses/assignments", requireAuth, requireRole("admin", "mentor"), async (req, res, next) => {
   try {
-    const filter = {};
-
+    let filter = {};
+    if (req.user.role === "mentor") {
+      const mentor = await User.findById(req.user.id).select("mentorProfile.assignedTeachers");
+      const claimedIds = (mentor?.mentorProfile?.assignedTeachers || []).map((id) => id);
+      filter = { teacher: { $in: claimedIds } };
+    }
     const assignments = await CourseAssignment.find(filter)
       .populate("course")
       .populate("teacher", "name email")
@@ -3929,8 +4011,19 @@ app.get("/api/admin/courses/assignments", requireAuth, requireRole("admin", "men
   }
 });
 
-app.patch("/api/admin/courses/assignments/:id", requireAuth, requireRole("admin"), async (req, res, next) => {
+app.patch("/api/admin/courses/assignments/:id", requireAuth, requireRole("admin", "mentor"), async (req, res, next) => {
   try {
+    const existing = await CourseAssignment.findById(req.params.id).select("teacher");
+    if (!existing) return res.status(404).json({ message: "Assignment not found." });
+
+    if (req.user.role === "mentor") {
+      const mentor = await User.findById(req.user.id).select("mentorProfile.assignedTeachers");
+      const claimedIds = (mentor?.mentorProfile?.assignedTeachers || []).map((id) => String(id));
+      if (!claimedIds.includes(String(existing.teacher))) {
+        return res.status(403).json({ message: "You can only review assignments for fellows you have claimed." });
+      }
+    }
+
     const { status, feedback, score, rubric, trainer, reviewedBy, reviewedAt, notified, annotations } = req.body;
     const update = {};
     if (status !== undefined) update.status = status;
@@ -4183,7 +4276,7 @@ app.post("/api/ai/generate-lesson-plan", requireAuth, requireRole("teacher", "ad
   }
 });
 
-app.post("/api/courses/generate-from-ai", requireAuth, requireRole("admin"), async (req, res, next) => {
+app.post("/api/courses/generate-from-ai", requireAuth, requireRole("admin", "mentor"), async (req, res, next) => {
   try {
     console.log("[ai-course] generate_and_save_start", JSON.stringify({ userId: req.user.id, topic: req.body?.topic || req.body?.title }));
     const result = await generateAICourse(req.body || {});
@@ -6140,7 +6233,7 @@ app.patch("/api/admin/users/:id/restore", requireAuth, requireRole("admin"), asy
 // PHASE 1: COURSE PUBLISHING WORKFLOW
 // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
-app.post("/api/courses/:id/publish", requireAuth, requireRole("admin"), async (req, res, next) => {
+app.post("/api/courses/:id/publish", requireAuth, requireRole("admin", "mentor"), async (req, res, next) => {
   try {
     const course = await Course.findById(req.params.id);
     if (!course) return res.status(404).json({ message: "Course not found" });
@@ -6153,7 +6246,7 @@ app.post("/api/courses/:id/publish", requireAuth, requireRole("admin"), async (r
   }
 });
 
-app.post("/api/courses/:id/archive", requireAuth, requireRole("admin"), async (req, res, next) => {
+app.post("/api/courses/:id/archive", requireAuth, requireRole("admin", "mentor"), async (req, res, next) => {
   try {
     const course = await Course.findById(req.params.id);
     if (!course) return res.status(404).json({ message: "Course not found" });
@@ -6616,7 +6709,7 @@ app.post("/api/assessments/ai-grade", requireAuth, async (req, res, next) => {
   }
 });
 
-app.post("/api/admin/upload-material", requireAuth, requireRole("admin"), upload.single("file"), async (req, res, next) => {
+app.post("/api/admin/upload-material", requireAuth, requireRole("admin", "mentor"), upload.single("file"), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 

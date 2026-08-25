@@ -395,7 +395,7 @@ const getChildName = (c) => {
 };
 
 /* ── Mark Complete Modal (requires proof submission) ── */
-export function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
+export function MarkCompleteModal({ activity, itemType = "activity", user, onSubmit, onClose }) {
   const [description, setDescription] = useState("");
   const [photos, setPhotos] = useState([]);
   const [docFiles, setDocFiles] = useState([]);
@@ -449,12 +449,12 @@ export function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
           list = res?.children || res?.data || [];
         }
         if (!list || list.length === 0) {
-          const adminRes = await getChildren();
-          list = adminRes?.children || adminRes?.data || [];
+          const res2 = await getChildren();
+          list = res2?.data || [];
         }
         setRoster(list || []);
       } catch (err) {
-        console.warn("Failed to fetch class roster:", err);
+        console.warn("Failed to load roster:", err);
       }
     }
     fetchRoster();
@@ -472,31 +472,24 @@ export function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
 
   // STT Voice Mic Handler (Clean, Bulletproof Real-Time Speech Recognition)
   const toggleSpeechRecognition = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("Speech recognition is not supported in your browser. Please use Chrome or Edge.");
-      return;
-    }
-
     if (isRecording) {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch (e) {}
-      }
+      recognitionRef.current?.stop();
       setIsRecording(false);
       return;
     }
-
     try {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert("Your browser does not support Speech Recognition. Please use Chrome.");
+        return;
+      }
       const recognition = new SpeechRecognition();
-      recognition.lang = speechLanguage || "en-US";
-      recognition.interimResults = true;
+      recognition.lang = speechLanguage;
       recognition.continuous = true;
+      recognition.interimResults = true;
 
-      const baseText = roughNotes ? roughNotes.trim() + " " : "";
-
-      recognition.onstart = () => {
-        setIsRecording(true);
-      };
+      baseNotesRef.current = roughNotes ? roughNotes + " " : "";
+      const baseText = baseNotesRef.current;
 
       recognition.onresult = (event) => {
         let finalStr = "";
@@ -511,23 +504,16 @@ export function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
             interimStr += text;
           }
         }
-
         setRoughNotes((baseText + finalStr + interimStr).trim());
       };
 
-      recognition.onerror = (e) => {
-        console.warn("Speech error:", e.error);
-        setIsRecording(false);
-      };
-
-      recognition.onend = () => {
-        setIsRecording(false);
-      };
-
+      recognition.onerror = () => setIsRecording(false);
+      recognition.onend = () => setIsRecording(false);
       recognitionRef.current = recognition;
       recognition.start();
+      setIsRecording(true);
     } catch (e) {
-      console.error("Speech Recognition Error:", e);
+      console.error("Speech Error:", e);
       setIsRecording(false);
     }
   };
@@ -599,7 +585,7 @@ export function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
       });
       const data = await response.json();
       if (response.ok) {
-        setDescription(data.text || data.topic);
+        setDescription(data.text || data.topic || data.draft);
         if (data.groupMastery) setGroupMastery(data.groupMastery);
         if (data.followUpAction) setFollowUpAction(data.followUpAction);
         if (Array.isArray(data.developmentalDomain) && data.developmentalDomain.length > 0) {
@@ -613,6 +599,7 @@ export function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
         setError(data.detail || data.message || "Failed to generate AI draft.");
       }
     } catch (err) {
+      console.warn("AI Draft Error:", err);
       setError("Error connecting to server. Make sure backend is running.");
     } finally {
       setIsDrafting(false);
@@ -640,34 +627,39 @@ export function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
         }
       }
 
-      const res = await submitActivityCompletion(
-        activity._id || activity.id,
-        {
-          center: userCenter,
-          class: userClass,
-          description,
-          activityDate: new Date().toISOString(),
-          activityBank: activity._id || activity.id,
-          activityName: activity.activityName || activity.title,
-          duration: activity.duration,
-          level: activity.level,
-          type: activity.type || "activity",
-          ageGroup: activity.ageGroup,
-          milestone: activity.milestone,
-          developmentalDomain: selectedDomains,
-          groupMastery,
-          flaggedChildren,
-          followUpAction,
-          dayNumber: activity.dayNumber,
-          notes: activity.notes,
-          files: fileIds
-        }
-      );
+      const payload = {
+        center: userCenter,
+        class: userClass,
+        description,
+        activityDate: new Date().toISOString(),
+        activityBank: itemType === "activity" ? (activity._id || activity.id) : undefined,
+        lessonPlan: itemType === "lesson" ? (activity.lessonPlan?._id || activity.lessonPlan?.id) : undefined,
+        activityName: activity.activityName || activity.title || activity.lessonPlan?.title,
+        duration: activity.duration || activity.lessonPlan?.duration,
+        level: activity.level,
+        type: itemType,
+        ageGroup: activity.ageGroup || activity.lessonPlan?.ageGroup,
+        milestone: activity.milestone,
+        developmentalDomain: selectedDomains,
+        groupMastery,
+        flaggedChildren,
+        followUpAction,
+        dayNumber: activity.dayNumber,
+        notes: activity.notes || roughNotes,
+        files: fileIds
+      };
+
+      let res;
+      if (itemType === "lesson") {
+        res = await submitLessonCompletion(activity._id || activity.id, payload);
+      } else {
+        res = await submitActivityCompletion(activity._id || activity.id, payload);
+      }
 
       onSubmit?.(res?.submission || {
         _id: Date.now().toString(),
-        activityBank: activity._id || activity.id,
-        activityName: activity.activityName || activity.title,
+        activityBank: itemType === "activity" ? (activity._id || activity.id) : undefined,
+        activityName: activity.activityName || activity.title || activity.lessonPlan?.title,
         dayNumber: activity.dayNumber
       });
       onClose();
@@ -679,7 +671,7 @@ export function MarkCompleteModal({ activity, user, onSubmit, onClose }) {
   };
 
   return (
-    <Modal title={`✅ Mark Complete: ${activity.activityName || activity.title}`} onClose={onClose}>
+    <Modal title={`✅ Mark Complete: ${activity.activityName || activity.title || activity.lessonPlan?.title}`} onClose={onClose}>
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {error && (
           <div style={{ padding: "8px 12px", background: "#fef2f2", color: "#991b1b", borderRadius: 8, fontSize: 12 }}>
@@ -1089,91 +1081,6 @@ function LessonDetailModal({ assignment, onClose, onSubmitComplete }) {
   );
 }
 
-/* ── Completion Submission Modal (for admin-assigned lesson plans) ── */
-function CompleteLessonModal({ assignment, onSubmit, onClose }) {
-  const [teachingNotes, setTeachingNotes] = useState("");
-  const [activityDescription, setActivityDescription] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-  const [file, setFile] = useState(null);
-
-  const plan = assignment.lessonPlan || {};
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!teachingNotes.trim() && !activityDescription.trim()) {
-      setError("Please add teaching notes or an activity description before submitting.");
-      return;
-    }
-    setSubmitting(true);
-    setError("");
-    try {
-      let fileId = null;
-      if (file) {
-        const uploadRes = await uploadFile(file);
-        if (uploadRes && uploadRes.asset) {
-          fileId = uploadRes.asset._id || uploadRes.asset.id;
-        } else if (uploadRes && uploadRes.file) {
-          fileId = uploadRes.file._id || uploadRes.file.id;
-        } else {
-          throw new Error("File upload failed.");
-        }
-      }
-      await onSubmit(assignment._id || assignment.id, {
-        teachingNotes,
-        activityDescription,
-        files: fileId ? [fileId] : []
-      });
-      onClose();
-    } catch (err) {
-      setError(err.message || "Failed to submit completion report.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <Modal title={`✅ Mark Complete: ${plan.title || "Lesson"}`} onClose={onClose}>
-      <form onSubmit={handleSubmit}>
-        {error && (
-          <div style={{ padding: "8px 12px", background: "#fef2f2", color: "#991b1b", borderRadius: 8, fontSize: 12, marginBottom: 12 }}>
-            {error}
-          </div>
-        )}
-
-        <label style={S.label}>What did you teach today? (Activity Description)</label>
-        <textarea
-          style={{ ...S.input, height: 70, resize: "none", marginBottom: 12 }}
-          value={activityDescription}
-          onChange={(e) => setActivityDescription(e.target.value)}
-          placeholder="Briefly describe what was covered in class..."
-        />
-
-        <label style={S.label}>Teaching Notes / Observations</label>
-        <textarea
-          style={{ ...S.input, height: 90, resize: "none", marginBottom: 16 }}
-          value={teachingNotes}
-          onChange={(e) => setTeachingNotes(e.target.value)}
-          placeholder="How did the children respond? Any challenges or highlights?"
-        />
-
-        <label style={S.label}>Attach Document (Optional)</label>
-        <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>
-          Supports any file type (PNG, JPG, PDFs, Excel, Videos, Zips, etc.)
-        </div>
-        <input
-          type="file"
-          onChange={(e) => setFile(e.target.files[0])}
-          style={{ marginBottom: 20, width: "100%", fontSize: 13 }}
-        />
-
-        <button type="submit" disabled={submitting} style={{ ...S.primaryBtn, width: "100%" }}>
-          {submitting ? "Submitting..." : "📤 Submit Completion Report"}
-        </button>
-      </form>
-    </Modal>
-  );
-}
 
 /* ── Formats raw markdown report text into styled bullet lists ── */
 function formatReportText(text) {
@@ -1567,8 +1474,8 @@ export default function TrainingAndClassroomManager({ user }) {
   const pendingCount = allItems.filter(i => i.status === "pending").length;
   const completedCount = allItems.filter(i => i.status === "completed" || i.status === "reviewed" || i.status === "approved").length;
 
-  const handleCompleteSubmit = async (assignmentId, payload) => {
-    await submitLessonCompletion(assignmentId, payload);
+  const handleCompleteSubmit = async (assignmentId, submissionPayload) => {
+    // The API call is already handled inside MarkCompleteModal
     setLessonAssignments(prev => prev.map(l => (l._id === assignmentId || l.id === assignmentId ? { ...l, status: "completed" } : l)));
     setToast({ msg: "Completion report submitted for admin review!", type: "success" });
     loadData();
@@ -1647,9 +1554,11 @@ export default function TrainingAndClassroomManager({ user }) {
 
       {/* Mark Complete: Lesson Plan assignment */}
       {completeLessonAssignment && (
-        <CompleteLessonModal
-          assignment={completeLessonAssignment}
-          onSubmit={handleCompleteSubmit}
+        <MarkCompleteModal
+          activity={completeLessonAssignment}
+          itemType="lesson"
+          user={user}
+          onSubmit={(payload) => handleCompleteSubmit(completeLessonAssignment._id || completeLessonAssignment.id, payload)}
           onClose={() => setCompleteLessonAssignment(null)}
         />
       )}
