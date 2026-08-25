@@ -4714,7 +4714,7 @@ app.get("/api/activities", requireAuth, async (req, res, next) => {
 
 app.post("/api/activities", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
-    const { center, class: classId, lessonPlan, activityBank, activityDate, description, files, activityName, duration, level, type, ageGroup, milestone, developmentalDomain, groupMastery, flaggedChildren, followUpAction, purposeOfActivity, howToConduct, facilitatorRole, materialsRequired, expectedLearningOutcomes, dayNumber, learningObjectives, activities, resources, instructions, expectedOutput, notes } = req.body;
+    const { center, class: classId, lessonPlan, activityBank, activityDate, description, files, activityName, duration, level, type, ageGroup, milestone, developmentalDomain, groupMastery, flaggedChildren, followUpAction, purposeOfActivity, howToConduct, facilitatorRole, materialsRequired, expectedLearningOutcomes, dayNumber, learningObjectives, activities, resources, instructions, expectedOutput, notes, externalBeneficiaries, visitMetrics, googleFormSyncStatus } = req.body;
     if (!center || !classId) {
       return res.status(400).json({ message: "Teacher center and class assignment are required before submitting activities." });
     }
@@ -4754,7 +4754,10 @@ app.post("/api/activities", requireAuth, requireRole("teacher", "fellow"), async
       expectedOutput,
       notes,
       files: files || [],
-      status: "pending"
+      status: "pending",
+      externalBeneficiaries: externalBeneficiaries || [],
+      visitMetrics: visitMetrics || {},
+      googleFormSyncStatus: googleFormSyncStatus || {}
     });
     res.status(201).json({ activity });
   } catch (error) {
