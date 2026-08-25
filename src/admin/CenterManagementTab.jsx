@@ -1123,12 +1123,537 @@ function AddClassModal({ centers, onSave, onClose, setToast }) {
   );
 }
 
+/* ── Class Assessment Modal ── */
+const ASSESSMENT_TEMPLATES = [
+  {
+    id: "literacy",
+    name: "📚 Early Literacy & Phonics",
+    title: "Early Literacy & Phonics Assessment",
+    subject: "Language & Literacy",
+    passMark: 60,
+    questions: [
+      {
+        question: "Which letter sound does the word 'Apple' start with?",
+        options: ["/a/", "/b/", "/c/", "/d/"],
+        correctAnswer: "/a/",
+      },
+      {
+        question: "Identify the rhyming word for 'Cat':",
+        options: ["Dog", "Hat", "Sun", "Pig"],
+        correctAnswer: "Hat",
+      },
+      {
+        question: "How many syllables are in the word 'Butterfly'?",
+        options: ["1", "2", "3", "4"],
+        correctAnswer: "3",
+      },
+      {
+        question: "Which of the following is a vowel?",
+        options: ["B", "M", "E", "T"],
+        correctAnswer: "E",
+      },
+    ],
+  },
+  {
+    id: "numeracy",
+    name: "🔢 Basic Counting & Numeracy",
+    title: "Basic Counting & Shapes Assessment",
+    subject: "Mathematics",
+    passMark: 70,
+    questions: [
+      {
+        question: "Count the apples: 🍎 🍎 🍎. How many are there?",
+        options: ["2", "3", "4", "5"],
+        correctAnswer: "3",
+      },
+      {
+        question: "Which shape has 3 sides?",
+        options: ["Square", "Circle", "Triangle", "Rectangle"],
+        correctAnswer: "Triangle",
+      },
+      {
+        question: "What number comes immediately after 7?",
+        options: ["6", "8", "9", "10"],
+        correctAnswer: "8",
+      },
+      {
+        question: "Which collection has MORE objects?",
+        options: ["5 marbles", "2 marbles", "3 marbles", "1 marble"],
+        correctAnswer: "5 marbles",
+      },
+    ],
+  },
+  {
+    id: "developmental",
+    name: "🌱 Child Development & Milestones",
+    title: "Social & Developmental Milestones Checklist",
+    subject: "Child Development",
+    passMark: 60,
+    questions: [
+      {
+        question: "How does a child demonstrate positive turn-taking in group play?",
+        options: ["Grab toys from others", "Wait for turn & share", "Refuse to play", "Hide toys in backpack"],
+        correctAnswer: "Wait for turn & share",
+      },
+      {
+        question: "Which activity builds fine-motor strength for writing readiness?",
+        options: ["Running in open yard", "Threading beads & pinching playdough", "Watching videos", "Listening to music"],
+        correctAnswer: "Threading beads & pinching playdough",
+      },
+      {
+        question: "How should a teacher evaluate emotional self-regulation?",
+        options: ["Observing how child responds to mild frustration", "Counting height in cm", "Checking attendance percentage", "Giving a written paper exam"],
+        correctAnswer: "Observing how child responds to mild frustration",
+      },
+    ],
+  },
+];
+
+function ClassAssessmentModal({ classData, onClose, setToast, onSave }) {
+  const defaultQuestions = classData.assessmentQuestionsList || [
+    {
+      question: "Sample Question 1: What is the primary color of the sky on a clear day?",
+      options: ["Red", "Blue", "Green", "Yellow"],
+      correctAnswer: "Blue",
+    },
+    {
+      question: "Sample Question 2: Which number is greater?",
+      options: ["4", "9", "2", "1"],
+      correctAnswer: "9",
+    },
+  ];
+
+  const [activeTab, setActiveTab] = useState("settings"); // "settings" | "questions"
+  const [form, setForm] = useState({
+    title: classData.assessmentTitle || `${classData.name} Assessment`,
+    subject: classData.assessmentSubject || "General Assessment",
+    passMark: classData.assessmentPassMark || 60,
+    instructions: classData.assessmentInstructions || "Complete all questions carefully.",
+    status: classData.assessmentStatus || "active",
+  });
+  const [questionsList, setQuestionsList] = useState(defaultQuestions);
+  const [editingQIndex, setEditingQIndex] = useState(null); // index or "new"
+  const [qForm, setQForm] = useState({
+    question: "",
+    options: ["", "", "", ""],
+    correctAnswer: "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  const applyTemplate = (templateId) => {
+    const tpl = ASSESSMENT_TEMPLATES.find(t => t.id === templateId);
+    if (!tpl) return;
+    setForm(prev => ({
+      ...prev,
+      title: `${classData.name} — ${tpl.title}`,
+      subject: tpl.subject,
+      passMark: tpl.passMark,
+    }));
+    setQuestionsList(tpl.questions);
+    setToast({ msg: `Applied "${tpl.name}" template with ${tpl.questions.length} questions!`, type: "success" });
+  };
+
+  const openAddQuestion = () => {
+    setQForm({
+      question: "",
+      options: ["Option A", "Option B", "Option C", "Option D"],
+      correctAnswer: "Option A",
+    });
+    setEditingQIndex("new");
+  };
+
+  const openEditQuestion = (index) => {
+    const q = questionsList[index];
+    setQForm({
+      question: q.question || "",
+      options: q.options && q.options.length ? [...q.options] : ["", "", "", ""],
+      correctAnswer: q.correctAnswer || (q.options ? q.options[0] : ""),
+    });
+    setEditingQIndex(index);
+  };
+
+  const saveQuestion = () => {
+    if (!qForm.question.trim()) {
+      setToast({ msg: "Question text is required.", type: "error" });
+      return;
+    }
+    const cleanOptions = qForm.options.map(o => o.trim()).filter(Boolean);
+    if (cleanOptions.length < 2) {
+      setToast({ msg: "Please provide at least 2 options.", type: "error" });
+      return;
+    }
+    const finalQuestion = {
+      question: qForm.question.trim(),
+      options: cleanOptions,
+      correctAnswer: qForm.correctAnswer || cleanOptions[0],
+    };
+
+    if (editingQIndex === "new") {
+      setQuestionsList(prev => [...prev, finalQuestion]);
+    } else {
+      setQuestionsList(prev => prev.map((q, idx) => idx === editingQIndex ? finalQuestion : q));
+    }
+    setEditingQIndex(null);
+    setToast({ msg: "Question saved!", type: "success" });
+  };
+
+  const deleteQuestion = (index) => {
+    setQuestionsList(prev => prev.filter((_, idx) => idx !== index));
+    setToast({ msg: "Question removed.", type: "info" });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await updateClass(classData._id || classData.id, {
+        assessmentTitle: form.title,
+        assessmentSubject: form.subject,
+        assessmentQuestions: questionsList.length,
+        assessmentPassMark: Number(form.passMark),
+        assessmentInstructions: form.instructions,
+        assessmentStatus: form.status,
+        assessmentQuestionsList: questionsList,
+      });
+      setToast({ msg: `Assessment for ${classData.name} saved with ${questionsList.length} questions!`, type: "success" });
+      if (onSave) onSave();
+      onClose();
+    } catch (err) {
+      setToast({ msg: "Failed to update assessment: " + err.message, type: "error" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal title={`📝 Edit Assessment — ${classData.name}`} onClose={onClose} width={760}>
+      {/* Step Tabs */}
+      <div style={{ display: "flex", gap: 6, borderBottom: "2px solid #f1f5f9", marginBottom: 16 }}>
+        <button
+          type="button"
+          onClick={() => setActiveTab("settings")}
+          style={{
+            padding: "8px 16px",
+            border: "none",
+            borderBottom: activeTab === "settings" ? "3px solid #8b5cf6" : "3px solid transparent",
+            background: activeTab === "settings" ? "#f3e8ff" : "transparent",
+            color: activeTab === "settings" ? "#6b21a8" : "#64748b",
+            fontWeight: 700,
+            fontSize: 13,
+            cursor: "pointer",
+            borderRadius: "8px 8px 0 0"
+          }}
+        >
+          📋 Assessment Details & Templates
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("questions")}
+          style={{
+            padding: "8px 16px",
+            border: "none",
+            borderBottom: activeTab === "questions" ? "3px solid #8b5cf6" : "3px solid transparent",
+            background: activeTab === "questions" ? "#f3e8ff" : "transparent",
+            color: activeTab === "questions" ? "#6b21a8" : "#64748b",
+            fontWeight: 700,
+            fontSize: 13,
+            cursor: "pointer",
+            borderRadius: "8px 8px 0 0",
+            display: "flex",
+            alignItems: "center",
+            gap: 6
+          }}
+        >
+          <span>❓ Question Bank</span>
+          <span style={{ background: "#8b5cf6", color: "white", borderRadius: 10, padding: "1px 7px", fontSize: 10 }}>
+            {questionsList.length}
+          </span>
+        </button>
+      </div>
+
+      <form onSubmit={handleSubmit}>
+        {activeTab === "settings" && (
+          <div>
+            {/* Quick Template Picker Card */}
+            <div style={{
+              background: "linear-gradient(135deg, #f5f3ff, #ede9fe)",
+              border: "1px solid #ddd6fe",
+              borderRadius: 12,
+              padding: "14px",
+              marginBottom: 16
+            }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: "#5b21b6", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                ⚡ Quick Load Assessment Template
+              </div>
+              <div style={{ fontSize: 11, color: "#6d28d9", marginBottom: 10 }}>
+                Select a pre-built template to auto-fill title, subject, passing criteria, and ready-to-use questions:
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {ASSESSMENT_TEMPLATES.map(tpl => (
+                  <button
+                    key={tpl.id}
+                    type="button"
+                    onClick={() => applyTemplate(tpl.id)}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: 8,
+                      border: "1.5px solid #8b5cf6",
+                      background: "white",
+                      color: "#6b21a8",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      transition: "all 0.15s ease"
+                    }}
+                  >
+                    {tpl.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={S.label}>Assessment Title *</label>
+              <input
+                style={S.input}
+                value={form.title}
+                onChange={e => setForm({ ...form, title: e.target.value })}
+                placeholder="e.g. Nursery A End-of-Term Assessment"
+              />
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={S.label}>Subject / Category</label>
+                <input
+                  style={S.input}
+                  value={form.subject}
+                  onChange={e => setForm({ ...form, subject: e.target.value })}
+                  placeholder="e.g. Early Literacy & Numeracy"
+                />
+              </div>
+              <div>
+                <label style={S.label}>{t("Status")}</label>
+                <select
+                  style={S.input}
+                  value={form.status}
+                  onChange={e => setForm({ ...form, status: e.target.value })}
+                >
+                  <option value="active">Active</option>
+                  <option value="draft">Draft</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={S.label}>Total Questions Count</label>
+                <input
+                  style={{ ...S.input, background: "#f8fafc" }}
+                  type="number"
+                  disabled
+                  value={questionsList.length}
+                />
+                <span style={{ fontSize: 10, color: "#64748b", marginTop: 2, display: "block" }}>
+                  Managed automatically via the Question Bank tab.
+                </span>
+              </div>
+              <div>
+                <label style={S.label}>Passing Mark (%)</label>
+                <input
+                  style={S.input}
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={form.passMark}
+                  onChange={e => setForm({ ...form, passMark: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={S.label}>Instructions</label>
+              <textarea
+                style={{ ...S.input, height: 70, resize: "vertical" }}
+                value={form.instructions}
+                onChange={e => setForm({ ...form, instructions: e.target.value })}
+                placeholder="Instructions for teachers/students..."
+              />
+            </div>
+          </div>
+        )}
+
+        {activeTab === "questions" && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>
+                Questions List ({questionsList.length})
+              </div>
+              <button
+                type="button"
+                onClick={openAddQuestion}
+                style={{ ...S.primaryBtn, background: "#8b5cf6", padding: "6px 14px", fontSize: 12 }}
+              >
+                + Add Question
+              </button>
+            </div>
+
+            {/* Inline Question Form Modal / Box */}
+            {editingQIndex !== null && (
+              <div style={{
+                background: "#faf5ff",
+                border: "1.5px solid #c084fc",
+                borderRadius: 12,
+                padding: "14px",
+                marginBottom: 16
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: "#6b21a8", marginBottom: 10 }}>
+                  {editingQIndex === "new" ? "➕ Add New Question" : `✏️ Edit Question ${editingQIndex + 1}`}
+                </div>
+
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ ...S.label, fontSize: 11 }}>Question Prompt *</label>
+                  <input
+                    style={{ ...S.input, fontSize: 12 }}
+                    value={qForm.question}
+                    onChange={e => setQForm({ ...qForm, question: e.target.value })}
+                    placeholder="e.g. Which letter sound does the word 'Apple' start with?"
+                  />
+                </div>
+
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#6b21a8", marginBottom: 6 }}>
+                  Multiple Choice Options
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+                  {qForm.options.map((opt, oIdx) => (
+                    <div key={oIdx}>
+                      <div style={{ fontSize: 10, color: "#64748b", marginBottom: 2 }}>Option {String.fromCharCode(65 + oIdx)}</div>
+                      <input
+                        style={{ ...S.input, fontSize: 12 }}
+                        value={opt}
+                        onChange={e => {
+                          const updated = [...qForm.options];
+                          updated[oIdx] = e.target.value;
+                          setQForm({ ...qForm, options: updated });
+                        }}
+                        placeholder={`Option ${String.fromCharCode(65 + oIdx)}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ ...S.label, fontSize: 11 }}>Select Correct Answer *</label>
+                  <select
+                    style={{ ...S.input, fontSize: 12 }}
+                    value={qForm.correctAnswer}
+                    onChange={e => setQForm({ ...qForm, correctAnswer: e.target.value })}
+                  >
+                    {qForm.options.map((opt, oIdx) => (
+                      <option key={oIdx} value={opt}>
+                        Option {String.fromCharCode(65 + oIdx)}: {opt || `(Option ${String.fromCharCode(65 + oIdx)})`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button type="button" onClick={saveQuestion} style={{ ...S.primaryBtn, background: "#8b5cf6", padding: "6px 14px", fontSize: 12 }}>
+                    Save Question ✓
+                  </button>
+                  <button type="button" onClick={() => setEditingQIndex(null)} style={{ ...S.tblBtn, fontSize: 12 }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Questions List */}
+            {questionsList.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 300, overflowY: "auto" }}>
+                {questionsList.map((q, idx) => (
+                  <div key={idx} style={{
+                    background: "white",
+                    borderRadius: 10,
+                    padding: "12px",
+                    border: "1px solid #e5e7eb",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.03)"
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>
+                          {idx + 1}. {q.question}
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                          {(q.options || []).map((opt, oIdx) => {
+                            const isCorrect = opt === q.correctAnswer;
+                            return (
+                              <span key={oIdx} style={{
+                                padding: "3px 8px",
+                                borderRadius: 6,
+                                fontSize: 11,
+                                fontWeight: isCorrect ? 700 : 500,
+                                background: isCorrect ? "#d1fae5" : "#f1f5f9",
+                                color: isCorrect ? "#065f46" : "#475569",
+                                border: isCorrect ? "1px solid #a7f3d0" : "1px solid #e2e8f0"
+                              }}>
+                                {String.fromCharCode(65 + oIdx)}: {opt} {isCorrect && "✅"}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button type="button" onClick={() => openEditQuestion(idx)} style={{ ...S.tblBtn, padding: "4px 8px", fontSize: 11 }}>
+                          ✏️ Edit
+                        </button>
+                        <button type="button" onClick={() => deleteQuestion(idx)} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5", padding: "4px 8px", fontSize: 11 }}>
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{
+                padding: "24px",
+                textAlign: "center",
+                color: "#64748b",
+                background: "#f8fafc",
+                borderRadius: 10,
+                border: "1px dashed #cbd5e1"
+              }}>
+                No questions added yet. Click <b>+ Add Question</b> above or choose a pre-built template from the Assessment Details tab!
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 18, paddingTop: 12, borderTop: "1px solid #f1f5f9" }}>
+          <button type="button" onClick={onClose} style={S.tblBtn}>
+            Cancel
+          </button>
+          <button type="submit" disabled={saving} style={{ ...S.primaryBtn, background: "#8b5cf6" }}>
+            {saving ? "Saving..." : "Save Assessment ✓"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 /* ── Classes Management Modal ── */
 function ClassManagementModal({ centerId, centerName, classes, onSave, onClose, setToast }) {
   const [centerClasses, setCenterClasses] = useState(classes.filter(c => String(c.center) === String(centerId) || String(c.center?._id) === String(centerId)));
   const [showAddForm, setShowAddForm] = useState(false);
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [editClass, setEditClass] = useState(null);
+  const [editAssessmentClass, setEditAssessmentClass] = useState(null);
   const [classLogs, setClassLogs] = useState([]);
   const [formData, setFormData] = useState({ name: "", ageGroup: "", curriculumLevel: "", schedule: "", capacity: 0 });
 
@@ -1302,6 +1827,7 @@ function ClassManagementModal({ centerId, centerName, classes, onSave, onClose, 
                   <td style={{ padding: "12px 16px", color: "#6b7280" }}>{cls.capacity || 0}</td>
                   <td style={{ padding: "12px 16px", textAlign: "center", whiteSpace: "nowrap" }}>
                     <button onClick={() => openEditForm(cls)} style={{ ...S.tblBtn, padding: "6px 12px", fontSize: 12, marginRight: 6 }}>✏️ Edit</button>
+                    <button onClick={() => setEditAssessmentClass(cls)} style={{ ...S.tblBtn, color: "#8b5cf6", borderColor: "#c4b5fd", padding: "6px 12px", fontSize: 12, marginRight: 6 }}>📝 Edit Assessment</button>
                     <button onClick={() => handleDeleteClass(cls._id || cls.id)} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5", padding: "6px 12px", fontSize: 12 }}>🗑️ Delete</button>
                   </td>
                 </tr>
@@ -1315,9 +1841,18 @@ function ClassManagementModal({ centerId, centerName, classes, onSave, onClose, 
             )}
           </tbody>
         </table>
-</div>
-       </Modal>
-   );
+      </div>
+
+      {editAssessmentClass && (
+        <ClassAssessmentModal
+          classData={editAssessmentClass}
+          onClose={() => setEditAssessmentClass(null)}
+          setToast={setToast}
+          onSave={onSave}
+        />
+      )}
+    </Modal>
+  );
 }
 
 /* ── Class Activity Logs Modal ── */
@@ -1388,6 +1923,7 @@ export default function CenterManagementTab({ setToast }) {
   const [classesModal, setClassesModal] = useState(false);
   const [manageCenterId, setManageCenterId] = useState(null);
   const [addClassModal, setAddClassModal] = useState(false);
+  const [editAssessmentClass, setEditAssessmentClass] = useState(null);
   const [classes, setClasses]           = useState([]);
   const [centerAssignments, setCenterAssignments] = useState({});
   const [loading, setLoading]         = useState(true);
@@ -1802,6 +2338,7 @@ export default function CenterManagementTab({ setToast }) {
                       <td style={{ padding: "12px 16px", color: "#6b7280" }}>{cls.schedule || "—"}</td>
                       <td style={{ padding: "12px 16px", textAlign: "center", whiteSpace: "nowrap" }}>
                         <button onClick={() => { setManageCenterId(cls.center || cls.center?._id); setClassesModal(true); }} style={{ ...S.tblBtn, padding: "6px 12px", fontSize: 12, marginRight: 6 }}>👁 Manage</button>
+                        <button onClick={() => setEditAssessmentClass(cls)} style={{ ...S.tblBtn, color: "#8b5cf6", borderColor: "#c4b5fd", padding: "6px 12px", fontSize: 12, marginRight: 6 }}>📝 Edit Assessment</button>
                         <button onClick={() => { if (window.confirm("Delete this class?")) { deleteClass(cls.id).then(() => { showToast({ msg: "Class deleted", type: "success" }); handleAddClassSaved(); }); }}} style={{ ...S.tblBtn, color: "#dc2626", borderColor: "#fca5a5", padding: "6px 12px", fontSize: 12 }}>🗑️</button>
                       </td>
                     </tr>
@@ -1827,6 +2364,15 @@ export default function CenterManagementTab({ setToast }) {
           onSave={() => loadClasses()}
           onClose={() => setClassesModal(false)}
           setToast={showToast}
+        />
+      )}
+
+      {editAssessmentClass && (
+        <ClassAssessmentModal
+          classData={editAssessmentClass}
+          onClose={() => setEditAssessmentClass(null)}
+          setToast={showToast}
+          onSave={loadClasses}
         />
       )}
 
