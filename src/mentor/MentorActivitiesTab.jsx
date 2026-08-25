@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { getCourseAssignments, updateCourseAssignmentReview } from "../services/api";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
@@ -20,6 +21,10 @@ function formatAge(dateString) {
 }
 
 export default function MentorActivitiesTab({ user, setToast }) {
+  const [mainTab, setMainTab] = useState("submissions"); // "submissions" | "assignments"
+  const [assignments, setAssignments] = useState([]);
+  const [selectedAssignment, setSelectedAssignment] = useState(null);
+
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -60,7 +65,33 @@ export default function MentorActivitiesTab({ user, setToast }) {
 
   useEffect(() => {
     fetchActivities();
+    fetchAssignments();
   }, []);
+
+  const fetchAssignments = async () => {
+    try {
+      const res = await getCourseAssignments();
+      setAssignments(res.assignments || []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAssignmentReview = async (status) => {
+    if (!selectedAssignment) return;
+    setSubmitting(true);
+    try {
+      await updateCourseAssignmentReview(selectedAssignment._id, { status, feedback: feedbackText });
+      setToast?.({ msg: `Assignment marked as ${status}`, type: "success" });
+      setSelectedAssignment(null);
+      setFeedbackText("");
+      await fetchAssignments();
+    } catch (err) {
+      setToast?.({ msg: err.message || "Failed to update review", type: "error" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const handleSeedSamples = async () => {
     setLoading(true);
@@ -260,8 +291,12 @@ export default function MentorActivitiesTab({ user, setToast }) {
               Mentor Inbox
             </span>
           </div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0f172a", margin: 0, letterSpacing: "-0.5px" }}>Fellow Activity Submissions</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0f172a", margin: 0, letterSpacing: "-0.5px" }}>{mainTab === "submissions" ? "Fellow Activity Submissions" : "Course Assignments"}</h1>
           <p style={{ fontSize: 13, color: "#64748b", margin: "4px 0 0" }}>Review, grade, and provide actionable feedback on fellow deliverables.</p>
+          <div style={{ display: "flex", gap: 16, marginTop: 16 }}>
+            <button onClick={() => setMainTab("submissions")} style={{ background: mainTab === "submissions" ? "#0f172a" : "#f1f5f9", color: mainTab === "submissions" ? "#fff" : "#475569", border: "none", padding: "8px 16px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}>Activity Submissions</button>
+            <button onClick={() => setMainTab("assignments")} style={{ background: mainTab === "assignments" ? "#0f172a" : "#f1f5f9", color: mainTab === "assignments" ? "#fff" : "#475569", border: "none", padding: "8px 16px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}>Course Assignments</button>
+          </div>
         </div>
 
         <div style={{ display: "flex", gap: 10 }}>
@@ -372,6 +407,25 @@ export default function MentorActivitiesTab({ user, setToast }) {
         </div>
       </div>
 
+      {mainTab === "assignments" ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {assignments.map(a => (
+            <div key={a._id} onClick={() => { setSelectedAssignment(a); setFeedbackText(a.feedback || ""); }} style={{ background: "#fff", padding: 16, borderRadius: 12, border: "1px solid #e2e8f0", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <h3 style={{ margin: "0 0 4px", fontSize: 16 }}>{a.course?.title || "Unknown Course"}</h3>
+                <div style={{ fontSize: 14, color: "#64748b" }}>Fellow: {a.teacher?.name} • Due: {a.dueDate ? new Date(a.dueDate).toLocaleDateString() : "No Date"}</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: "#0f172a" }}>{a.progressPercent}%</span>
+                <span style={{ background: STATUS_META[a.status]?.bg || "#f1f5f9", color: STATUS_META[a.status]?.color || "#475569", padding: "4px 8px", borderRadius: 4, fontSize: 12, fontWeight: 700 }}>
+                  {STATUS_META[a.status]?.label || a.status}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+      <>
       {/* Submissions List Queue */}
       {loading ? (
         <div style={{ padding: 40, textAlign: "center", color: "#64748b", fontSize: 13 }}>Loading activity submission queue...</div>
@@ -691,6 +745,30 @@ export default function MentorActivitiesTab({ user, setToast }) {
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+      </>
+      )}
+
+      {selectedAssignment && (
+        <div style={{ position: "fixed", top: 0, right: 0, width: 450, height: "100vh", background: "#fff", boxShadow: "-4px 0 20px rgba(0,0,0,0.1)", zIndex: 1000, display: "flex", flexDirection: "column" }}>
+          <div style={{ padding: "20px 24px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between" }}>
+            <h2 style={{ margin: 0, fontSize: 18 }}>Review Assignment</h2>
+            <button onClick={() => setSelectedAssignment(null)} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer" }}>×</button>
+          </div>
+          <div style={{ padding: 24, flex: 1, overflowY: "auto" }}>
+            <h3 style={{ margin: "0 0 8px" }}>{selectedAssignment.course?.title}</h3>
+            <p style={{ margin: "0 0 16px", color: "#64748b" }}>Fellow: {selectedAssignment.teacher?.name}</p>
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Feedback</label>
+              <textarea value={feedbackText} onChange={e => setFeedbackText(e.target.value)} rows={4} style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #cbd5e1" }} />
+            </div>
+            <div style={{ display: "flex", gap: 12 }}>
+              <button disabled={submitting} onClick={() => handleAssignmentReview("approved")} style={{ flex: 1, padding: 12, background: "#059669", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>Approve</button>
+              <button disabled={submitting} onClick={() => handleAssignmentReview("revision")} style={{ flex: 1, padding: 12, background: "#ea580c", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>Revision</button>
+              <button disabled={submitting} onClick={() => handleAssignmentReview("reviewed")} style={{ flex: 1, padding: 12, background: "#3b82f6", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer" }}>Reviewed</button>
+            </div>
           </div>
         </div>
       )}

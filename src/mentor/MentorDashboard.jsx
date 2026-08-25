@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Logo, Toast, Badge, StatusBadge, StatCard, SectionCard, S, globalCSS, DonutChart, ActivityItem, ProgressCard, BarChart } from "../components/Shared";
 import { t } from "../services/i18n";
 import { 
@@ -14,13 +14,12 @@ import {
   getCapstoneSubmissions, 
   getMenteeObservations 
 } from "../services/api";
-import { MentorProfileTab, MentorNotificationsTab, MentorFeedbackTab, MenteeManagementTab, ImpactCapstoneTab, PDCATab } from "./MentorDashboardTabs";
-import MentorActivitiesTab from "./MentorActivitiesTab";
+import { MentorProfileTab, MentorNotificationsTab, MentorFeedbackTab, MenteeManagementTab } from "./MentorDashboardTabs";
 import MentorCurriculumTab from "./MentorCurriculumTab";
 import MentorLessonPlanTab from "./MentorLessonPlanTab";
+import GrowthCycleHub from "./GrowthCycleHub";
 import { PendingApprovalsReminder } from "./PendingApprovalsReminder";
 import TeacherManagementTab from "../admin/TeacherManagementTab";
-import AttendanceTab from "../admin/AttendanceTab";
 import GeotagAttendance from "../pages/GeotagAttendance";
 import { calculateTeacherScore } from "../admin/OverviewTab";
 
@@ -533,12 +532,9 @@ export default function MentorDashboard({ user, onLogout }) {
   const navItems = [
     { key: "overview", label: "Overview", icon: "📊", color: "#3b82f6" },
     { key: "mentees", label: "Teacher Management", icon: "👥", color: "#22c55e", badge: pendingApprovalsCount },
-    { key: "fellow_attendance", label: "Teacher Attendance", icon: "📅", color: "#ec4899" },
     { key: "my_attendance", label: "My Attendance", icon: "📍", color: "#06b6d4" },
-    { key: "activities", label: "Fellow Activities", icon: "📝", color: "#8b5cf6" },
     { key: "curriculum", label: "Curriculum Management", icon: "📚", color: "#14b8a6" },
     { key: "lesson_plans", label: "Lesson Plans", icon: "📋", color: "#f59e0b" },
-    { key: "impact", label: "Impact & Capstone", icon: "🏆", color: "#eab308" },
     { key: "documentation", label: "Growth Cycle", icon: "📝", color: "#6366f1" },
     { key: "feedback", label: "Feedback", icon: "💬", color: "#ef4444" },
   ];
@@ -547,13 +543,10 @@ export default function MentorDashboard({ user, onLogout }) {
     switch(activeTab) {
       case "overview": return <OverviewTab user={currentUser} workingCenter={workingCenter} />;
       case "mentees": return <TeacherManagementTab role="mentor" user={currentUser} setToast={setToast} onUserUpdate={setCurrentUser} />;
-      case "fellow_attendance": return <AttendanceTab role="mentor" user={currentUser} setToast={setToast} />;
       case "my_attendance": return <GeotagAttendance user={currentUser} />;
-      case "activities": return <MentorActivitiesTab user={currentUser} setToast={setToast} />;
       case "curriculum": return <MentorCurriculumTab user={currentUser} setToast={setToast} />;
       case "lesson_plans": return <MentorLessonPlanTab user={currentUser} setToast={setToast} />;
-      case "impact": return <ImpactCapstoneTab user={currentUser} setToast={setToast} onUserUpdate={setCurrentUser} />;
-      case "documentation": return <PDCATab user={currentUser} setToast={setToast} onUserUpdate={setCurrentUser} />;
+      case "documentation": return <GrowthCycleHub user={currentUser} setToast={setToast} onUserUpdate={setCurrentUser} />;
       case "notifications": return <MentorNotificationsTab notifications={notifications} onMarkRead={handleMarkNotifRead} onMarkAllRead={handleMarkAllNotifRead} />;
       case "feedback": return <MentorFeedbackTab user={currentUser} setToast={setToast} />;
       case "profile": return <MentorProfileTab user={currentUser} onWorkingCenterChange={setWorkingCenter} onUserUpdate={setCurrentUser} />;

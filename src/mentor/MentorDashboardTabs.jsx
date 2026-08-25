@@ -1,7 +1,7 @@
 import PDCAGenerator from "./PDCAGenerator";
 import { useState, useEffect, useRef } from "react";
 import { S, SectionCard, Toast, StatCard, StatusBadge, SearchBar, Modal } from "../components/Shared";
-import { uploadFile, submitFeedback, getFeedbacks, updateMentorMe, changeMentorPassword, recordMenteeObservation, getMenteeObservations, submitCapstoneMilestone, getCapstoneSubmissions, submitPDCACycle, getPDCACycles, getMentorFellows, updateFellowStatus, getMentorMe, updateMenteeTracking, claimFellow, unclaimFellow, deleteMentorFellow, getMentorAttendance } from "../services/api";
+import { uploadFile, submitFeedback, getFeedbacks, updateMentorMe, changeMentorPassword, recordMenteeObservation, getMenteeObservations, submitCapstoneMilestone, getCapstoneSubmissions, submitPDCACycle, getPDCACycles, getMentorFellows, updateFellowStatus, getMentorMe, updateMenteeTracking, claimFellow, unclaimFellow, deleteMentorFellow, getMentorAttendance, getCourseAssignments } from "../services/api";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
@@ -1574,6 +1574,7 @@ export function PDCATab({ user, setToast, onUserUpdate }) {
   const [pdcaForm, setPdcaForm] = useState({ plan: "", do: "", check: "", act: "" });
   const [submitting, setSubmitting] = useState(false);
   const [history, setHistory] = useState([]);
+  const [courseAssignments, setCourseAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [historyFilter, setHistoryFilter] = useState("all"); // "all" or a mentee _id
 
@@ -1583,6 +1584,9 @@ export function PDCATab({ user, setToast, onUserUpdate }) {
       .then(res => setHistory(res.cycles || []))
       .catch(err => console.error("Failed to fetch Growth Cycles", err))
       .finally(() => setLoading(false));
+    getCourseAssignments()
+      .then(res => setCourseAssignments(res.assignments || []))
+      .catch(err => console.error("Failed to fetch assignments", err));
   };
 
   useEffect(() => {
@@ -1611,11 +1615,18 @@ export function PDCATab({ user, setToast, onUserUpdate }) {
     const cyclesForMentee = history.filter(h => String(cycleMenteeId(h)) === String(m._id));
     const sorted = [...cyclesForMentee].sort((a, b) => new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0));
     const latest = sorted[0];
+
+    const coursesForMentee = courseAssignments.filter(a => String(a.teacher?._id || a.teacher) === String(m._id));
+    const sortedCourses = [...coursesForMentee].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const latestCourse = sortedCourses[0];
+
     return {
       mentee: m,
       count: cyclesForMentee.length,
       latest,
       lastDate: latest ? (latest.createdAt || latest.date) : null,
+      courseCount: coursesForMentee.length,
+      latestCourse
     };
   });
 
@@ -1773,6 +1784,43 @@ export function PDCATab({ user, setToast, onUserUpdate }) {
                     Clear filter (show all fellows)
                   </button>
                 )}
+              </div>
+            )}
+          </SectionCard>
+
+          {/* Assigned Courses Summary */}
+          <SectionCard title="📚 Assigned Courses">
+            {mentees.length === 0 ? (
+              <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No fellows assigned yet.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {menteeProgress.map(({ mentee, courseCount, latestCourse }) => (
+                  <button
+                    key={mentee._id}
+                    onClick={() => setHistoryFilter(historyFilter === mentee._id ? "all" : mentee._id)}
+                    style={{
+                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                      padding: "12px 14px", borderRadius: 10, textAlign: "left", cursor: "pointer",
+                      border: historyFilter === mentee._id ? "1.5px solid #3b82f6" : "1px solid #e2e8f0",
+                      background: historyFilter === mentee._id ? "#eff6ff" : "#f8fafc",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1e293b" }}>{mentee.name || "Unknown Fellow"}</div>
+                      <div style={{ fontSize: 11, color: "#64748b" }}>
+                        {courseCount} course{courseCount !== 1 ? "s" : ""} assigned
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {latestCourse && (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "4px 8px", borderRadius: 4, background: "#e0f2fe", color: "#0369a1" }}>
+                          {latestCourse.status}
+                        </span>
+                      )}
+                      <div style={{ fontSize: 16, fontWeight: 900, color: courseCount > 0 ? "#8b5cf6" : "#cbd5e1" }}>{courseCount}</div>
+                    </div>
+                  </button>
+                ))}
               </div>
             )}
           </SectionCard>

@@ -45,7 +45,7 @@ const getCourseId = (course) => course?._id || course?.id;
 /* ══════════════════════════════════════════
    COURSE PREVIEW MODAL — Watch all lessons/videos in a course
 ══════════════════════════════════════════ */
-function CoursePreviewModal({ course, onClose, onProgress }) {
+export function CoursePreviewModal({ course, onClose, onProgress }) {
   const [activeModuleIdx, setActiveModuleIdx] = useState(0);
   const [activeLessonIdx, setActiveLessonIdx] = useState(0);
   const [watchedLessons, setWatchedLessons] = useState(() => new Set());
@@ -199,10 +199,17 @@ function CoursePreviewModal({ course, onClose, onProgress }) {
                     {activeModule?.title} · ⏱ {activeLesson.duration || activeLesson.suggestedDuration || "N/A"}
                     {activeLesson.type && <span style={{ marginLeft: 10, background: "#dbeafe", color: "#1d4ed8", padding: "2px 8px", borderRadius: 6, fontSize: 10, fontWeight: 700 }}>{activeLesson.type}</span>}
                   </div>
-                  {(activeLesson.notes || activeLesson.description) && (
-                    <div style={{ background: "#f9fafb", borderRadius: 10, padding: "12px 14px", border: "1px solid #f1f5f9", fontSize: 13, color: "#374151", lineHeight: 1.7, whiteSpace: "pre-line" }}>
-                      {activeLesson.notes || activeLesson.description}
-                    </div>
+                  {(activeLesson.notes || activeLesson.detailedLearningContent || activeLesson.description) && (
+                    activeLesson.detailedLearningContent ? (
+                      <div 
+                        style={{ background: "#f9fafb", borderRadius: 10, padding: "12px 14px", border: "1px solid #f1f5f9", fontSize: 13, color: "#374151", lineHeight: 1.7 }}
+                        dangerouslySetInnerHTML={{ __html: activeLesson.detailedLearningContent }}
+                      />
+                    ) : (
+                      <div style={{ background: "#f9fafb", borderRadius: 10, padding: "12px 14px", border: "1px solid #f1f5f9", fontSize: 13, color: "#374151", lineHeight: 1.7, whiteSpace: "pre-line" }}>
+                        {activeLesson.notes || activeLesson.description}
+                      </div>
+                    )
                   )}
                   {/* Navigation buttons */}
                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16 }}>
@@ -245,7 +252,7 @@ function CoursePreviewModal({ course, onClose, onProgress }) {
 /* ══════════════════════════════════════════
    COURSE FORM — A3.2 (Full Multi-Section)
 ══════════════════════════════════════════ */
- function CourseFormModal({ course, onSave, onClose, categories, setToast }) {
+export function CourseFormModal({ course, onSave, onClose, categories, setToast }) {
   const isEdit = !!course;
 
   /* ── State for all sections ── */
