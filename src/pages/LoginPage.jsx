@@ -70,29 +70,29 @@ function StrengthBar({ password }) {
 function PasswordRequirements({ password }) {
   if (!password) return null;
   const checks = [
-    { label: "At least 8 characters", valid: password.length >= 8 },
-    { label: "One uppercase letter", valid: /[A-Z]/.test(password) },
-    { label: "One number", valid: /[0-9]/.test(password) },
-    { label: "One special character", valid: /[!@#$%^&*(),.?":{}|<>]/.test(password) },
+    { label: "8+ chars", valid: password.length >= 8 },
+    { label: "1 uppercase", valid: /[A-Z]/.test(password) },
+    { label: "1 number", valid: /[0-9]/.test(password) },
+    { label: "1 special char", valid: /[!@#$%^&*(),.?":{}|<>]/.test(password) },
   ];
   return (
-    <ul style={{ margin: "4px 0 0", padding: 0, listStyle: "none" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 4, background: "#fffbeb", padding: "4px 8px", borderRadius: 6, border: "1px solid #fef3c7" }}>
       {checks.map((c, i) => (
-        <li key={i} style={{ fontSize: 10, fontWeight: 600, color: c.valid ? "#10b981" : "#ef4444", marginBottom: 1 }}>
-          {c.valid ? "✅" : "❌"} {c.label}
-        </li>
+        <span key={i} style={{ fontSize: 9.5, fontWeight: 600, color: c.valid ? "#10b981" : "#ef4444", display: "flex", alignItems: "center", gap: 2, whiteSpace: "nowrap" }}>
+          <span>{c.valid ? "✓" : "•"}</span> {c.label}
+        </span>
       ))}
-    </ul>
+    </div>
   );
 }
 // End: Prajwal edit
 
 /* ── Compact input style overrides ── */
 const ci = {
-  input: { fontSize: 12, padding: "7px 10px 7px 28px", marginBottom: 0 },
-  label: { fontSize: 11, marginBottom: 3, display: "block", fontWeight: 600, color: "#374151" },
+  input: { fontSize: 12, padding: "6px 10px 6px 28px", marginBottom: 0 },
+  label: { fontSize: 11, marginBottom: 2, display: "block", fontWeight: 600, color: "#374151" },
   fieldIcon: { position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", fontSize: 12, pointerEvents: "none" },
-  mb: { marginBottom: 10 },
+  mb: { marginBottom: 6 },
 };
 
 /* ── OTP Input Component ── */
@@ -914,160 +914,215 @@ function RegisterForm({ onBack }) {
   // End: Prajwal edit
 
   return (
-    <>
+    <div className="animated-reg-form" style={{ width: "100%" }}>
       <Toast msg={toast.msg} type={toast.type} onClose={() => setToast({ msg: "", type: "" })} />
-      <Logo size={100} />
-      <div style={{ textAlign: "center", marginBottom: 14 }}>
+      <Logo size={72} />
+      <div style={{ textAlign: "center", marginBottom: 10 }}>
         <span style={ls.badge}>{roleLabel} Registration</span>
-        <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 4, fontStyle: "italic" }}>Admin will approve your account</p>
-      </div>
-
-      <div style={ci.mb}>
-        <label style={ci.label}>Register As</label>
-        <select
-          value={role}
-          onChange={e => setRole(e.target.value)}
-          style={{ ...S.input, fontSize: 12, padding: "7px 10px", marginBottom: 0, cursor: "pointer" }}
-        >
-          <option value="teacher">Teacher</option>
-          <option value="mentor">Mentor</option>
-        </select>
+        <p style={{ fontSize: 10.5, color: "#9ca3af", marginTop: 2, fontStyle: "italic", marginBottom: 0 }}>Admin will approve your account</p>
       </div>
 
       <form onSubmit={handleRegisterClick}>
-        <div style={ci.mb}>
-          <label style={ci.label}>Full Name</label>
-          <div style={{ position: "relative" }}>
-            <span style={ci.fieldIcon}>👤</span>
-            {/* Start: Prajwal edit — name field validation styling */}
-            <input
-              style={{
-                ...S.input,
-                ...ci.input,
-                borderColor: form.name && !/^[a-zA-Z][a-zA-Z.'-]*(\s+[a-zA-Z][a-zA-Z.'-]*)+$/.test(form.name.trim()) ? "#ef4444" : "#e5e7eb",
-              }}
-              value={form.name}
-              onChange={e => setForm({ ...form, name: e.target.value })}
-              placeholder="Dr. Jane Smith"
-            />
+        <div className="reg-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 12px" }}>
+
+          {/* Register As */}
+          <div style={{ gridColumn: "1 / -1", ...ci.mb }}>
+            <label style={ci.label}>Register As</label>
+            <select
+              value={role}
+              onChange={e => setRole(e.target.value)}
+              className="reg-input-field"
+              style={{ ...S.input, fontSize: 12, padding: "6px 10px", marginBottom: 0, cursor: "pointer", width: "100%" }}
+            >
+              <option value="teacher">Teacher</option>
+              <option value="mentor">Mentor</option>
+            </select>
           </div>
-          {form.name && (
-            <p style={{ fontSize: 10, fontWeight: 600, marginTop: 3, marginBottom: 0, color: /^[a-zA-Z][a-zA-Z.'-]*(\s+[a-zA-Z][a-zA-Z.'-]*)+$/.test(form.name.trim()) ? "#10b981" : "#ef4444" }}>
-              {/^[a-zA-Z][a-zA-Z.'-]*(\s+[a-zA-Z][a-zA-Z.'-]*)+$/.test(form.name.trim())
-                ? "✅ Valid name"
-                : "❌ Please enter your full name (first and last name, letters only)"}
-            </p>
-          )}
-          {/* End: Prajwal edit */}
-        </div>
-        {[
-          { key: "email", label: "Email Address *", icon: "📧", type: "email", ph: "teacher@school.edu" },
-          { key: "phone", label: "Phone (10-Digit Mobile) *", icon: "📱", type: "tel", ph: "9876543210" },
-        ].map(f => (
-          <div key={f.key} style={ci.mb}>
-            <label style={ci.label}>{f.label}</label>
+
+          {/* Full Name */}
+          <div style={ci.mb}>
+            <label style={ci.label}>Full Name *</label>
             <div style={{ position: "relative" }}>
-              <span style={ci.fieldIcon}>{f.icon}</span>
+              <span style={ci.fieldIcon}>👤</span>
               <input
+                className="reg-input-field"
                 style={{
                   ...S.input,
                   ...ci.input,
-                  borderColor: f.key === "email" && form.email && !/^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(form.email) ? "#ef4444" : "#e5e7eb",
+                  borderColor: form.name && !/^[a-zA-Z][a-zA-Z.'-]*(\s+[a-zA-Z][a-zA-Z.'-]*)+$/.test(form.name.trim()) ? "#ef4444" : "#e5e7eb",
                 }}
-                type={f.type}
-                value={form[f.key]}
-                onChange={e => setForm({ ...form, [f.key]: e.target.value })}
-                placeholder={f.ph}
+                value={form.name}
+                onChange={e => setForm({ ...form, name: e.target.value })}
+                placeholder="Dr. Jane Smith"
               />
             </div>
-            {f.key === "email" && form.email && (
-              <p style={{ fontSize: 10, fontWeight: 600, marginTop: 3, marginBottom: 0, color: /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(form.email) ? "#10b981" : "#ef4444" }}>
-                {/^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(form.email) ? "✅ Valid email address" : "❌ Invalid email — use format: name@domain.com"}
-              </p>
-            )}
-            {f.key === "phone" && form.phone && (
-              <p style={{ fontSize: 10, fontWeight: 600, marginTop: 3, marginBottom: 0, color: /^[6-9]\d{9}$/.test(form.phone.trim()) ? "#10b981" : "#ef4444" }}>
-                {/^[6-9]\d{9}$/.test(form.phone.trim()) ? "✅ Valid 10-digit Indian phone number" : "❌ Invalid phone — must be a 10-digit number starting with 6-9"}
+            {form.name && (
+              <p style={{ fontSize: 9.5, fontWeight: 600, marginTop: 2, marginBottom: 0, color: /^[a-zA-Z][a-zA-Z.'-]*(\s+[a-zA-Z][a-zA-Z.'-]*)+$/.test(form.name.trim()) ? "#10b981" : "#ef4444" }}>
+                {/^[a-zA-Z][a-zA-Z.'-]*(\s+[a-zA-Z][a-zA-Z.'-]*)+$/.test(form.name.trim())
+                  ? "✅ Valid name"
+                  : "❌ Enter first & last name"}
               </p>
             )}
           </div>
-        ))}
-        {/* Start: Prajwal edit — Upload Profile Photo field removed here */}
-        {/* End: Prajwal edit */}
-        {/* Start: Prajwal edit — School/Address now loaded live from the database */}
-        <div style={ci.mb}>
-          <label style={ci.label}>School / Address *</label>
-          <select
-            required
-            value={form.centerId}
-            onChange={e => {
-              const selected = centers.find(c => c._id === e.target.value);
-              setForm({
-                ...form,
-                centerId: e.target.value,
-                address: selected ? selected.name : "",
-              });
-            }}
-            disabled={centersLoading}
-            style={{
-              ...S.input,
-              fontSize: 12,
-              padding: "7px 10px",
-              marginBottom: 0,
-              cursor: centersLoading ? "not-allowed" : "pointer",
-            }}
-          >
-            <option value="">
-              {centersLoading ? "Loading centers..." : "Select a center"}
-            </option>
-            {centers.map((c) => (
-              <option key={c._id} value={c._id}>
-                {c.name}{c.city ? `, ${c.city}` : ""}
+
+          {/* Email Address */}
+          <div style={ci.mb}>
+            <label style={ci.label}>Email Address *</label>
+            <div style={{ position: "relative" }}>
+              <span style={ci.fieldIcon}>📧</span>
+              <input
+                className="reg-input-field"
+                style={{
+                  ...S.input,
+                  ...ci.input,
+                  borderColor: form.email && !/^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(form.email) ? "#ef4444" : "#e5e7eb",
+                }}
+                type="email"
+                value={form.email}
+                onChange={e => setForm({ ...form, email: e.target.value })}
+                placeholder="teacher@school.edu"
+              />
+            </div>
+            {form.email && (
+              <p style={{ fontSize: 9.5, fontWeight: 600, marginTop: 2, marginBottom: 0, color: /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(form.email) ? "#10b981" : "#ef4444" }}>
+                {/^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(form.email) ? "✅ Valid email" : "❌ Invalid email format"}
+              </p>
+            )}
+          </div>
+
+          {/* Phone */}
+          <div style={ci.mb}>
+            <label style={ci.label}>Phone (10-Digit Mobile) *</label>
+            <div style={{ position: "relative" }}>
+              <span style={ci.fieldIcon}>📱</span>
+              <input
+                className="reg-input-field"
+                style={{
+                  ...S.input,
+                  ...ci.input,
+                  borderColor: form.phone && !/^[6-9]\d{9}$/.test(form.phone.trim()) ? "#ef4444" : "#e5e7eb",
+                }}
+                type="tel"
+                value={form.phone}
+                onChange={e => setForm({ ...form, phone: e.target.value })}
+                placeholder="9876543210"
+              />
+            </div>
+            {form.phone && (
+              <p style={{ fontSize: 9.5, fontWeight: 600, marginTop: 2, marginBottom: 0, color: /^[6-9]\d{9}$/.test(form.phone.trim()) ? "#10b981" : "#ef4444" }}>
+                {/^[6-9]\d{9}$/.test(form.phone.trim()) ? "✅ Valid phone number" : "❌ 10 digits starting 6-9"}
+              </p>
+            )}
+          </div>
+
+          {/* Center */}
+          <div style={ci.mb}>
+            <label style={ci.label}>School / Center *</label>
+            <select
+              required
+              value={form.centerId}
+              onChange={e => {
+                const selected = centers.find(c => c._id === e.target.value);
+                setForm({
+                  ...form,
+                  centerId: e.target.value,
+                  address: selected ? selected.name : "",
+                });
+              }}
+              disabled={centersLoading}
+              className="reg-input-field"
+              style={{
+                ...S.input,
+                fontSize: 12,
+                padding: "6px 10px",
+                marginBottom: 0,
+                cursor: centersLoading ? "not-allowed" : "pointer",
+                width: "100%"
+              }}
+            >
+              <option value="">
+                {centersLoading ? "Loading..." : "Select a center"}
               </option>
-            ))}
-          </select>
-          {centersError && (
-            <p style={{ fontSize: 10, color: "#ef4444", marginTop: 3, marginBottom: 0 }}>
-              ⚠️ {centersError}
-            </p>
+              {centers.map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.name}{c.city ? `, ${c.city}` : ""}
+                </option>
+              ))}
+            </select>
+            {centersError && (
+              <p style={{ fontSize: 9.5, color: "#ef4444", marginTop: 2, marginBottom: 0 }}>
+                ⚠️ {centersError}
+              </p>
+            )}
+          </div>
+
+          {/* Password */}
+          <div style={ci.mb}>
+            <label style={ci.label}>Password *</label>
+            <div style={{ position: "relative" }}>
+              <span style={ci.fieldIcon}>🔒</span>
+              <input
+                className="reg-input-field"
+                style={{ ...S.input, ...ci.input }}
+                type={showPass ? "text" : "password"}
+                value={form.password}
+                onChange={e => setForm({ ...form, password: e.target.value })}
+                placeholder="Min. 8 characters"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPass(!showPass)}
+                style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 13 }}
+              >
+                {showPass ? "🙈" : "👁️"}
+              </button>
+            </div>
+            <StrengthBar password={form.password} />
+          </div>
+
+          {/* Confirm Password */}
+          <div style={ci.mb}>
+            <label style={ci.label}>Confirm Password *</label>
+            <div style={{ position: "relative" }}>
+              <span style={ci.fieldIcon}>🛡️</span>
+              <input
+                className="reg-input-field"
+                style={{ ...S.input, ...ci.input }}
+                type="password"
+                value={form.confirmPassword}
+                onChange={e => setForm({ ...form, confirmPassword: e.target.value })}
+                placeholder="Re-enter password"
+              />
+            </div>
+          </div>
+
+          {/* Password Requirements Checklist spanning full width */}
+          {form.password && (
+            <div style={{ gridColumn: "1 / -1", marginBottom: 2 }}>
+              <PasswordRequirements password={form.password} />
+            </div>
           )}
-        </div>
-        {/* End: Prajwal edit */}
-        <div style={ci.mb}>
-          <label style={ci.label}>Password</label>
-          <div style={{ position: "relative" }}>
-            <span style={ci.fieldIcon}>🔒</span>
-            <input style={{ ...S.input, ...ci.input }} type={showPass ? "text" : "password"} value={form.password}
-              onChange={e => setForm({ ...form, password: e.target.value })} placeholder="Min. 8 characters" />
-            <button type="button" onClick={() => setShowPass(!showPass)}
-              style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 13 }}>
-              {showPass ? "🙈" : "👁️"}
+
+          {/* Submit Button spanning full width */}
+          <div style={{ gridColumn: "1 / -1", marginTop: 4 }}>
+            <button
+              type="submit"
+              disabled={verifying}
+              className="reg-submit-btn"
+              style={{ ...S.primaryBtn, width: "100%", padding: "9px", fontSize: 13, opacity: verifying ? 0.7 : 1, cursor: verifying ? "not-allowed" : "pointer" }}
+            >
+              {verifying ? "Submitting..." : "Submit Registration →"}
             </button>
           </div>
-          <StrengthBar password={form.password} />
-          {/* Start: Prajwal edit */}
-          <PasswordRequirements password={form.password} />
-          {/* End: Prajwal edit */}
+
         </div>
-        <div style={ci.mb}>
-          <label style={ci.label}>Confirm Password</label>
-          <div style={{ position: "relative" }}>
-            <span style={ci.fieldIcon}>🛡️</span>
-            <input style={{ ...S.input, ...ci.input }} type="password" value={form.confirmPassword}
-              onChange={e => setForm({ ...form, confirmPassword: e.target.value })} placeholder="Re-enter password" />
-          </div>
-        </div>
-        {/* Start: Prajwal edit — button now says "Submitting..." (was "Sending Verification...") since OTP step is skipped */}
-        <button type="submit" disabled={verifying} style={{ ...S.primaryBtn, width: "100%", padding: "9px", fontSize: 13, opacity: verifying ? 0.7 : 1 }}>
-          {verifying ? "Submitting..." : "Submit Registration →"}
-        </button>
-        {/* End: Prajwal edit */}
       </form>
-      <p style={{ textAlign: "center", fontSize: 11, color: "#9ca3af", marginTop: 12, marginBottom: 0 }}>
+
+      <p style={{ textAlign: "center", fontSize: 11, color: "#9ca3af", marginTop: 10, marginBottom: 0 }}>
         Already registered?{" "}
         <span onClick={onBack} style={{ color: "#d97706", fontWeight: 700, cursor: "pointer" }}>Sign in</span>
       </p>
-    </>
+    </div>
   );
 }
 // End: Dnyaneshwari Thorat
@@ -1098,9 +1153,41 @@ export default function LoginPage({ onLogin }) {
     <div style={ls.bg}>
       <Particles />
       <style>{globalCSS}</style>
+      <style>{`
+        @keyframes regFormSlideIn {
+          from { opacity: 0; transform: translateY(14px) scale(0.98); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .animated-reg-form {
+          animation: regFormSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .reg-input-field {
+          transition: all 0.2s ease-in-out !important;
+        }
+        .reg-input-field:focus {
+          border-color: #f59e0b !important;
+          box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.22) !important;
+          outline: none !important;
+        }
+        .reg-submit-btn {
+          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        }
+        .reg-submit-btn:hover:not(:disabled) {
+          transform: translateY(-1.5px);
+          box-shadow: 0 6px 16px rgba(245, 158, 11, 0.35) !important;
+        }
+        .reg-submit-btn:active:not(:disabled) {
+          transform: translateY(0);
+        }
+        @media (max-width: 640px) {
+          .reg-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
 
       {/* Site header - shown on Login, Register, Forgot & Reset views */}
-            <header style={ls.header}>
+      <header style={ls.header}>
         <a href="https://teacher-training-six.vercel.app/" style={ls.headerBrand}>
           <Logo size={40} />
           <span style={ls.headerBrandText}>SpacECE India Foundation</span>
@@ -1110,7 +1197,7 @@ export default function LoginPage({ onLogin }) {
         </a>
       </header>
 
-      <div style={ls.panel}>
+      <div style={view === "register" ? { ...ls.panel, maxWidth: 760 } : ls.panel}>
         {/* Left — illustration (hidden on reset view for cleaner focus) */}
         {!isResetView && (
           <div style={ls.left}>
@@ -1123,7 +1210,13 @@ export default function LoginPage({ onLogin }) {
         )}
 
         {/* Right — form */}
-        <div style={isResetView ? { ...ls.right, maxWidth: 420, margin: "0 auto", flex: "unset", width: "100%" } : ls.right}>
+        <div style={
+          isResetView
+            ? { ...ls.right, maxWidth: 420, margin: "0 auto", flex: "unset", width: "100%" }
+            : view === "register"
+            ? { ...ls.right, padding: "20px 24px", overflowY: "hidden" }
+            : ls.right
+        }>
           {isResetView ? (
             <ResetPasswordForm token={view.token} onDone={handleResetDone} />
           ) : view === "login" ? (
