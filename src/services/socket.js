@@ -18,7 +18,7 @@ export function connectSocket(token) {
     reconnection: true,
     reconnectionAttempts: 10,
     reconnectionDelay: 1000,
-    reconnectionDelayMax: 5001,
+    reconnectionDelayMax: 5000,
   });
 
   socket.on("connect", () => {
