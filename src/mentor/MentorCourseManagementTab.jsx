@@ -9,7 +9,7 @@ import { CourseFormModal, CoursePreviewModal } from "../admin/CourseManagementTa
 import { CourseLibraryPickerModal } from "../admin/CurriculumTrainingTab";
 import AICourseGenerator from "../admin/AICourseGenerator";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 
 const getCourseId = (course) => course?._id || course?.id;
 
