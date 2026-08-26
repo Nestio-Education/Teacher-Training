@@ -1,10 +1,10 @@
-import { SECTIONS, computeSectionScores, scoreOf, getAcademicYear } from "../data/childAssessmentSections.js";
+import { SECTIONS, AGE_GROUPS, computeSectionScores, scoreOf, getAcademicYear } from "../data/childAssessmentSections.js";
 
 /**
  * Recompute section scores purely from answers server-side to prevent client spoofing.
  */
-export function computeAndValidateSectionScores(answers) {
-  return computeSectionScores(answers);
+export function computeAndValidateSectionScores(answers, sectionsInput = SECTIONS) {
+  return computeSectionScores(answers, sectionsInput);
 }
 
 /**
@@ -12,8 +12,9 @@ export function computeAndValidateSectionScores(answers) {
  * HIGH score → 1-2 suggestions only (child is doing well)
  * LOW score  → MORE suggestions (child needs support)
  */
-export function buildRecommendations(sectionScores, answers) {
-  return SECTIONS.map((section) => {
+export function buildRecommendations(sectionScores, answers, sectionsInput = SECTIONS) {
+  const activeSections = sectionsInput || SECTIONS;
+  return activeSections.map((section) => {
     const chartEntry = sectionScores.find((cs) => cs.id === section.id);
     if (!chartEntry) return null;
 
