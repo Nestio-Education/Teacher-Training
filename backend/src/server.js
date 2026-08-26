@@ -94,7 +94,7 @@ import { Child } from "./models/Child.js";
 // Start: Dnyaneshwari Thorat
 import { ChildAssessment } from "./models/ChildAssessment.js";
 import ActivityCompletion from "./models/ActivityCompletion.js";
-import { buildRecommendations, getLatestStageWithData } from "./services/childAssessmentService.js";
+import { buildRecommendations, getLatestStageWithData, getAgeGroupFromChild, AGE_GROUPS } from "./services/childAssessmentService.js";
 // End: Dnyaneshwari Thorat
 import { Course } from "./models/Course.js";
 import { CourseAssignment } from "./models/CourseAssignment.js";
@@ -596,8 +596,10 @@ function isAllowedOrigin(origin) {
 
   try {
     const { hostname, protocol } = new URL(origin);
+    if (process.env.NODE_ENV !== "production") {
+      return true;
+    }
     return (
-      process.env.NODE_ENV !== "production" &&
       protocol === "http:" &&
       ["localhost", "127.0.0.1"].includes(hostname)
     );
@@ -611,10 +613,9 @@ app.use(
     origin(origin, callback) {
       if (isAllowedOrigin(origin)) {
         callback(null, true);
-        return;
+      } else {
+        callback(null, false);
       }
-
-      callback(new Error("Not allowed by CORS"));
     },
     credentials: true,
   })
@@ -2966,7 +2967,11 @@ app.get("/api/teacher/children/:id/activity-suggestions", requireAuth, requireRo
       restoredAnswers[k.replace(/_/g, '.')] = v;
     }
 
-    const recommendations = buildRecommendations(latestStageData.sectionScores, restoredAnswers);
+    const childDoc = await Child.findById(childId).populate('class');
+    const ageGroup = childDoc ? getAgeGroupFromChild(childDoc) : "2–3 Years";
+    const activeSections = AGE_GROUPS[ageGroup] || AGE_GROUPS["2–3 Years"];
+
+    const recommendations = buildRecommendations(latestStageData.sectionScores, restoredAnswers, activeSections);
 
     const completions = await ActivityCompletion.find({ child: childId, stage: latestStageData.stage });
     const completedActivities = {};

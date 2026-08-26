@@ -2305,6 +2305,67 @@ export const AGE_GROUPS = {
   "4–5 Years": SECTIONS_4_5_YEARS,
 };
 
+export function normalizeAgeGroup(str) {
+  if (!str) return null;
+  const s = String(str).toLowerCase().trim();
+  if (s.includes("1-2") || s.includes("1–2") || s.includes("1 to 2") || s.includes("1-1.5") || s.includes("1.5-2")) return "1–2 Years";
+  if (s.includes("2-3") || s.includes("2–3") || s.includes("2 to 3")) return "2–3 Years";
+  if (s.includes("3-4") || s.includes("3–4") || s.includes("3 to 4") || s.includes("nursery")) return "3–4 Years";
+  if (s.includes("4-5") || s.includes("4–5") || s.includes("4 to 5") || s.includes("lkg") || s.includes("junior kg")) return "4–5 Years";
+  return null;
+}
+
+export function getAgeGroupFromChild(child) {
+  if (!child) return "2–3 Years";
+
+  // 1. Direct explicit ageGroup check
+  if (child.ageGroup) {
+    const norm = normalizeAgeGroup(child.ageGroup);
+    if (norm && AGE_GROUPS[norm]) return norm;
+    if (AGE_GROUPS[child.ageGroup]) return child.ageGroup;
+  }
+
+  // 2. Class ageGroup or class name check
+  if (child.class) {
+    const classStr = typeof child.class === "object" ? (child.class.ageGroup || child.class.name || "") : String(child.class);
+    const norm = normalizeAgeGroup(classStr);
+    if (norm && AGE_GROUPS[norm]) return norm;
+  }
+  if (child.className) {
+    const norm = normalizeAgeGroup(child.className);
+    if (norm && AGE_GROUPS[norm]) return norm;
+  }
+
+  // 3. Date of Birth check
+  if (child.dob) {
+    const dob = new Date(child.dob);
+    if (!isNaN(dob.getTime())) {
+      const ageInYears = (Date.now() - dob.getTime()) / 3.15576e10;
+      if (ageInYears < 2) return "1–2 Years";
+      if (ageInYears < 3) return "2–3 Years";
+      if (ageInYears < 4) return "3–4 Years";
+      return "4–5 Years";
+    }
+  }
+
+  // 4. Numerical Age property check (e.g. 4 or "4")
+  if (typeof child.age === "number" || (child.age && !isNaN(Number(child.age)))) {
+    const age = Number(child.age);
+    if (age < 2) return "1–2 Years";
+    if (age < 3) return "2–3 Years";
+    if (age < 4) return "3–4 Years";
+    return "4–5 Years";
+  }
+
+  // 5. String Age check (e.g. "3-4 years", "4 yrs")
+  if (child.age && typeof child.age === "string") {
+    const norm = normalizeAgeGroup(child.age);
+    if (norm && AGE_GROUPS[norm]) return norm;
+  }
+
+  return "2–3 Years";
+}
+
 // Default SECTIONS export defaults to Age 2-3 Years for backwards compatibility
 export const SECTIONS = SECTIONS_2_3_YEARS;
 

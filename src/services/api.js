@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5001").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL !== undefined ? import.meta.env.VITE_API_BASE_URL : "").replace(/\/$/, "");
 
 async function request(path, options = {}) {
   const token = localStorage.getItem("spaceece_auth_token");
@@ -32,7 +32,7 @@ async function request(path, options = {}) {
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    if (response.status === 401 && (data.message === "Invalid authorization token" || data.message === "Token expired" || data.message === "Invalid token type")) {
+    if (response.status === 401 && (data.message === "Invalid authorization token" || data.message === "Token expired" || data.message === "Invalid token type" || data.message === "Account is not active")) {
       clearSession();
     }
     throw new Error(data.message || `Request failed (${response.status})`);

@@ -1,4 +1,5 @@
-import { SECTIONS, AGE_GROUPS, computeSectionScores, scoreOf, getAcademicYear } from "../data/childAssessmentSections.js";
+import { SECTIONS, AGE_GROUPS, computeSectionScores, scoreOf, getAcademicYear, getAgeGroupFromChild, normalizeAgeGroup } from "../data/childAssessmentSections.js";
+export { getAgeGroupFromChild, normalizeAgeGroup, AGE_GROUPS };
 
 /**
  * Recompute section scores purely from answers server-side to prevent client spoofing.
