@@ -68,6 +68,21 @@ export function createMentorLessonPlansRouter(upload) {
   }
 
   // ---------------------------------------------------------------------------
+  // GET / — List lesson plans created by this mentor
+  // ---------------------------------------------------------------------------
+  router.get("/", async (req, res) => {
+    try {
+      const lessonPlans = await LessonPlan.find({ createdBy: req.user.id })
+        .populate("course", "title category level")
+        .sort({ createdAt: -1 });
+      res.json({ lessonPlans });
+    } catch (error) {
+      console.error("[mentor/lesson-plans GET] error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
   // POST /import-excel — Parse an Excel file, upsert LessonPlans for this mentor
   // ---------------------------------------------------------------------------
   router.post("/import-excel", upload.single("file"), async (req, res) => {
