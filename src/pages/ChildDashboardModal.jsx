@@ -12,6 +12,7 @@ import {
   SECTIONS,
   scoreOf,
   computeSectionScores,
+  getAgeGroupFromChild,
 } from "../data/childAssessmentSections";
 
 /* ─────────────────────────────────────────
@@ -208,29 +209,6 @@ function SectionPieChart({ data }) {
   );
 }
 
-export function getAgeGroupFromChild(child) {
-  if (!child) return "2–3 Years";
-  if (child.ageGroup && AGE_GROUPS[child.ageGroup]) return child.ageGroup;
-  if (child.dob) {
-    const dob = new Date(child.dob);
-    if (!isNaN(dob.getTime())) {
-      const ageInYears = (Date.now() - dob.getTime()) / 3.15576e10;
-      if (ageInYears < 2) return "1–2 Years";
-      if (ageInYears < 3) return "2–3 Years";
-      if (ageInYears < 4) return "3–4 Years";
-      return "4–5 Years";
-    }
-  }
-  if (typeof child.age === "number" || (child.age && !isNaN(Number(child.age)))) {
-    const age = Number(child.age);
-    if (age < 2) return "1–2 Years";
-    if (age < 3) return "2–3 Years";
-    if (age < 4) return "3–4 Years";
-    return "4–5 Years";
-  }
-  return "2–3 Years";
-}
-
 function ChildAssessmentTab({ child, onAssessmentSaved }) {
   const [stage, setStage] = useState("Baseline");
   const [savedAssessments, setSavedAssessments] = useState({});
@@ -251,9 +229,10 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
 
   // Load any previously saved assessments for this child from the backend database
   useEffect(() => {
-    if (!child) return;
+    const childId = child?.id || child?._id;
+    if (!childId) return;
     setLoading(true);
-    getChildAssessments(child.id)
+    getChildAssessments(childId)
       .then((data) => {
         setSavedAssessments(data || {});
       })
@@ -313,7 +292,8 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
     };
 
     setLoading(true);
-    saveChildAssessment(child.id, record)
+    const childId = child?.id || child?._id;
+    saveChildAssessment(childId, record)
       .then((res) => {
         const savedData = (res && res.assessment) ? res.assessment : (res && res.stage ? res : record);
         const updated = { ...savedAssessments, [stage]: savedData };
@@ -792,8 +772,9 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
  * HIGH score → 1-2 suggestions only (child is doing well)
  * LOW score  → MORE suggestions (child needs support)
  */
-function buildRecommendationsFromChart(chartScores, answers) {
-  return SECTIONS.map((section) => {
+function buildRecommendationsFromChart(chartScores, answers, activeSections = SECTIONS_2_3_YEARS) {
+  const sectionsToUse = activeSections || SECTIONS_2_3_YEARS;
+  return sectionsToUse.map((section) => {
     const chartEntry = chartScores.find((cs) => cs.id === section.id);
     if (!chartEntry) return null;
 
@@ -865,9 +846,10 @@ function ActivitySuggestionsTab({ child }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!child) return;
+    const childId = child?.id || child?._id;
+    if (!childId) return;
     setLoading(true);
-    getChildAssessments(child.id)
+    getChildAssessments(childId)
       .then((data) => {
         setSavedAssessments(data || {});
       })
@@ -891,11 +873,14 @@ function ActivitySuggestionsTab({ child }) {
   let answers = {};
   let latestStage = "";
 
+  const ageGroup = getAgeGroupFromChild(child);
+  const activeSections = AGE_GROUPS[ageGroup] || SECTIONS_2_3_YEARS;
+
   for (const stage of ["Endline", "Midline", "Baseline"]) {
     if (savedAssessments[stage] && savedAssessments[stage].answers && Object.keys(savedAssessments[stage].answers).length > 0) {
       const rec = savedAssessments[stage];
       answers = rec.answers || {};
-      chartScores = rec.sectionScores || computeSectionScores(answers);
+      chartScores = rec.sectionScores || computeSectionScores(answers, activeSections);
       latestStage = stage;
       break;
     }
@@ -948,7 +933,7 @@ function ActivitySuggestionsTab({ child }) {
     );
   }
 
-  const recommendations = buildRecommendationsFromChart(chartScores, answers);
+  const recommendations = buildRecommendationsFromChart(chartScores, answers, activeSections);
   const totalActivities = recommendations.reduce((sum, r) => sum + r.totalActivities, 0);
   const completedCount = Object.values(completedActivities).filter(Boolean).length;
 
