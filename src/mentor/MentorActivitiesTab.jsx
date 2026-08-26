@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { getCourseAssignments, updateCourseAssignmentReview } from "../services/api";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 
 const STATUS_META = {
   pending: { bg: "#fef3c7", color: "#92400e", label: "Pending Review", tint: "#f59e0b", badgeBg: "#fffbeb" },
