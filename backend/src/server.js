@@ -83,6 +83,7 @@ import { generateAICourse } from "./services/aiCourseGenerator.js";
 import { generateAILessonPlan } from "./services/aiLessonPlanner.js";
 import dailyTaskAutomationRoutes from "./routes/dailyTaskAutomationRoutes.js";
 import teacherTasksRouter from "./routes/teacherTasks.js";
+import haalsRouter from "./routes/haals.js";
 import { startDailyTaskAutomationCron } from "./cron/dailyTaskCron.js";
 import reminderAutomationRoutes from "./routes/reminderAutomationRoutes.js";
 import { startReminderAutomationCron } from "./cron/reminderCron.js";
@@ -133,7 +134,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
 const app = express();
-const port = process.env.PORT || 5001;
+const port = process.env.PORT || 5000;
 const databaseModels = [
   ActivityBank,
   AutomationTeacher,
@@ -7144,6 +7145,7 @@ ${roughNotes}`;
 });
 
 app.use("/api/teacher-tasks", teacherTasksRouter);
+app.use("/api/haals", haalsRouter);
 
 await connectDb();
 await ensureDatabaseReady();

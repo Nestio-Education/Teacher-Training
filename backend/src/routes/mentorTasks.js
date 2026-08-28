@@ -26,6 +26,7 @@ router.post("/", requireRole("mentor"), async (req, res, next) => {
       mentorId: req.user.id,
       fellowId,
       month: Number(month),
+      date: date || new Date().toISOString().slice(0, 10),
       title: title.trim(),
       description: description?.trim() || "",
       dueDate: dueDate || "",

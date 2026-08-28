@@ -1547,6 +1547,13 @@ export function toggleTeacherTask(id) {
   });
 }
 
+export function submitTeacherTaskReport(id, payload) {
+  return request(`/api/teacher-tasks/${id}/report`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function deleteTeacherTask(id) {
   return request(`/api/teacher-tasks/${id}`, {
     method: "DELETE"
@@ -1672,5 +1679,20 @@ export function sendPDCANotification(payload) {
   return request("/api/mentor-tasks/pdca", {
     method: "POST",
     body: JSON.stringify(payload),
+
+// ── HAALS / Home Visit Observation APIs ──
+export function getFellowHaalsMetrics(fellowId) {
+  const path = fellowId ? `/api/haals/fellow/metrics?fellowId=${fellowId}` : "/api/haals/fellow/metrics";
+  return request(path);
+}
+
+export function getMentorHaalsMetrics() {
+  return request("/api/haals/mentor/metrics");
+}
+
+export function triggerHaalsAiReportStub(fellowId, month) {
+  return request("/api/haals/reports/generate-stub", {
+    method: "POST",
+    body: JSON.stringify({ fellowId, month })
   });
 }

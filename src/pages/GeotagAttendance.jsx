@@ -233,7 +233,7 @@ export default function GeotagAttendance({ user }) {
         },
         (error) => {
           if (!isFallback) {
-            tryPosition({ enableHighAccuracy: false, timeout: 15001, maximumAge: 60000 }, true);
+            tryPosition({ enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }, true);
           } else {
             setLoading(false);
             setActionType(null);
