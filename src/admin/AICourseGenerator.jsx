@@ -35,7 +35,7 @@ const DURATIONS = ["2 Weeks", "4 Weeks", "6 Weeks", "8 Weeks", "3 Months", "6 Mo
 
 // Helper: get API base from environment or default
 const getApiBase = () => {
-  return import.meta.env?.VITE_API_BASE_URL || "http://localhost:5001";
+  return import.meta.env?.VITE_API_BASE_URL || "http://localhost:5000";
 };
 
 export default function AICourseGenerator({ onApply, categories = [] }) {

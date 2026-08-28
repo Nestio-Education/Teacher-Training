@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5001").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
 
 async function request(path, options = {}) {
   const token = localStorage.getItem("spaceece_auth_token");
@@ -1547,6 +1547,13 @@ export function toggleTeacherTask(id) {
   });
 }
 
+export function submitTeacherTaskReport(id, payload) {
+  return request(`/api/teacher-tasks/${id}/report`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function deleteTeacherTask(id) {
   return request(`/api/teacher-tasks/${id}`, {
     method: "DELETE"
@@ -1631,10 +1638,10 @@ export function submitWeeklyReport(cycleId, payload) {
 }
 
 // ── Mentor-assigned Custom Tasks (MentorTask) ──
-export function createMentorTask({ fellowId, month, title, description }) {
+export function createMentorTask({ fellowId, month, title, description, date }) {
   return request("/api/mentor-tasks", {
     method: "POST",
-    body: JSON.stringify({ fellowId, month, title, description }),
+    body: JSON.stringify({ fellowId, month, title, description, date }),
   });
 }
 

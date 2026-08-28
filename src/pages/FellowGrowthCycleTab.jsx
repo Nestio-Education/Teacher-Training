@@ -6,7 +6,9 @@ import {
   updateFellowPDCAChecklist,
   getFellowAssignedTasks,
   submitTaskEvidence,
+  getTeacherTasks,
 } from "../services/api";
+import UniversalActivityReportModal from "../components/UniversalActivityReportModal";
 import { MONTH_TITLES, SEMESTER_LABELS, semesterOf } from "../mentor/monthMeta";
 import { MONTH_CURRICULA } from "../mentor/monthCurricula";
 
@@ -109,6 +111,21 @@ export default function FellowGrowthCycleTab({ user, setToast }) {
   const [evidenceModal, setEvidenceModal] = useState(null); // { taskId, taskTitle }
   const [evidenceForm, setEvidenceForm] = useState({ text: "", formLink: "", photoBase64: "" });
   const [submittingEvidence, setSubmittingEvidence] = useState(false);
+
+  // Home & Anganwadi visit tasks (field_visit / pcb_session)
+  const [visitTasks, setVisitTasks] = useState([]);
+  const [visitReportTask, setVisitReportTask] = useState(null);
+
+  // Load visit tasks on mount
+  useEffect(() => {
+    getTeacherTasks()
+      .then(res => {
+        const list = (res.tasks || res || []).filter(t => ["field_visit", "pcb_session"].includes(t.category));
+        list.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+        setVisitTasks(list);
+      })
+      .catch(err => console.warn("[FellowGrowthCycleTab] Failed to load visit tasks:", err?.message));
+  }, []);
 
   // Load mentor-assigned tasks for selected month
   useEffect(() => {
@@ -852,6 +869,62 @@ export default function FellowGrowthCycleTab({ user, setToast }) {
               </div>
             </div>
           </div>
+        )}
+
+        {/* ── Home & Anganwadi Visits (Do Phase Fieldwork) ── */}
+        <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 16, padding: "20px 24px", marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+          <h3 style={{ fontSize: 16, fontWeight: 800, color: "#0f172a", margin: "0 0 4px" }}>
+            🏕️ Home & Anganwadi Visits
+          </h3>
+          <div style={{ fontSize: 12, color: "#64748b", marginBottom: 14 }}>
+            Field Visits and PCB (Anganwadi) Sessions — the “Do” phase fieldwork of your PDCA cycle.
+          </div>
+
+          {visitTasks.length === 0 ? (
+            <div style={{ padding: "18px", textAlign: "center", background: "#f8fafc", borderRadius: 10, border: "1px dashed #cbd5e1", fontSize: 12.5, color: "#64748b" }}>
+              No Home or Anganwadi Visits scheduled yet. Add one from the Dashboard calendar as a “Field Visit” or “PCB Session”.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {visitTasks.map(v => {
+                const meta = v.category === "field_visit"
+                  ? { icon: "🏕️", label: "Field Visit (Home Visit)", color: "#10b981", bg: "#d1fae5" }
+                  : { icon: "🧪", label: "PCB Session (Anganwadi Visit)", color: "#ec4899", bg: "#fce7f3" };
+                return (
+                  <div key={v._id || v.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", borderRadius: 10, border: "1px solid #e2e8f0" }}>
+                    <span style={{ fontSize: 20 }}>{meta.icon}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{v.title}</div>
+                      <div style={{ fontSize: 11, color: "#64748b" }}>{meta.label} · {v.date}</div>
+                    </div>
+                    {v.completed ? (
+                      <span style={{ fontSize: 11, fontWeight: 800, color: "#065f46", background: "#d1fae5", padding: "3px 10px", borderRadius: 999 }}>
+                        ✅ Reported
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setVisitReportTask({ id: v._id || v.id, title: v.title, category: v.category, date: v.date, time: v.time })}
+                        style={{ fontSize: 11.5, fontWeight: 700, padding: "6px 14px", borderRadius: 8, border: "none", background: meta.color, color: "white", cursor: "pointer" }}
+                      >
+                        📤 Submit Report
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {visitReportTask && (
+          <UniversalActivityReportModal
+            task={visitReportTask}
+            onClose={() => setVisitReportTask(null)}
+            onSubmitSuccess={(taskId) => {
+              setVisitTasks(prev => prev.map(t => (t._id || t.id) === taskId ? { ...t, completed: true } : t));
+            }}
+          />
         )}
 
         {/* ── Official PDCA Report from Mentor (Read-Only) ── */}
