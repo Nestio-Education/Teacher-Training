@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { Modal } from "./Shared";
-import { uploadFile, submitActivity } from "../services/api";
+import { uploadFile, submitTeacherTaskReport } from "../services/api";
 
 /* ═══════════════════════════════════════════════════════════════════
    UNIVERSAL ACTIVITY REPORT MODAL
@@ -83,19 +83,13 @@ export default function UniversalActivityReportModal({ task, onClose, onSubmitSu
       }
 
       const reportPayload = {
-        taskId: task.id,
-        title: task.title,
-        category: task.category,
-        date: task.date,
-        time: task.time,
         completionStatus,
         notes: notes.trim(),
         ...(isPDCA ? { pdcaPhase } : {}),
-        ...(uploadedFile ? { attachments: [uploadedFile] } : {}),
-        submittedAt: new Date().toISOString()
+        ...(uploadedFile ? { attachments: [uploadedFile] } : {})
       };
 
-      await submitActivity(reportPayload);
+      await submitTeacherTaskReport(task.id, reportPayload);
 
       if (setToast) {
         setToast({ msg: `✅ Report submitted for "${task.title}"`, type: "success" });
