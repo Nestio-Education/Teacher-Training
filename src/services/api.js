@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5001").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
 
 async function request(path, options = {}) {
   const token = localStorage.getItem("spaceece_auth_token");
@@ -1631,10 +1631,10 @@ export function submitWeeklyReport(cycleId, payload) {
 }
 
 // ── Mentor-assigned Custom Tasks (MentorTask) ──
-export function createMentorTask({ fellowId, month, title, description }) {
+export function createMentorTask({ fellowId, month, title, description, dueDate, dueTime }) {
   return request("/api/mentor-tasks", {
     method: "POST",
-    body: JSON.stringify({ fellowId, month, title, description }),
+    body: JSON.stringify({ fellowId, month, title, description, dueDate, dueTime }),
   });
 }
 
@@ -1662,5 +1662,15 @@ export function reviewMentorTask(taskId, status) {
   return request(`/api/mentor-tasks/${taskId}/review`, {
     method: "PUT",
     body: JSON.stringify({ status }),
+  });
+}
+// ── PDCA Notification API ──
+// Sends an in-app notification to a specific user (mentor or fellow).
+// payload: { recipientId, type, title, body }
+// type examples: "task_assigned" | "module_completed" | "pdca_approved" | "evidence_submitted"
+export function sendPDCANotification(payload) {
+  return request("/api/mentor-tasks/pdca", {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
