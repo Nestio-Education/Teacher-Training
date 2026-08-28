@@ -103,14 +103,42 @@ export function getLatestStageWithData(assessments) {
   return null;
 }
 
+
+
+export function normalizeAgeGroup(strVal) {
+  if (strVal === undefined || strVal === null || strVal === "") return null;
+  const s = String(strVal).trim().toLowerCase();
+
+  if (s.includes("1-2") || s.includes("1–2") || s.includes("toddler")) return "1–2 Years";
+  if (s.includes("2-3") || s.includes("2–3") || s.includes("playgroup")) return "2–3 Years";
+  if (s.includes("3-4") || s.includes("3–4") || s.includes("nursery")) return "3–4 Years";
+  if (s.includes("4-5") || s.includes("4–5") || s.includes("5-6") || s.includes("5–6") || s.includes("jr") || s.includes("sr") || s.includes("junior") || s.includes("senior")) return "4–5 Years";
+
+  const num = Number(s);
+  if (!isNaN(num)) {
+    if (num < 2.0) return "1–2 Years";
+    if (num < 3.0) return "2–3 Years";
+    if (num < 4.0) return "3–4 Years";
+    return "4–5 Years";
+  }
+
+  return null;
+}
+
 export function getAgeGroupFromChild(child) {
   if (!child) return "2–3 Years";
 
-  // 1. Direct explicit ageGroup matching
-  if (child.ageGroup && AGE_GROUPS[child.ageGroup]) return child.ageGroup;
-  if (child.class?.ageGroup && AGE_GROUPS[child.class.ageGroup]) return child.class.ageGroup;
+  // 1. Explicit ageGroup property (handles "3-4 Years", "3–4 Years", etc.)
+  if (child.ageGroup) {
+    const norm = normalizeAgeGroup(child.ageGroup);
+    if (norm) return norm;
+  }
+  if (child.class?.ageGroup) {
+    const norm = normalizeAgeGroup(child.class.ageGroup);
+    if (norm) return norm;
+  }
 
-  // 2. DOB calculation (checking dateOfBirth or dob)
+  // 2. DOB calculation
   const dobVal = child.dateOfBirth || child.dob;
   if (dobVal) {
     const dob = new Date(dobVal);
@@ -123,31 +151,17 @@ export function getAgeGroupFromChild(child) {
     }
   }
 
-  // 3. Numeric age property
-  if (typeof child.age === "number" || (child.age && !isNaN(Number(child.age)))) {
-    const age = Number(child.age);
-    if (age < 2.0) return "1–2 Years";
-    if (age < 3.0) return "2–3 Years";
-    if (age < 4.0) return "3–4 Years";
-    return "4–5 Years";
+  // 3. Numeric/string age property (e.g. 3, "3", "3-4")
+  if (child.age !== undefined && child.age !== null) {
+    const normAge = normalizeAgeGroup(child.age);
+    if (normAge) return normAge;
   }
 
-  // 4. Class Name / Label Fallback (e.g. "jr (4-5)", "4-5", "nursery", "1-2", "3-4")
-  const classNameStr = String(child.className || child.class?.name || child.class || "").toLowerCase();
-  if (classNameStr.includes("1-2") || classNameStr.includes("1–2") || classNameStr.includes("toddler")) {
-    return "1–2 Years";
-  }
-  if (classNameStr.includes("2-3") || classNameStr.includes("2–3") || classNameStr.includes("playgroup")) {
-    return "2–3 Years";
-  }
-  if (classNameStr.includes("3-4") || classNameStr.includes("3–4") || classNameStr.includes("nursery")) {
-    return "3–4 Years";
-  }
-  if (classNameStr.includes("4-5") || classNameStr.includes("4–5") || classNameStr.includes("jr") || classNameStr.includes("junior")) {
-    return "4–5 Years";
-  }
-  if (classNameStr.includes("5-6") || classNameStr.includes("5–6") || classNameStr.includes("sr") || classNameStr.includes("senior")) {
-    return "4–5 Years";
+  // 4. Class Name / Label Fallback (e.g. "Nursery (3-4)", "Nursery", "3-4")
+  const classNameStr = child.className || child.class?.name || child.class;
+  if (classNameStr) {
+    const normClass = normalizeAgeGroup(classNameStr);
+    if (normClass) return normClass;
   }
 
   return "2–3 Years";
