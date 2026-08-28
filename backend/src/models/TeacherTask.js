@@ -1,5 +1,15 @@
 import mongoose from "mongoose";
 
+const reportAttachmentSchema = new mongoose.Schema(
+  {
+    asset: { type: mongoose.Schema.Types.ObjectId, ref: "FileAsset" },
+    name: String,
+    url: String,
+    uploadedAt: Date
+  },
+  { _id: false }
+);
+
 const teacherTaskSchema = new mongoose.Schema(
   {
     teacher: {
@@ -23,7 +33,12 @@ const teacherTaskSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ["homework", "exam", "workshop", "class", "tech", "admin_assigned"],
+      enum: [
+        // Legacy categories (kept for backward compatibility with existing docs)
+        "homework", "exam", "workshop", "class", "tech", "admin_assigned",
+        // Calendar categories used by ACTIVITY_CATEGORIES (UniversalActivityReportModal.jsx)
+        "class_lesson", "field_visit", "pcb_session", "pdca_deliverable", "self_learning", "custom_task"
+      ],
       default: "homework"
     },
     date: {
@@ -45,6 +60,28 @@ const teacherTaskSchema = new mongoose.Schema(
     completed: {
       type: Boolean,
       default: false
+    },
+    // ── Report fields (Field Visit / PCB Session / other calendar-category reports) ──
+    completionStatus: {
+      type: String,
+      enum: ["completed", "partial", "skipped"],
+      default: undefined
+    },
+    reportNotes: {
+      type: String,
+      default: ""
+    },
+    reportAttachments: {
+      type: [reportAttachmentSchema],
+      default: []
+    },
+    pdcaPhase: {
+      type: String,
+      enum: ["plan", "do", "check", "act"],
+      default: undefined
+    },
+    reportSubmittedAt: {
+      type: Date
     }
   },
   { timestamps: true }
