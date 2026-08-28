@@ -128,7 +128,7 @@ export function normalizeAgeGroup(strVal) {
 export function getAgeGroupFromChild(child) {
   if (!child) return "2–3 Years";
 
-  // 1. Explicit ageGroup property (handles "3-4 Years", "3–4 Years", etc.)
+  // 1. Explicit ageGroup property
   if (child.ageGroup) {
     const norm = normalizeAgeGroup(child.ageGroup);
     if (norm) return norm;
@@ -138,7 +138,7 @@ export function getAgeGroupFromChild(child) {
     if (norm) return norm;
   }
 
-  // 2. DOB calculation
+  // 2. DOB calculation (1.0-1.9 -> 1-2, 2.0-2.9 -> 2-3, 3.0-3.9 -> 3-4, 4.0+ -> 4-5)
   const dobVal = child.dateOfBirth || child.dob;
   if (dobVal) {
     const dob = new Date(dobVal);
@@ -151,13 +151,13 @@ export function getAgeGroupFromChild(child) {
     }
   }
 
-  // 3. Numeric/string age property (e.g. 3, "3", "3-4")
+  // 3. Numeric/string age property (e.g. 1, 2, 3, 4, 5, "3-4", "4-5")
   if (child.age !== undefined && child.age !== null) {
     const normAge = normalizeAgeGroup(child.age);
     if (normAge) return normAge;
   }
 
-  // 4. Class Name / Label Fallback (e.g. "Nursery (3-4)", "Nursery", "3-4")
+  // 4. Class Name / Label Fallback (e.g. "jr (4-5)", "nursery (3-4)")
   const classNameStr = child.className || child.class?.name || child.class;
   if (classNameStr) {
     const normClass = normalizeAgeGroup(classNameStr);

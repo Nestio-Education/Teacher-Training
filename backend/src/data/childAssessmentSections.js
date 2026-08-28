@@ -2296,9 +2296,626 @@ export const SECTIONS_4_5_YEARS = [
   },
 ];
 
-
-
-
+export const SECTIONS_5_6_YEARS = [
+  {
+    "id": "physical",
+    "number": "1",
+    "title": "Domain 1: Physical Development",
+    "items": [
+      {
+        "id": "1.1",
+        "title": "Walks Up and Down Stairs Using Alternating Feet",
+        "milestone": "Walks up and down stairs using alternating feet (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to walk up and down stairs using alternating feet with confidence?",
+        "activities": [
+          "Guided Practice \u2013 Practice walks up and down stairs using alternating feet with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of walks up and down stairs using alternating feet.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of walks up and down stairs using alternating feet."
+        ]
+      },
+      {
+        "id": "1.2",
+        "title": "Walks on a Line or Balance Beam",
+        "milestone": "Walks on a line or balance beam (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to maintain balance while walking on a narrow surface?",
+        "activities": [
+          "Guided Practice \u2013 Practice walks on a line or balance beam with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of walks on a line or balance beam.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of walks on a line or balance beam."
+        ]
+      },
+      {
+        "id": "1.3",
+        "title": "Jumps Forward with Both Feet Leaving the Ground",
+        "milestone": "Jumps forward with both feet leaving the ground (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to jump forward using both feet together?",
+        "activities": [
+          "Guided Practice \u2013 Practice jumps forward with both feet leaving the ground with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of jumps forward with both feet leaving the ground.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of jumps forward with both feet leaving the ground."
+        ]
+      },
+      {
+        "id": "1.4",
+        "title": "Runs with More Coordination and Less Falling",
+        "milestone": "Runs with more coordination and less falling (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to run with coordination and control?",
+        "activities": [
+          "Guided Practice \u2013 Practice runs with more coordination and less falling with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of runs with more coordination and less falling.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of runs with more coordination and less falling."
+        ]
+      },
+      {
+        "id": "1.5",
+        "title": "Pedals a Tricycle",
+        "milestone": "Pedals a tricycle (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to pedal a tricycle with coordination?",
+        "activities": [
+          "Guided Practice \u2013 Practice pedals a tricycle with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of pedals a tricycle.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of pedals a tricycle."
+        ]
+      },
+      {
+        "id": "1.6",
+        "title": "Demonstrates Coordination in Ball Play",
+        "milestone": "Demonstrates coordination in ball play (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate coordination when playing with balls?",
+        "activities": [
+          "Guided Practice \u2013 Practice demonstrates coordination in ball play with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of demonstrates coordination in ball play.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of demonstrates coordination in ball play."
+        ]
+      },
+      {
+        "id": "1.7",
+        "title": "Demonstrates Rhythmic Movement to Music",
+        "milestone": "Demonstrates rhythmic movement to music (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to move rhythmically in response to music?",
+        "activities": [
+          "Guided Practice \u2013 Practice demonstrates rhythmic movement to music with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of demonstrates rhythmic movement to music.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of demonstrates rhythmic movement to music."
+        ]
+      },
+      {
+        "id": "1.8",
+        "title": "Follows Simple Safety Rules During Physical Activities",
+        "milestone": "Follows simple safety rules (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate understanding and compliance with basic safety rules during physical activities?",
+        "activities": [
+          "Guided Practice \u2013 Practice follows simple safety rules during physical activities with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of follows simple safety rules during physical activities.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of follows simple safety rules during physical activities."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "cognitive",
+    "number": "2",
+    "title": "Domain 2: Cognitive Development",
+    "items": [
+      {
+        "id": "2.1",
+        "title": "Counts Objects Up to 10",
+        "milestone": "Counts objects up to 10 (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to count objects up to 10 accurately?",
+        "activities": [
+          "Guided Practice \u2013 Practice counts objects up to 10 with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of counts objects up to 10.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of counts objects up to 10."
+        ]
+      },
+      {
+        "id": "2.2",
+        "title": "Recognizes and Names Numerals 1-5",
+        "milestone": "Recognizes and names numerals 1-5 (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to recognize and name numerals 1-5?",
+        "activities": [
+          "Guided Practice \u2013 Practice recognizes and names numerals 1-5 with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of recognizes and names numerals 1-5.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of recognizes and names numerals 1-5."
+        ]
+      },
+      {
+        "id": "2.3",
+        "title": "Understands the Concept of \"More\" and \"Less\"",
+        "milestone": "Understands the concept of \"more\" and \"less\" (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate understanding of \"more\" and \"less\" concepts?",
+        "activities": [
+          "Guided Practice \u2013 Practice understands the concept of \"more\" and \"less\" with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of understands the concept of \"more\" and \"less\".",
+          "Independent Application \u2013 Provide opportunities for independent mastery of understands the concept of \"more\" and \"less\"."
+        ]
+      },
+      {
+        "id": "2.4",
+        "title": "Sorts Objects by One Attribute (Color, Shape, Size)",
+        "milestone": "Sorts objects by one attribute (color, shape, size) (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to sort objects by a single attribute?",
+        "activities": [
+          "Guided Practice \u2013 Practice sorts objects by one attribute (color, shape, size) with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of sorts objects by one attribute (color, shape, size).",
+          "Independent Application \u2013 Provide opportunities for independent mastery of sorts objects by one attribute (color, shape, size)."
+        ]
+      },
+      {
+        "id": "2.5",
+        "title": "Recognizes and Creates Simple AB Patterns",
+        "milestone": "Recognizes and creates simple AB patterns (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to recognize and create simple AB patterns?",
+        "activities": [
+          "Guided Practice \u2013 Practice recognizes and creates simple ab patterns with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of recognizes and creates simple ab patterns.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of recognizes and creates simple ab patterns."
+        ]
+      },
+      {
+        "id": "2.6",
+        "title": "Identifies Basic Shapes (Circle, Square, Triangle)",
+        "milestone": "Identifies basic shapes (circle, square, triangle) (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to identify and name basic shapes?",
+        "activities": [
+          "Guided Practice \u2013 Practice identifies basic shapes (circle, square, triangle) with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of identifies basic shapes (circle, square, triangle).",
+          "Independent Application \u2013 Provide opportunities for independent mastery of identifies basic shapes (circle, square, triangle)."
+        ]
+      },
+      {
+        "id": "2.7",
+        "title": "Understands and Uses Positional Words (On, In, Under)",
+        "milestone": "Understands and uses positional words (on, in, under) (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate understanding and use of positional words?",
+        "activities": [
+          "Guided Practice \u2013 Practice understands and uses positional words (on, in, under) with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of understands and uses positional words (on, in, under).",
+          "Independent Application \u2013 Provide opportunities for independent mastery of understands and uses positional words (on, in, under)."
+        ]
+      },
+      {
+        "id": "2.8",
+        "title": "Sequences 2-3 Pictures to Tell a Simple Story",
+        "milestone": "Sequences 2-3 pictures to tell a simple story (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to sequence pictures and tell a simple story?",
+        "activities": [
+          "Guided Practice \u2013 Practice sequences 2-3 pictures to tell a simple story with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of sequences 2-3 pictures to tell a simple story.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of sequences 2-3 pictures to tell a simple story."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "social",
+    "number": "3",
+    "title": "Domain 3: Social-Emotional Development",
+    "items": [
+      {
+        "id": "3.1",
+        "title": "Understands and Follows Classroom Rules Independently",
+        "milestone": "Follows simple classroom rules and routines (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to understand and follow classroom rules without reminders?",
+        "activities": [
+          "Guided Practice \u2013 Practice understands and follows classroom rules independently with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of understands and follows classroom rules independently.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of understands and follows classroom rules independently."
+        ]
+      },
+      {
+        "id": "3.2",
+        "title": "Resolves Peer Conflicts with Words and Compromise",
+        "milestone": "Resolves conflicts with words (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to resolve conflicts using words and finding a compromise?",
+        "activities": [
+          "Guided Practice \u2013 Practice resolves peer conflicts with words and compromise with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of resolves peer conflicts with words and compromise.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of resolves peer conflicts with words and compromise."
+        ]
+      },
+      {
+        "id": "3.3",
+        "title": "Plans and Executes Group Play with Rules",
+        "milestone": "Plans and executes group play with rules (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to plan and participate in group play with agreed-upon rules?",
+        "activities": [
+          "Guided Practice \u2013 Practice plans and executes group play with rules with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of plans and executes group play with rules.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of plans and executes group play with rules."
+        ]
+      },
+      {
+        "id": "3.4",
+        "title": "Demonstrates Consistent Peer Empathy",
+        "milestone": "Shows concern for a peer who is upset (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child consistently demonstrate empathy and concern for peers?",
+        "activities": [
+          "Guided Practice \u2013 Practice demonstrates consistent peer empathy with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of demonstrates consistent peer empathy.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of demonstrates consistent peer empathy."
+        ]
+      },
+      {
+        "id": "3.5",
+        "title": "Demonstrates Consistent Self-Regulation in Varied Settings",
+        "milestone": "Demonstrates self-regulation in varied settings (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to regulate emotions and behavior across different situations?",
+        "activities": [
+          "Guided Practice \u2013 Practice demonstrates consistent self-regulation in varied settings with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of demonstrates consistent self-regulation in varied settings.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of demonstrates consistent self-regulation in varied settings."
+        ]
+      },
+      {
+        "id": "3.6",
+        "title": "Demonstrates Strong Community and Classroom Citizenship",
+        "milestone": "Demonstrates strong community and classroom citizenship (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate strong community and classroom citizenship through responsible behavior?",
+        "activities": [
+          "Guided Practice \u2013 Practice demonstrates strong community and classroom citizenship with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of demonstrates strong community and classroom citizenship.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of demonstrates strong community and classroom citizenship."
+        ]
+      },
+      {
+        "id": "3.7",
+        "title": "Shows Confidence in Attempting New Tasks",
+        "milestone": "Shows confidence in attempting new tasks (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate confidence when faced with new or challenging tasks?",
+        "activities": [
+          "Guided Practice \u2013 Practice shows confidence in attempting new tasks with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of shows confidence in attempting new tasks.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of shows confidence in attempting new tasks."
+        ]
+      },
+      {
+        "id": "3.8",
+        "title": "Makes Simple Choices Independently",
+        "milestone": "Makes simple choices independently (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to make choices independently?",
+        "activities": [
+          "Guided Practice \u2013 Practice makes simple choices independently with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of makes simple choices independently.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of makes simple choices independently."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "language",
+    "number": "4",
+    "title": "Domain 4: Language Development",
+    "items": [
+      {
+        "id": "4.1",
+        "title": "Speaks in 7-9 Word Sentences",
+        "milestone": "Uses complete sentences (Age-appropriate for 5-6 years)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to speak in complex sentences of 7-9 words?",
+        "activities": [
+          "Guided Practice \u2013 Practice speaks in 7-9 word sentences with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of speaks in 7-9 word sentences.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of speaks in 7-9 word sentences."
+        ]
+      },
+      {
+        "id": "4.2",
+        "title": "Describes Stories with Character Feelings and Motivations",
+        "milestone": "Describes stories with character feelings (Age-appropriate for 5-6 years)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to describe character feelings and motivations in stories?",
+        "activities": [
+          "Guided Practice \u2013 Practice describes stories with character feelings and motivations with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of describes stories with character feelings and motivations.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of describes stories with character feelings and motivations."
+        ]
+      },
+      {
+        "id": "4.3",
+        "title": "Writes Simple Words and CVC Words",
+        "milestone": "Writes simple CVC words (Age-appropriate for 5-6 years)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to write simple CVC words independently?",
+        "activities": [
+          "Guided Practice \u2013 Practice writes simple words and cvc words with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of writes simple words and cvc words.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of writes simple words and cvc words."
+        ]
+      },
+      {
+        "id": "4.4",
+        "title": "Writes Simple Sentences with Beginning Punctuation",
+        "milestone": "Writes simple sentences (Age-appropriate for 5-6 years)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to write simple sentences with capital letters and punctuation?",
+        "activities": [
+          "Guided Practice \u2013 Practice writes simple sentences with beginning punctuation with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of writes simple sentences with beginning punctuation.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of writes simple sentences with beginning punctuation."
+        ]
+      },
+      {
+        "id": "4.5",
+        "title": "Writes Short Paragraphs with Support",
+        "milestone": "Writes short paragraphs (Age-appropriate for 5-6 years)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to write short paragraphs with some support?",
+        "activities": [
+          "Guided Practice \u2013 Practice writes short paragraphs with support with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of writes short paragraphs with support.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of writes short paragraphs with support."
+        ]
+      },
+      {
+        "id": "4.6",
+        "title": "Writes Complete Stories with Detail and Structure",
+        "milestone": "Writes complete stories (Age-appropriate for 5-6 years)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to write complete stories with detail and structure?",
+        "activities": [
+          "Guided Practice \u2013 Practice writes complete stories with detail and structure with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of writes complete stories with detail and structure.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of writes complete stories with detail and structure."
+        ]
+      },
+      {
+        "id": "4.7",
+        "title": "Listens Attentively to Stories",
+        "milestone": "Listens attentively to stories (Age-appropriate for 5-6 years)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to listen attentively during story time?",
+        "activities": [
+          "Guided Practice \u2013 Practice listens attentively to stories with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of listens attentively to stories.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of listens attentively to stories."
+        ]
+      },
+      {
+        "id": "4.8",
+        "title": "Uses Descriptive Language",
+        "milestone": "Uses descriptive language (Age-appropriate for 5-6 years)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to use descriptive words in communication?",
+        "activities": [
+          "Guided Practice \u2013 Practice uses descriptive language with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of uses descriptive language.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of uses descriptive language."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "adaptive",
+    "number": "5",
+    "title": "Domain 5: Adaptive (Self-Help) Skills",
+    "items": [
+      {
+        "id": "5.1",
+        "title": "Independently Manages All Dressing Including Laces and Buckles",
+        "milestone": "Independently manages dressing (Age-appropriate for 5-6 years)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to dress independently including managing fasteners?",
+        "activities": [
+          "Guided Practice \u2013 Practice independently manages all dressing including laces and buckles with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of independently manages all dressing including laces and buckles.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of independently manages all dressing including laces and buckles."
+        ]
+      },
+      {
+        "id": "5.2",
+        "title": "Follows Multi-Step Hygiene Routine Independently",
+        "milestone": "Follows multi-step hygiene routine (Age-appropriate for 5-6 years)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to follow a multi-step hygiene routine independently?",
+        "activities": [
+          "Guided Practice \u2013 Practice follows multi-step hygiene routine independently with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of follows multi-step hygiene routine independently.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of follows multi-step hygiene routine independently."
+        ]
+      },
+      {
+        "id": "5.3",
+        "title": "Manages Full School-Day Routine Independently",
+        "milestone": "Manages full school-day routine (Age-appropriate for 5-6 years)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to manage a full school-day routine independently?",
+        "activities": [
+          "Guided Practice \u2013 Practice manages full school-day routine independently with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of manages full school-day routine independently.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of manages full school-day routine independently."
+        ]
+      },
+      {
+        "id": "5.4",
+        "title": "Handles All Personal Care Fully Independently",
+        "milestone": "Handles all personal care (Age-appropriate for 5-6 years)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to handle all personal care needs independently?",
+        "activities": [
+          "Guided Practice \u2013 Practice handles all personal care fully independently with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of handles all personal care fully independently.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of handles all personal care fully independently."
+        ]
+      },
+      {
+        "id": "5.5",
+        "title": "Plans Own Morning Routine with a Checklist",
+        "milestone": "Plans own morning routine (Age-appropriate for 5-6 years)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to plan and follow a morning routine using a checklist?",
+        "activities": [
+          "Guided Practice \u2013 Practice plans own morning routine with a checklist with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of plans own morning routine with a checklist.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of plans own morning routine with a checklist."
+        ]
+      },
+      {
+        "id": "5.6",
+        "title": "Manages All Daily Routines Fully Independently",
+        "milestone": "Manages all daily routines (Age-appropriate for 5-6 years)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to manage all daily routines independently?",
+        "activities": [
+          "Guided Practice \u2013 Practice manages all daily routines fully independently with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of manages all daily routines fully independently.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of manages all daily routines fully independently."
+        ]
+      },
+      {
+        "id": "5.7",
+        "title": "Demonstrates Awareness of Personal Safety",
+        "milestone": "Demonstrates awareness of personal safety (Age-appropriate for 5-6 years)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate awareness of personal safety rules and practices?",
+        "activities": [
+          "Guided Practice \u2013 Practice demonstrates awareness of personal safety with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of demonstrates awareness of personal safety.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of demonstrates awareness of personal safety."
+        ]
+      },
+      {
+        "id": "5.8",
+        "title": "Shows Understanding of Basic Table Manners",
+        "milestone": "Shows understanding of basic table manners (Age-appropriate for 5-6 years)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate emerging understanding of table manners?",
+        "activities": [
+          "Guided Practice \u2013 Practice shows understanding of basic table manners with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of shows understanding of basic table manners.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of shows understanding of basic table manners."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "sensory",
+    "number": "6",
+    "title": "Domain 6: Sensory & Emotional Regulation",
+    "items": [
+      {
+        "id": "6.1",
+        "title": "Demonstrates Self-Regulation in Group Activities",
+        "milestone": "Demonstrates self-regulation in group activities (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to self-regulate during group activities?",
+        "activities": [
+          "Guided Practice \u2013 Practice demonstrates self-regulation in group activities with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of demonstrates self-regulation in group activities.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of demonstrates self-regulation in group activities."
+        ]
+      },
+      {
+        "id": "6.2",
+        "title": "Demonstrates Improved Impulse Control",
+        "milestone": "Demonstrates improved impulse control (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to control impulses and wait for instructions?",
+        "activities": [
+          "Guided Practice \u2013 Practice demonstrates improved impulse control with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of demonstrates improved impulse control.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of demonstrates improved impulse control."
+        ]
+      },
+      {
+        "id": "6.3",
+        "title": "Uses Preferred Calming Strategy Independently",
+        "milestone": "Uses preferred calming strategy (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to use calming strategies independently when needed?",
+        "activities": [
+          "Guided Practice \u2013 Practice uses preferred calming strategy independently with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of uses preferred calming strategy independently.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of uses preferred calming strategy independently."
+        ]
+      },
+      {
+        "id": "6.4",
+        "title": "Practices Mindfulness with Teacher Guidance",
+        "milestone": "Practices mindfulness (Age-appropriate for 5-6 years)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to participate in mindfulness activities with guidance?",
+        "activities": [
+          "Guided Practice \u2013 Practice practices mindfulness with teacher guidance with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of practices mindfulness with teacher guidance.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of practices mindfulness with teacher guidance."
+        ]
+      },
+      {
+        "id": "6.5",
+        "title": "Demonstrates Proactive Coping Skills",
+        "milestone": "Demonstrates proactive coping skills (Age-appropriate for 5-6 years)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to use proactive coping skills before becoming upset?",
+        "activities": [
+          "Guided Practice \u2013 Practice demonstrates proactive coping skills with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of demonstrates proactive coping skills.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of demonstrates proactive coping skills."
+        ]
+      },
+      {
+        "id": "6.6",
+        "title": "Uses a Range of Self-Regulation Strategies Flexibly",
+        "milestone": "Uses a range of self-regulation strategies (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to use a range of self-regulation strategies flexibly?",
+        "activities": [
+          "Guided Practice \u2013 Practice uses a range of self-regulation strategies flexibly with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of uses a range of self-regulation strategies flexibly.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of uses a range of self-regulation strategies flexibly."
+        ]
+      },
+      {
+        "id": "6.7",
+        "title": "Identifies and Labels Basic Emotions",
+        "milestone": "Identifies and labels basic emotions (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to identify and label basic emotions in self and others?",
+        "activities": [
+          "Guided Practice \u2013 Practice identifies and labels basic emotions with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of identifies and labels basic emotions.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of identifies and labels basic emotions."
+        ]
+      },
+      {
+        "id": "6.8",
+        "title": "Expresses Feelings and Needs Using Words",
+        "milestone": "Expresses feelings and needs using words (Level 8, Age 3.5-4)",
+        "targetAge": "5\u20136 Years",
+        "text": "Does the child demonstrate the ability to express feelings and needs using words?",
+        "activities": [
+          "Guided Practice \u2013 Practice expresses feelings and needs using words with initial teacher demonstration.",
+          "Peer Practice \u2013 Pair with a peer to encourage shared practice of expresses feelings and needs using words.",
+          "Independent Application \u2013 Provide opportunities for independent mastery of expresses feelings and needs using words."
+        ]
+      }
+    ]
+  }
+];
 
 export const AGE_GROUPS = {
   "1–2 Years": SECTIONS_1_2_YEARS,
@@ -2373,7 +2990,7 @@ export function normalizeAgeGroup(strVal) {
 export function getAgeGroupFromChild(child) {
   if (!child) return "2–3 Years";
 
-  // 1. Explicit ageGroup property (handles "3-4 Years", "3–4 Years", etc.)
+  // 1. Explicit ageGroup property
   if (child.ageGroup) {
     const norm = normalizeAgeGroup(child.ageGroup);
     if (norm) return norm;
@@ -2383,7 +3000,7 @@ export function getAgeGroupFromChild(child) {
     if (norm) return norm;
   }
 
-  // 2. DOB calculation
+  // 2. DOB calculation (1.0-1.9 -> 1-2, 2.0-2.9 -> 2-3, 3.0-3.9 -> 3-4, 4.0+ -> 4-5)
   const dobVal = child.dateOfBirth || child.dob;
   if (dobVal) {
     const dob = new Date(dobVal);
@@ -2396,13 +3013,13 @@ export function getAgeGroupFromChild(child) {
     }
   }
 
-  // 3. Numeric/string age property (e.g. 3, "3", "3-4")
+  // 3. Numeric/string age property (e.g. 1, 2, 3, 4, 5, "3-4", "4-5")
   if (child.age !== undefined && child.age !== null) {
     const normAge = normalizeAgeGroup(child.age);
     if (normAge) return normAge;
   }
 
-  // 4. Class Name / Label Fallback (e.g. "Nursery (3-4)", "Nursery", "3-4")
+  // 4. Class Name / Label Fallback (e.g. "jr (4-5)", "nursery (3-4)")
   const classNameStr = child.className || child.class?.name || child.class;
   if (classNameStr) {
     const normClass = normalizeAgeGroup(classNameStr);
