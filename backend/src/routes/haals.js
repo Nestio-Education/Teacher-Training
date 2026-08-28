@@ -524,4 +524,49 @@ router.post("/reports/generate-stub", requireAuth, async (req, res, next) => {
   }
 });
 
+// ── 5. Admin Ingestion Audit Endpoint ──
+router.get("/admin/audit", requireAuth, async (req, res, next) => {
+  try {
+    if (req.user.role !== "admin" && req.user.role !== "super_admin") {
+      return res.status(403).json({ message: "Access Denied. Admin role required." });
+    }
+
+    const totalCount = await VisitObservation.countDocuments();
+    const matchedFacilitatorCount = await VisitObservation.countDocuments({ facilitatorId: { $ne: null } });
+    const nullFacilitatorCount = await VisitObservation.countDocuments({ facilitatorId: null });
+    
+    const matchedChildCount = await VisitObservation.countDocuments({ childId: { $ne: null } });
+    const nullChildCount = await VisitObservation.countDocuments({ childId: null });
+
+    const sanikaVisits = await VisitObservation.find({ facilitatorNameRaw: /Sanika Prabhawale/i }).lean();
+    
+    const unmatchedFacilitators = await VisitObservation.distinct("facilitatorNameRaw", { facilitatorId: null });
+    const unmatchedChildren = await VisitObservation.distinct("childName", { childId: null });
+
+    res.json({
+      success: true,
+      totalCount,
+      facilitators: {
+        matched: matchedFacilitatorCount,
+        unmatched: nullFacilitatorCount,
+        matchRate: totalCount > 0 ? Math.round((matchedFacilitatorCount / totalCount) * 100) : 0
+      },
+      children: {
+        matched: matchedChildCount,
+        unmatched: nullChildCount,
+        matchRate: totalCount > 0 ? Math.round((matchedChildCount / totalCount) * 100) : 0
+      },
+      sanika: {
+        count: sanikaVisits.length,
+        matchedCount: sanikaVisits.filter(v => v.facilitatorId !== null).length,
+        visits: sanikaVisits
+      },
+      unmatchedFacilitatorNames: unmatchedFacilitators,
+      unmatchedChildNames: unmatchedChildren
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;
