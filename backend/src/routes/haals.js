@@ -524,45 +524,51 @@ router.post("/reports/generate-stub", requireAuth, async (req, res, next) => {
   }
 });
 
-// ── 5. Admin Ingestion Audit Endpoint ──
-router.get("/admin/audit", requireAuth, async (req, res, next) => {
+// ── 5. Debug Stats for Ingestion Audit ──
+router.get("/debug-stats", async (req, res, next) => {
   try {
-    if (req.user.role !== "admin" && req.user.role !== "super_admin") {
-      return res.status(403).json({ message: "Access Denied. Admin role required." });
+    const expectedSecret = process.env.HAALS_SYNC_SECRET || "spaceece_haals_sync_secret_token_2026";
+    const clientSecret = req.query.secret || req.headers["x-sync-secret"];
+    if (!clientSecret || clientSecret !== expectedSecret) {
+      return res.status(401).json({ success: false, message: "Unauthorized debug check." });
     }
 
     const totalCount = await VisitObservation.countDocuments();
-    const matchedFacilitatorCount = await VisitObservation.countDocuments({ facilitatorId: { $ne: null } });
-    const nullFacilitatorCount = await VisitObservation.countDocuments({ facilitatorId: null });
-    
-    const matchedChildCount = await VisitObservation.countDocuments({ childId: { $ne: null } });
     const nullChildCount = await VisitObservation.countDocuments({ childId: null });
+    const nullFacilitatorCount = await VisitObservation.countDocuments({ facilitatorId: null });
 
-    const sanikaVisits = await VisitObservation.find({ facilitatorNameRaw: /Sanika Prabhawale/i }).lean();
-    
-    const unmatchedFacilitators = await VisitObservation.distinct("facilitatorNameRaw", { facilitatorId: null });
-    const unmatchedChildren = await VisitObservation.distinct("childName", { childId: null });
+    // Look for Sanika Prabhawale
+    const sanikaVisits = await VisitObservation.find({
+      facilitatorNameRaw: { $regex: new RegExp(`^Sanika Prabhawale$`, "i") }
+    }).select("visitDate childName childId facilitatorId").lean();
+
+    const sanikaUser = await User.findOne({
+      name: { $regex: new RegExp(`^Sanika Prabhawale$`, "i") }
+    }).select("name role email status").lean();
 
     res.json({
       success: true,
       totalCount,
-      facilitators: {
-        matched: matchedFacilitatorCount,
-        unmatched: nullFacilitatorCount,
-        matchRate: totalCount > 0 ? Math.round((matchedFacilitatorCount / totalCount) * 100) : 0
-      },
-      children: {
-        matched: matchedChildCount,
+      childMatch: {
+        matched: totalCount - nullChildCount,
         unmatched: nullChildCount,
-        matchRate: totalCount > 0 ? Math.round((matchedChildCount / totalCount) * 100) : 0
+        rate: totalCount > 0 ? `${Math.round(((totalCount - nullChildCount) / totalCount) * 100)}%` : "0%"
       },
-      sanika: {
-        count: sanikaVisits.length,
-        matchedCount: sanikaVisits.filter(v => v.facilitatorId !== null).length,
-        visits: sanikaVisits
+      facilitatorMatch: {
+        matched: totalCount - nullFacilitatorCount,
+        unmatched: nullFacilitatorCount,
+        rate: totalCount > 0 ? `${Math.round(((totalCount - nullFacilitatorCount) / totalCount) * 100)}%` : "0%"
       },
-      unmatchedFacilitatorNames: unmatchedFacilitators,
-      unmatchedChildNames: unmatchedChildren
+      sanikaDetails: {
+        rawVisitsCount: sanikaVisits.length,
+        userFound: sanikaUser ? {
+          id: sanikaUser._id,
+          name: sanikaUser.name,
+          role: sanikaUser.role,
+          status: sanikaUser.status
+        } : null,
+        visitsSample: sanikaVisits.slice(0, 5)
+      }
     });
   } catch (err) {
     next(err);
