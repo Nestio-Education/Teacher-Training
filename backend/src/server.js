@@ -7146,8 +7146,13 @@ ${roughNotes}`;
 app.use("/api/teacher-tasks", teacherTasksRouter);
 app.use("/api/haals", haalsRouter);
 
-await connectDb();
-await ensureDatabaseReady();
+try {
+  await connectDb();
+  await ensureDatabaseReady();
+} catch (dbError) {
+  console.warn("⚠️ Could not connect to MongoDB database:", dbError.message);
+  console.warn("⚠️ Express server will run, but database features require MongoDB service or MONGODB_URI in backend/.env.");
+}
 
 const server = http.createServer(app);
 

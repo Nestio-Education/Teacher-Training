@@ -102,3 +102,53 @@ export function getLatestStageWithData(assessments) {
 
   return null;
 }
+
+export function getAgeGroupFromChild(child) {
+  if (!child) return "2–3 Years";
+
+  // 1. Direct explicit ageGroup matching
+  if (child.ageGroup && AGE_GROUPS[child.ageGroup]) return child.ageGroup;
+  if (child.class?.ageGroup && AGE_GROUPS[child.class.ageGroup]) return child.class.ageGroup;
+
+  // 2. DOB calculation (checking dateOfBirth or dob)
+  const dobVal = child.dateOfBirth || child.dob;
+  if (dobVal) {
+    const dob = new Date(dobVal);
+    if (!isNaN(dob.getTime())) {
+      const ageInYears = (Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+      if (ageInYears < 2.0) return "1–2 Years";
+      if (ageInYears < 3.0) return "2–3 Years";
+      if (ageInYears < 4.0) return "3–4 Years";
+      return "4–5 Years";
+    }
+  }
+
+  // 3. Numeric age property
+  if (typeof child.age === "number" || (child.age && !isNaN(Number(child.age)))) {
+    const age = Number(child.age);
+    if (age < 2.0) return "1–2 Years";
+    if (age < 3.0) return "2–3 Years";
+    if (age < 4.0) return "3–4 Years";
+    return "4–5 Years";
+  }
+
+  // 4. Class Name / Label Fallback (e.g. "jr (4-5)", "4-5", "nursery", "1-2", "3-4")
+  const classNameStr = String(child.className || child.class?.name || child.class || "").toLowerCase();
+  if (classNameStr.includes("1-2") || classNameStr.includes("1–2") || classNameStr.includes("toddler")) {
+    return "1–2 Years";
+  }
+  if (classNameStr.includes("2-3") || classNameStr.includes("2–3") || classNameStr.includes("playgroup")) {
+    return "2–3 Years";
+  }
+  if (classNameStr.includes("3-4") || classNameStr.includes("3–4") || classNameStr.includes("nursery")) {
+    return "3–4 Years";
+  }
+  if (classNameStr.includes("4-5") || classNameStr.includes("4–5") || classNameStr.includes("jr") || classNameStr.includes("junior")) {
+    return "4–5 Years";
+  }
+  if (classNameStr.includes("5-6") || classNameStr.includes("5–6") || classNameStr.includes("sr") || classNameStr.includes("senior")) {
+    return "4–5 Years";
+  }
+
+  return "2–3 Years";
+}

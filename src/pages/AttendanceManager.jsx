@@ -92,10 +92,17 @@ export default function AttendanceManager({ user, onRosterChange }) {
       getChildAttendance({ date: selectedDate, classId: classId })
     ]).then(([childrenRes, attendanceRes]) => {
       const dbChildren = childrenRes.children || [];
+      const currentSelectedClass = classes.find(c => (c._id || c.id) === classId);
       const roster = dbChildren.map(c => ({
+        ...c,
         id: c._id || c.id,
         rollNo: c.rollNo || "N/A",
         name: c.fullName || c.name,
+        dob: c.dateOfBirth || c.dob,
+        age: c.age,
+        gender: c.gender,
+        className: c.class?.name || currentSelectedClass?.name,
+        ageGroup: c.class?.ageGroup || c.ageGroup || currentSelectedClass?.ageGroup,
       }));
       setStudents(roster);
 
