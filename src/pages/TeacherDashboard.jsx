@@ -15,6 +15,7 @@ import LessonPlannerTab from "./LessonPlannerTab";
 import TeacherUserGuide from "./teacheruserguide";
 import CurriculumTab from "./CurriculumTab";
 import FellowGrowthCycleTab from "./FellowGrowthCycleTab";
+import FellowHomeVisitsTab from "./FellowHomeVisitsTab";
 import {
   getTeacherProgress,
   getNotifications,
@@ -3306,6 +3307,11 @@ export default function TeacherDashboard({ user, onLogout }) {
       { key: "curriculum", label: t("Curriculum"), icon: "📖", color: "#14b8a6" }
     );
   }
+  if (["fellow", "teacher"].includes(currentUser?.role)) {
+    navItems.splice(navItems.length - 1, 0,
+      { key: "home_visits", label: "Home Visits (HAALS)", icon: "🏠", color: "#f43f5e" }
+    );
+  }
   // End: Fellow-only tabs
 
   const enrichedUser = { ...currentUser, workingCenter };
@@ -3314,7 +3320,7 @@ export default function TeacherDashboard({ user, onLogout }) {
   // Every other page shows an "Under Construction" placeholder instead.
   // "courses" and "assessment" are now notes/assessment based (no video) —
   // both are fully wired, so they're included here.
-  const WORKING_TABS = new Set(["growth_cycle", "overview", "children_att", "geotag", "profile", "training", "courses", "assessment", "certificates", "notifications", "feedback", "lesson_planner", "parent_capacity", "curriculum", "planner"]);
+  const WORKING_TABS = new Set(["growth_cycle", "overview", "children_att", "geotag", "profile", "training", "courses", "assessment", "certificates", "notifications", "feedback", "lesson_planner", "parent_capacity", "curriculum", "planner", "home_visits"]);
 
   const renderContent = () => {
     if (loading) {
@@ -3364,6 +3370,7 @@ export default function TeacherDashboard({ user, onLogout }) {
       case "certificates": return <CertificatesTab assignments={courses} certificates={certificates} />;
       case "notifications": return <NotificationsTab notifications={notifications} onMarkRead={handleMarkNotifRead} onMarkAllRead={handleMarkAllNotifRead} />;
       case "feedback": return <TeacherFeedbackTab user={enrichedUser} setToast={setToast} />;
+      case "home_visits": return <FellowHomeVisitsTab user={enrichedUser} setToast={setToast} />;
       case "profile": return <ProfileTab user={enrichedUser} onWorkingCenterChange={setWorkingCenter} onUserUpdate={setCurrentUser} />;
       default: return null;
     }

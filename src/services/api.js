@@ -1664,3 +1664,20 @@ export function reviewMentorTask(taskId, status) {
     body: JSON.stringify({ status }),
   });
 }
+
+// ── HAALS / Home Visit Observation APIs ──
+export function getFellowHaalsMetrics(fellowId) {
+  const path = fellowId ? `/api/haals/fellow/metrics?fellowId=${fellowId}` : "/api/haals/fellow/metrics";
+  return request(path);
+}
+
+export function getMentorHaalsMetrics() {
+  return request("/api/haals/mentor/metrics");
+}
+
+export function triggerHaalsAiReportStub(fellowId, month) {
+  return request("/api/haals/reports/generate-stub", {
+    method: "POST",
+    body: JSON.stringify({ fellowId, month })
+  });
+}

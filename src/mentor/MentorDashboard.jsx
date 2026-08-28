@@ -18,6 +18,7 @@ import { MentorProfileTab, MentorNotificationsTab, MentorFeedbackTab, MenteeMana
 import MentorCurriculumTab from "./MentorCurriculumTab";
 import MentorLessonPlanTab from "./MentorLessonPlanTab";
 import GrowthCycleHub from "./GrowthCycleHub";
+import MentorHomeVisitsTab from "./MentorHomeVisitsTab";
 import { PendingApprovalsReminder } from "./PendingApprovalsReminder";
 import TeacherManagementTab from "../admin/TeacherManagementTab";
 import GeotagAttendance from "../pages/GeotagAttendance";
@@ -536,6 +537,7 @@ export default function MentorDashboard({ user, onLogout }) {
     { key: "curriculum", label: "Curriculum Management", icon: "📚", color: "#14b8a6" },
     { key: "lesson_plans", label: "Lesson Plans", icon: "📋", color: "#f59e0b" },
     { key: "documentation", label: "Growth Cycle", icon: "📝", color: "#6366f1" },
+    { key: "home_visits", label: "Home Visits (HAALS)", icon: "🏠", color: "#f43f5e" },
     { key: "feedback", label: "Feedback", icon: "💬", color: "#ef4444" },
   ];
 
@@ -547,6 +549,7 @@ export default function MentorDashboard({ user, onLogout }) {
       case "curriculum": return <MentorCurriculumTab user={currentUser} setToast={setToast} />;
       case "lesson_plans": return <MentorLessonPlanTab user={currentUser} setToast={setToast} />;
       case "documentation": return <GrowthCycleHub user={currentUser} setToast={setToast} onUserUpdate={setCurrentUser} />;
+      case "home_visits": return <MentorHomeVisitsTab user={currentUser} setToast={setToast} />;
       case "notifications": return <MentorNotificationsTab notifications={notifications} onMarkRead={handleMarkNotifRead} onMarkAllRead={handleMarkAllNotifRead} />;
       case "feedback": return <MentorFeedbackTab user={currentUser} setToast={setToast} />;
       case "profile": return <MentorProfileTab user={currentUser} onWorkingCenterChange={setWorkingCenter} onUserUpdate={setCurrentUser} />;

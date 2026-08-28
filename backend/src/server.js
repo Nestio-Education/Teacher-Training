@@ -82,6 +82,7 @@ import { generateAICourse } from "./services/aiCourseGenerator.js";
 import { generateAILessonPlan } from "./services/aiLessonPlanner.js";
 import dailyTaskAutomationRoutes from "./routes/dailyTaskAutomationRoutes.js";
 import teacherTasksRouter from "./routes/teacherTasks.js";
+import haalsRouter from "./routes/haals.js";
 import { startDailyTaskAutomationCron } from "./cron/dailyTaskCron.js";
 import reminderAutomationRoutes from "./routes/reminderAutomationRoutes.js";
 import { startReminderAutomationCron } from "./cron/reminderCron.js";
@@ -7143,6 +7144,7 @@ ${roughNotes}`;
 });
 
 app.use("/api/teacher-tasks", teacherTasksRouter);
+app.use("/api/haals", haalsRouter);
 
 await connectDb();
 await ensureDatabaseReady();
