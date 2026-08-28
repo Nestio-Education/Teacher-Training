@@ -208,29 +208,6 @@ function SectionPieChart({ data }) {
   );
 }
 
-export function getAgeGroupFromChild(child) {
-  if (!child) return "2–3 Years";
-  if (child.ageGroup && AGE_GROUPS[child.ageGroup]) return child.ageGroup;
-  if (child.dob) {
-    const dob = new Date(child.dob);
-    if (!isNaN(dob.getTime())) {
-      const ageInYears = (Date.now() - dob.getTime()) / 3.15576e10;
-      if (ageInYears < 2) return "1–2 Years";
-      if (ageInYears < 3) return "2–3 Years";
-      if (ageInYears < 4) return "3–4 Years";
-      return "4–5 Years";
-    }
-  }
-  if (typeof child.age === "number" || (child.age && !isNaN(Number(child.age)))) {
-    const age = Number(child.age);
-    if (age < 2) return "1–2 Years";
-    if (age < 3) return "2–3 Years";
-    if (age < 4) return "3–4 Years";
-    return "4–5 Years";
-  }
-  return "2–3 Years";
-}
-
 function ChildAssessmentTab({ child, onAssessmentSaved }) {
   const [stage, setStage] = useState("Baseline");
   const [savedAssessments, setSavedAssessments] = useState({});
@@ -1364,3 +1341,65 @@ export default function ChildDashboardModal({ child, onClose }) {
   );
 }
 // Prajwal end
+
+export function normalizeAgeGroup(strVal) {
+  if (strVal === undefined || strVal === null || strVal === "") return null;
+  const s = String(strVal).trim().toLowerCase();
+
+  if (s.includes("1-2") || s.includes("1–2") || s.includes("toddler")) return "1–2 Years";
+  if (s.includes("2-3") || s.includes("2–3") || s.includes("playgroup")) return "2–3 Years";
+  if (s.includes("3-4") || s.includes("3–4") || s.includes("nursery")) return "3–4 Years";
+  if (s.includes("4-5") || s.includes("4–5") || s.includes("5-6") || s.includes("5–6") || s.includes("jr") || s.includes("sr") || s.includes("junior") || s.includes("senior")) return "4–5 Years";
+
+  const num = Number(s);
+  if (!isNaN(num)) {
+    if (num < 2.0) return "1–2 Years";
+    if (num < 3.0) return "2–3 Years";
+    if (num < 4.0) return "3–4 Years";
+    return "4–5 Years";
+  }
+
+  return null;
+}
+
+export function getAgeGroupFromChild(child) {
+  if (!child) return "2–3 Years";
+
+  // 1. Explicit ageGroup property
+  if (child.ageGroup) {
+    const norm = normalizeAgeGroup(child.ageGroup);
+    if (norm) return norm;
+  }
+  if (child.class?.ageGroup) {
+    const norm = normalizeAgeGroup(child.class.ageGroup);
+    if (norm) return norm;
+  }
+
+  // 2. DOB calculation (1.0-1.9 -> 1-2, 2.0-2.9 -> 2-3, 3.0-3.9 -> 3-4, 4.0+ -> 4-5)
+  const dobVal = child.dateOfBirth || child.dob;
+  if (dobVal) {
+    const dob = new Date(dobVal);
+    if (!isNaN(dob.getTime())) {
+      const ageInYears = (Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+      if (ageInYears < 2.0) return "1–2 Years";
+      if (ageInYears < 3.0) return "2–3 Years";
+      if (ageInYears < 4.0) return "3–4 Years";
+      return "4–5 Years";
+    }
+  }
+
+  // 3. Numeric/string age property (e.g. 1, 2, 3, 4, 5, "3-4", "4-5")
+  if (child.age !== undefined && child.age !== null) {
+    const normAge = normalizeAgeGroup(child.age);
+    if (normAge) return normAge;
+  }
+
+  // 4. Class Name / Label Fallback (e.g. "jr (4-5)", "nursery (3-4)")
+  const classNameStr = child.className || child.class?.name || child.class;
+  if (classNameStr) {
+    const normClass = normalizeAgeGroup(classNameStr);
+    if (normClass) return normClass;
+  }
+
+  return "2–3 Years";
+}
