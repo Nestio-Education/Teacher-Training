@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { SectionCard, S, Badge, StatusBadge } from "../components/Shared";
 // Start: Dnyaneshwari Thorat
-import { getChildAssessments, saveChildAssessment } from "../services/api";
+import { getChildAssessments, saveChildAssessment, getActiveQuestionBank } from "../services/api";
 // End: Dnyaneshwari Thorat
 
 import {
@@ -245,9 +245,30 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
   const [showValidation, setShowValidation] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Auto-assign age group strictly based on the child's DOB / Age property
   const ageGroup = getAgeGroupFromChild(child);
-  const activeSections = AGE_GROUPS[ageGroup] || SECTIONS_2_3_YEARS;
+
+  // ── NEW: sections now come from state, loaded from the DB ──
+  const [activeSections, setActiveSections] = useState([]);
+  const [sectionsLoading, setSectionsLoading] = useState(true);
+  const [sectionsSource, setSectionsSource] = useState(""); // "db" | "fallback"
+
+  useEffect(() => {
+    if (!child) return;
+    setSectionsLoading(true);
+    getActiveQuestionBank(ageGroup)
+      .then(res => {
+        setActiveSections(res.questionBank.sections);
+        setSectionsSource("db");
+      })
+      .catch(err => {
+        // No DB question bank yet for this age group — fall back to the static file so
+        // the tab still works for age groups that haven't been migrated yet.
+        console.warn(`No DB question bank for ${ageGroup}, using static fallback.`, err);
+        setActiveSections(AGE_GROUPS[ageGroup] || SECTIONS_2_3_YEARS);
+        setSectionsSource("fallback");
+      })
+      .finally(() => setSectionsLoading(false));
+  }, [child, ageGroup]);
 
   // Load any previously saved assessments for this child from the backend database
   useEffect(() => {
@@ -386,10 +407,10 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
     );
   };
 
-  if (loading) {
+  if (sectionsLoading || loading) {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "250px", fontSize: 14, color: "#d97706", fontWeight: 700 }}>
-        🔄 Loading assessment data...
+        🔄 Loading question bank...
       </div>
     );
   }
@@ -415,9 +436,14 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
             </div>
           </div>
         </div>
-        <span style={{ fontSize: 11, fontWeight: 700, background: stageTheme.color, color: "white", padding: "4px 12px", borderRadius: 20 }}>
-          {stageTheme.icon} {stage} Stage Evaluation
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {sectionsSource === "fallback" && (
+            <Badge children="Using built-in question set" color="#92400e" bg="#fef3c7" />
+          )}
+          <span style={{ fontSize: 11, fontWeight: 700, background: stageTheme.color, color: "white", padding: "4px 12px", borderRadius: 20 }}>
+            {stageTheme.icon} {stage} Stage Evaluation
+          </span>
+        </div>
       </div>
 
       {/* ── 3-Stage Milestone Progress Comparison Card ── */}

@@ -19,7 +19,6 @@ import { generateOtp, storeOtp, verifyOtp, deleteOtp, OTP_TTL_MINUTES } from "./
 import { sendNotification, broadcastNotification, CHANNELS, TEMPLATES, sendSms, sendWhatsApp } from "./services/notificationService.js";
 // End: Dnyaneshwari Thorat
 import { syncCourseTranslations, syncLessonPlanTranslations } from "./services/translationSync.js";
-
 function localizeCourse(courseDoc, lang) {
   const c = courseDoc.toObject ? courseDoc.toObject() : courseDoc;
   if (!lang || lang === 'en') return c;
@@ -93,6 +92,7 @@ import { ClassLog } from "./models/ClassLog.js";
 import { Child } from "./models/Child.js";
 // Start: Dnyaneshwari Thorat
 import { ChildAssessment } from "./models/ChildAssessment.js";
+import { QuestionBank } from "./models/QuestionBank.js";
 import ActivityCompletion from "./models/ActivityCompletion.js";
 import { buildRecommendations, getLatestStageWithData } from "./services/childAssessmentService.js";
 // End: Dnyaneshwari Thorat
@@ -147,6 +147,7 @@ const databaseModels = [
   // Start: Dnyaneshwari Thorat
   ChildAssessment,
   ActivityCompletion,
+  QuestionBank,
   // End: Dnyaneshwari Thorat
   Child,
   ClassLog,
@@ -633,7 +634,7 @@ const bypassRoutes = [
   "/api/auth/verify-otp",
   "/api/auth/reset-password",
   "/api/auth/reset-password/verify",
-  "/api/public/centers" 
+  "/api/public/centers"
 ];
 
 app.use(async (req, res, next) => {
@@ -5974,7 +5975,7 @@ app.post("/api/automation/attendance-reminders", requireAuth, requireRole("admin
 
     // Send reminders via preferred channel
     const channel = req.body.channel || "in_app";
-    
+
     // Send individually to capture per-user errors
     const sendResults = await Promise.allSettled(
       pendingTeachers.map(async (teacher) => {
@@ -6009,8 +6010,8 @@ app.post("/api/automation/attendance-reminders", requireAuth, requireRole("admin
         .flatMap(r => r.value.channelErrors)
     )];
 
-    console.log("[automation] attendance_reminders", JSON.stringify({ 
-      sent: sentTeachers.length, 
+    console.log("[automation] attendance_reminders", JSON.stringify({
+      sent: sentTeachers.length,
       pending: pendingTeachers.length,
       channelErrors: allChannelErrors,
     }));
@@ -6892,7 +6893,8 @@ app.use("/api/pdca", requireAuth, pdcaGenerateRouter);
 
 import mentorTasksRouter from "./routes/mentorTasks.js";
 app.use("/api/mentor-tasks", requireAuth, mentorTasksRouter);
-
+import questionBankRoutes from "./routes/questionBankRoutes.js";
+app.use("/api/teacher/question-banks", requireAuth, requireRole("teacher", "fellow"), questionBankRoutes);
 // ── Teacher/Fellow: View goals set by Mentor (My Goals panel) ──
 app.get("/api/teacher/goals", requireAuth, (req, res, next) => {
   if (!req.user || !(["teacher", "fellow"].includes(req.user.role))) {

@@ -35,7 +35,9 @@ async function request(path, options = {}) {
     if (response.status === 401 && (data.message === "Invalid authorization token" || data.message === "Token expired" || data.message === "Invalid token type")) {
       clearSession();
     }
-    throw new Error(data.message || `Request failed (${response.status})`);
+    const err = new Error(data.message || `Request failed (${response.status})`);
+    err.response = { status: response.status, data };
+    throw err;
   }
 
   return data;
@@ -1664,3 +1666,37 @@ export function reviewMentorTask(taskId, status) {
     body: JSON.stringify({ status }),
   });
 }
+
+// Start: Prajwal — add these to services/api.js, alongside your existing functions
+
+export function getActiveQuestionBank(ageGroup) {
+  return request(`/api/teacher/question-banks/active?ageGroup=${encodeURIComponent(ageGroup)}`);
+}
+
+export function getQuestionBankVersions(ageGroup) {
+  return request(`/api/teacher/question-banks/versions?ageGroup=${encodeURIComponent(ageGroup)}`);
+}
+
+export function uploadQuestionBank(ageGroup, file) {
+  const formData = new FormData();
+  formData.append("ageGroup", ageGroup);
+  formData.append("file", file);
+  return request("/api/teacher/question-banks/upload", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export function activateQuestionBankVersion(versionId) {
+  return request(`/api/teacher/question-banks/${versionId}/activate`, {
+    method: "POST",
+  });
+}
+
+export function updateQuestionBankSections(ageGroup, sections) {
+  return request("/api/teacher/question-banks/update-sections", {
+    method: "POST",
+    body: JSON.stringify({ ageGroup, sections }),
+  });
+}
+// End: Prajwal
