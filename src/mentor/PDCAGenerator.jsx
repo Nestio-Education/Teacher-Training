@@ -43,7 +43,7 @@ export default function PDCAGenerator({ mentees = [], setToast, onApproved }) {
   const [activeTab, setActiveTab] = useState("pdca"); // "pdca" | "addTask"
   const [customTasks, setCustomTasks] = useState([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
-  const [taskForm, setTaskForm] = useState({ title: "", description: "", assignedTo: "" });
+  const [taskForm, setTaskForm] = useState({ title: "", description: "", assignedTo: "", date: new Date().toISOString().slice(0, 10) });
   const [taskSaving, setTaskSaving] = useState(false);
   // Static lookup — no API call, no database, no publish step. See
   // src/mentor/monthCurricula.js.
@@ -288,6 +288,21 @@ export default function PDCAGenerator({ mentees = [], setToast, onApproved }) {
               </select>
             </div>
 
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: "#475569", display: "block", marginBottom: 4 }}>
+                Date
+              </label>
+              <input
+                type="date"
+                value={taskForm.date}
+                onChange={(e) => setTaskForm((f) => ({ ...f, date: e.target.value }))}
+                style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1.5px solid #c7d2fe", fontSize: 13, boxSizing: "border-box" }}
+              />
+              <div style={{ fontSize: 10.5, color: "#94a3b8", marginTop: 3 }}>
+                This is the day the task will appear on the fellow's Dashboard calendar.
+              </div>
+            </div>
+
             <button
               type="button"
               disabled={!taskForm.title.trim() || !taskForm.assignedTo || taskSaving}
@@ -300,6 +315,7 @@ export default function PDCAGenerator({ mentees = [], setToast, onApproved }) {
                     month: selectedMonth,
                     title: taskForm.title.trim(),
                     description: taskForm.description.trim(),
+                    date: taskForm.date || new Date().toISOString().slice(0, 10),
                   });
                   if (res.success) {
                     // Attach fellow name locally so it shows immediately without re-fetch
@@ -309,7 +325,7 @@ export default function PDCAGenerator({ mentees = [], setToast, onApproved }) {
                       fellowId: { _id: taskForm.assignedTo, name: assignedName },
                     };
                     setCustomTasks((prev) => [taskWithName, ...prev]);
-                    setTaskForm({ title: "", description: "", assignedTo: "" });
+                    setTaskForm({ title: "", description: "", assignedTo: "", date: new Date().toISOString().slice(0, 10) });
                     setToast?.({ msg: `Task "${res.task.title}" assigned to ${assignedName} ✅`, type: "success" });
                   }
                 } catch (err) {

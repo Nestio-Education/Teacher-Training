@@ -9,7 +9,7 @@ const router = express.Router();
 // ── POST /api/mentor-tasks — Mentor creates a task for a fellow ──
 router.post("/", requireRole("mentor"), async (req, res, next) => {
   try {
-    const { fellowId, month, title, description } = req.body;
+    const { fellowId, month, title, description, date } = req.body;
     if (!fellowId || !title?.trim() || !month) {
       return res.status(400).json({ success: false, message: "fellowId, month, and title are required." });
     }
@@ -25,6 +25,7 @@ router.post("/", requireRole("mentor"), async (req, res, next) => {
       mentorId: req.user.id,
       fellowId,
       month: Number(month),
+      date: date || new Date().toISOString().slice(0, 10),
       title: title.trim(),
       description: description?.trim() || "",
     });

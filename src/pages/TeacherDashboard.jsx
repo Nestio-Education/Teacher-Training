@@ -15,6 +15,7 @@ import LessonPlannerTab from "./LessonPlannerTab";
 import TeacherUserGuide from "./teacheruserguide";
 import CurriculumTab from "./CurriculumTab";
 import FellowGrowthCycleTab from "./FellowGrowthCycleTab";
+import FellowHomeVisitsTab from "./FellowHomeVisitsTab";
 import {
   getTeacherProgress,
   getNotifications,
@@ -38,7 +39,9 @@ import {
   updateTeacherTask,
   toggleTeacherTask,
   deleteTeacherTask,
-  getTeacherAttendance
+  getTeacherAttendance,
+  getFellowAssignedTasks,
+  submitTaskEvidence
 } from "../services/api";
 // Start: Dnyaneshwari Thorat
 import { downloadCertificatePdf, viewCertificatePdf } from "../services/api";
@@ -48,7 +51,7 @@ import { onSocketEvent } from "../services/socket";
 // End: Dnyaneshwari Thorat
 
 /* Resolve a profile photo path to a full URL */
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 // Start: PTP Form Link feature — fallback links used when a module hasn't set its own yet
 const DEFAULT_FORM_LINKS = {
@@ -258,6 +261,82 @@ const getTodayLocalDate = () => {
   return `${year}-${month}-${dateNum}`;
 };
 
+const isPastDeadlineIST = (dateStr) => {
+  if (!dateStr) return false;
+  const [y, m, d] = dateStr.split("-").map(Number);
+  if (!y || !m || !d) return false;
+  const cutoffUTCms = Date.UTC(y, m - 1, d, 23, 59, 59, 999) - (5 * 60 + 30) * 60 * 1000;
+  return Date.now() > cutoffUTCms;
+};
+
+function MentorTaskEvidenceModal({ task, onClose, onSubmitSuccess }) {
+  const [text, setText] = useState("");
+  const [formLink, setFormLink] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async () => {
+    if (!text.trim() && !formLink.trim()) {
+      setError("Add a note or a link describing what you did.");
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      await submitTaskEvidence(task.id, { text: text.trim(), formLink: formLink.trim() });
+      onSubmitSuccess?.(task.id);
+      onClose();
+    } catch (err) {
+      setError(err.message || "Failed to submit evidence.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}>
+      <div style={{ background: "white", borderRadius: 16, padding: 24, width: 480, maxWidth: "92vw" }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a", marginBottom: 4 }}>👨🏫 {task.title}</div>
+        {task.description && (
+          <div style={{ fontSize: 12.5, color: "#64748b", marginBottom: 14, lineHeight: 1.5 }}>{task.description}</div>
+        )}
+        {error && (
+          <div style={{ padding: "8px 12px", background: "#fef2f2", color: "#991b1b", borderRadius: 8, fontSize: 12, marginBottom: 12 }}>
+            {error}
+          </div>
+        )}
+        <label style={{ fontSize: 12, fontWeight: 700, color: "#334155", display: "block", marginBottom: 6 }}>
+          Notes
+        </label>
+        <textarea
+          value={text}
+          onChange={e => setText(e.target.value)}
+          placeholder="Describe what you did for this task…"
+          style={{ width: "100%", height: 90, padding: 10, borderRadius: 10, border: "1.5px solid #cbd5e1", fontSize: 13, fontFamily: "inherit", boxSizing: "border-box", marginBottom: 12 }}
+        />
+        <label style={{ fontSize: 12, fontWeight: 700, color: "#334155", display: "block", marginBottom: 6 }}>
+          Link (optional)
+        </label>
+        <input
+          type="text"
+          value={formLink}
+          onChange={e => setFormLink(e.target.value)}
+          placeholder="Link to a form, photo, or document"
+          style={{ width: "100%", padding: 10, borderRadius: 10, border: "1.5px solid #cbd5e1", fontSize: 13, boxSizing: "border-box", marginBottom: 16 }}
+        />
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+          <button type="button" onClick={onClose} style={{ padding: "8px 18px", background: "#f1f5f9", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", color: "#475569" }}>
+            Cancel
+          </button>
+          <button type="button" onClick={handleSubmit} disabled={submitting} style={{ padding: "8px 22px", background: submitting ? "#94a3b8" : "#4f46e5", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, color: "white", cursor: submitting ? "not-allowed" : "pointer" }}>
+            {submitting ? "Submitting…" : "📤 Submit Evidence"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── WeeklyScheduleTaskPlannerWidget ── */
 function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [], courses = [], setActiveTab }) {
   const [selectedWeekOffset, setSelectedWeekOffset] = useState(0);
@@ -265,6 +344,8 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportTask, setReportTask] = useState(null);
+
+  const HIDDEN_CALENDAR_CATEGORIES = ["pcb_session", "pdca_deliverable"];
 
   const storageKey = `teacher_custom_tasks_${user?._id || user?.id || 'default'}`;
   const [customTasks, setCustomTasks] = useState(() => {
@@ -275,6 +356,19 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
       return [];
     }
   });
+
+  const [mentorTasks, setMentorTasks] = useState([]);
+  const [evidenceTask, setEvidenceTask] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    getFellowAssignedTasks()
+      .then(res => {
+        if (isMounted && res?.success) setMentorTasks(res.tasks || []);
+      })
+      .catch(err => console.warn("[WeeklyPlanner] Failed to load mentor-assigned tasks:", err?.message));
+    return () => { isMounted = false; };
+  }, [user]);
 
   // Fetch tasks from backend DB on mount if logged in
   useEffect(() => {
@@ -442,6 +536,7 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
     pdca_deliverable: { fill: ACTIVITY_CATEGORIES.pdca_deliverable.bg, text: ACTIVITY_CATEGORIES.pdca_deliverable.color, icon: "📈" },
     self_learning:    { fill: ACTIVITY_CATEGORIES.self_learning.bg,    text: ACTIVITY_CATEGORIES.self_learning.color,    icon: "🧠" },
     custom_task:      { fill: ACTIVITY_CATEGORIES.custom_task.bg,      text: ACTIVITY_CATEGORIES.custom_task.color,      icon: "📝" },
+    mentor_task:      { fill: "#e0e7ff", text: "#3730a3", icon: "👨🏫" },
   };
 
   const categoryMeta = {
@@ -451,6 +546,7 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
     pdca_deliverable: { bg: ACTIVITY_CATEGORIES.pdca_deliverable.bg, border: ACTIVITY_CATEGORIES.pdca_deliverable.border, color: ACTIVITY_CATEGORIES.pdca_deliverable.color, label: ACTIVITY_CATEGORIES.pdca_deliverable.label },
     self_learning:    { bg: ACTIVITY_CATEGORIES.self_learning.bg,    border: ACTIVITY_CATEGORIES.self_learning.border,    color: ACTIVITY_CATEGORIES.self_learning.color,    label: ACTIVITY_CATEGORIES.self_learning.label },
     custom_task:      { bg: ACTIVITY_CATEGORIES.custom_task.bg,      border: ACTIVITY_CATEGORIES.custom_task.border,      color: ACTIVITY_CATEGORIES.custom_task.color,      label: ACTIVITY_CATEGORIES.custom_task.label },
+    mentor_task:      { bg: "#e0e7ff", border: "#6366f1", color: "#3730a3", label: "Mentor Task" },
     // Legacy fallbacks so old tasks don't break
     homework: { bg: "#fee2e2", border: "#ef4444", color: "#991b1b", label: "Homework" },
     exam:     { bg: "#ffedd5", border: "#f97316", color: "#9a3412", label: "Exam" },
@@ -514,11 +610,24 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
       completed: l.status === "completed",
       isCustom: false
     })),
+    ...mentorTasks.map(t => ({
+      id: t._id || t.id,
+      title: t.title,
+      date: t.date ? formatLocalDateStr(t.date) : formatLocalDateStr(t.createdAt),
+      time: "",
+      category: "mentor_task",
+      completed: t.status === "submitted" || t.status === "approved",
+      isCustom: false,
+      isMentorTask: true,
+      mentorTaskStatus: t.status,
+      description: t.description
+    })),
     ...featuredAssignmentList
   ];
 
   const todayStr = getTodayLocalDate();
   const displayTasks = combinedTasks.filter(item => {
+    if (HIDDEN_CALENDAR_CATEGORIES.includes(item.category)) return false;
     const itemDate = item.date ? formatLocalDateStr(item.date) : "";
     if (activeTabFilter === "today") return itemDate === todayStr;
     if (activeTabFilter === "upcoming") return (itemDate ? itemDate >= todayStr : true) && !item.completed;
@@ -586,7 +695,7 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
       category: item.category || "class",
       topOffset: getTopOffsetForTime(item.time)
     };
-  }).filter(ev => ev.dayIdx >= 0);
+  }).filter(ev => ev.dayIdx >= 0 && !HIDDEN_CALENDAR_CATEGORIES.includes(ev.category));
 
   const scheduleGridEvents = dynamicScheduleEvents;
 
@@ -858,6 +967,10 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  if (originalTask.isMentorTask) {
+                                    if (!originalTask.completed) setEvidenceTask(originalTask);
+                                    return;
+                                  }
                                   if (originalTask.completed) {
                                     if (originalTask.isCustom) toggleTaskStatus(originalTask.id);
                                   } else {
@@ -865,14 +978,23 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
                                     setShowReportModal(true);
                                   }
                                 }}
+                                disabled={!originalTask.completed && !originalTask.isMentorTask && isPastDeadlineIST(originalTask.date)}
                                 style={{
                                   padding: "2px 7px", borderRadius: 999, border: "none",
-                                  background: originalTask.completed ? "white" : "rgba(15,23,42,0.85)",
+                                  background: originalTask.completed ? "white" : (!originalTask.completed && !originalTask.isMentorTask && isPastDeadlineIST(originalTask.date)) ? "rgba(100,116,139,0.3)" : "rgba(15,23,42,0.85)",
                                   color: originalTask.completed ? "#059669" : "white",
-                                  fontSize: 8, fontWeight: 800, cursor: "pointer"
+                                  fontSize: 8, fontWeight: 800,
+                                  cursor: (!originalTask.completed && !originalTask.isMentorTask && isPastDeadlineIST(originalTask.date)) ? "not-allowed" : "pointer",
+                                  opacity: (!originalTask.completed && !originalTask.isMentorTask && isPastDeadlineIST(originalTask.date)) ? 0.6 : 1
                                 }}
                               >
-                                {originalTask.completed ? "✓" : "📋 Report"}
+                                {originalTask.completed 
+                                  ? "✓" 
+                                  : originalTask.isMentorTask 
+                                    ? "📤 Submit Evidence" 
+                                    : isPastDeadlineIST(originalTask.date) 
+                                      ? "⏰ Deadline passed" 
+                                      : "📋 Report"}
                               </button>
                               {originalTask.isCustom && (
                                 <>
@@ -903,8 +1025,10 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
 
       {/* ── Category Legend ── */}
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 14, padding: "8px 0" }}>
-        {Object.entries(ACTIVITY_CATEGORIES).map(([key]) => {
-          const block = categoryBlock[key] || categoryBlock.class_lesson;
+        {Object.entries(ACTIVITY_CATEGORIES)
+          .filter(([key]) => !HIDDEN_CALENDAR_CATEGORIES.includes(key))
+          .map(([key]) => {
+            const block = categoryBlock[key] || categoryBlock.class_lesson;
           return (
             <div key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 700, color: "#64748b" }}>
               <div style={{ width: 11, height: 11, borderRadius: "50%", background: block.fill, border: `1.5px solid ${block.text}33` }} />
@@ -1070,6 +1194,16 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
             />
           );
         })()
+      )}
+
+      {evidenceTask && (
+        <MentorTaskEvidenceModal
+          task={evidenceTask}
+          onClose={() => setEvidenceTask(null)}
+          onSubmitSuccess={(taskId) => {
+            setMentorTasks(prev => prev.map(t => (t._id || t.id) === taskId ? { ...t, status: "submitted" } : t));
+          }}
+        />
       )}
       </div>
     </div>
@@ -1927,7 +2061,7 @@ function ProfileTab({ user, onWorkingCenterChange, onUserUpdate }) {
         let photoUrl = uploadRes.asset.publicUrl;
 
         if (photoUrl.startsWith("/uploads/")) {
-          const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
+          const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
           photoUrl = `${API_BASE_URL}${photoUrl}`;
         }
 
@@ -3031,6 +3165,7 @@ function ParentCapacityBuildingTab({ user, setToast }) {
 ═══════════════════════════════════════════ */
 export default function TeacherDashboard({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState("overview");
+  const [overviewSubTab, setOverviewSubTab] = useState("dashboard"); // "dashboard" | "pdca"
   const [menuOpen, setMenuOpen] = useState(false);
   const [toast, setToast] = useState({ msg: "", type: "" });
   const [currentUser, setCurrentUser] = useState(user);
@@ -3293,7 +3428,6 @@ export default function TeacherDashboard({ user, onLogout }) {
     { key: "training", label: "Training & Lessons", icon: "🎓", color: "#8b5cf6" },
     { key: "planner", label: "AI Lesson Planner", icon: "✏️", color: "#f59e0b" },
     { key: "courses", label: "My Courses", icon: "📚", color: "#06b6d4" },
-    { key: "growth_cycle", label: "Growth Cycle (PDCA)", icon: "📈", color: "#7c3aed" },
     { key: "parent_capacity", label: "Parent Capacity Building", icon: "👪", color: "#f97316" },
     { key: "assessment", label: "Assessments", icon: "📝", color: "#ef4444" },
     { key: "certificates", label: "Certificates", icon: "🏆", color: "#eab308" },
@@ -3306,6 +3440,11 @@ export default function TeacherDashboard({ user, onLogout }) {
       { key: "curriculum", label: t("Curriculum"), icon: "📖", color: "#14b8a6" }
     );
   }
+  if (["fellow", "teacher"].includes(currentUser?.role)) {
+    navItems.splice(navItems.length - 1, 0,
+      { key: "home_visits", label: "Home Visits (HAALS)", icon: "🏠", color: "#f43f5e" }
+    );
+  }
   // End: Fellow-only tabs
 
   const enrichedUser = { ...currentUser, workingCenter };
@@ -3314,7 +3453,7 @@ export default function TeacherDashboard({ user, onLogout }) {
   // Every other page shows an "Under Construction" placeholder instead.
   // "courses" and "assessment" are now notes/assessment based (no video) —
   // both are fully wired, so they're included here.
-  const WORKING_TABS = new Set(["growth_cycle", "overview", "children_att", "geotag", "profile", "training", "courses", "assessment", "certificates", "notifications", "feedback", "lesson_planner", "parent_capacity", "curriculum", "planner"]);
+  const WORKING_TABS = new Set(["growth_cycle", "overview", "children_att", "geotag", "profile", "training", "courses", "assessment", "certificates", "notifications", "feedback", "lesson_planner", "parent_capacity", "curriculum", "planner", "home_visits"]);
 
   const renderContent = () => {
     if (loading) {
@@ -3338,12 +3477,43 @@ export default function TeacherDashboard({ user, onLogout }) {
     }
 
     switch (activeTab) {
-      case "overview": return <OverviewTab user={enrichedUser} setActiveTab={handleTabSwitch} courses={courses} assignments={courses} lessons={lessons} activities={activities} summary={summary} />;
+      case "overview":
+        return (
+          <div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 18, borderBottom: "1px solid #e2e8f0", paddingBottom: 2 }}>
+              {[
+                { key: "dashboard", label: "📊 Dashboard" },
+                { key: "pdca", label: "📈 PDCA Cycle" }
+              ].map(sub => (
+                <button
+                  key={sub.key}
+                  onClick={() => setOverviewSubTab(sub.key)}
+                  style={{
+                    padding: "9px 18px",
+                    border: "none",
+                    borderBottom: overviewSubTab === sub.key ? "2.5px solid #7c3aed" : "2.5px solid transparent",
+                    background: "transparent",
+                    color: overviewSubTab === sub.key ? "#7c3aed" : "#64748b",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: "pointer"
+                  }}
+                >
+                  {sub.label}
+                </button>
+              ))}
+            </div>
+            {overviewSubTab === "dashboard" ? (
+              <OverviewTab user={enrichedUser} setActiveTab={handleTabSwitch} courses={courses} assignments={courses} lessons={lessons} activities={activities} summary={summary} />
+            ) : (
+              <FellowGrowthCycleTab user={enrichedUser} setToast={setToast} />
+            )}
+          </div>
+        );
       case "children_att": return <AttendanceManager user={enrichedUser} onRosterChange={refreshCoreData} />;
       case "geotag": return <GeotagAttendance user={enrichedUser} />;
       case "training": return <TrainingAndClassroomManager user={enrichedUser} />;
       case "planner": return <LessonPlannerTab setToast={setToast} user={enrichedUser} />;
-      case "growth_cycle": return <FellowGrowthCycleTab user={enrichedUser} setToast={setToast} />;
       case "courses":
         return (
           <TeacherCourseNotes
@@ -3364,6 +3534,7 @@ export default function TeacherDashboard({ user, onLogout }) {
       case "certificates": return <CertificatesTab assignments={courses} certificates={certificates} />;
       case "notifications": return <NotificationsTab notifications={notifications} onMarkRead={handleMarkNotifRead} onMarkAllRead={handleMarkAllNotifRead} />;
       case "feedback": return <TeacherFeedbackTab user={enrichedUser} setToast={setToast} />;
+      case "home_visits": return <FellowHomeVisitsTab user={enrichedUser} setToast={setToast} />;
       case "profile": return <ProfileTab user={enrichedUser} onWorkingCenterChange={setWorkingCenter} onUserUpdate={setCurrentUser} />;
       default: return null;
     }
