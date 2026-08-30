@@ -278,8 +278,17 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
     setShowValidation(false);
   }, [stage, savedAssessments]);
 
-  const totalItems = activeSections.reduce((sum, s) => sum + s.items.length, 0);
-  const answeredCount = Object.keys(answers).length;
+  const allItems = activeSections.flatMap((s) => s.items || []);
+  const totalItems = allItems.length;
+  const answeredCount = allItems.filter(item => {
+    const v = answers[item.id] || answers[item.id?.replace(/\./g, '_')] || answers[item.id?.replace(/_/g, '.')];
+    return v !== undefined && v !== "" && v !== null;
+  }).length;
+  const unansweredIds = allItems.filter(item => {
+    const v = answers[item.id] || answers[item.id?.replace(/\./g, '_')] || answers[item.id?.replace(/_/g, '.')];
+    return !v;
+  }).map(item => item.id);
+
   const totalScore = Object.values(answers).reduce((sum, r) => {
     const s = scoreOf(r);
     return sum + (s === null ? 0 : s);
@@ -287,9 +296,6 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
 
   const toggleActivities = (id) => setOpenActivities((p) => ({ ...p, [id]: !p[id] }));
   const setAnswer = (id, value) => setAnswers((p) => ({ ...p, [id]: value }));
-
-  const allItemIds = activeSections.flatMap((s) => s.items.map((it) => it.id));
-  const unansweredIds = allItemIds.filter((id) => !answers[id]);
 
   const handleSaveAssessment = () => {
     // Smart defaults for seamless saving
@@ -601,7 +607,7 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
 
             {section.items.map((item, idx) => {
               const scale = item.ratingScale || RATING_SCALE_3;
-              const currentValue = answers[item.id];
+              const currentValue = answers[item.id] || (item.id && answers[item.id.replace(/\./g, '_')]) || (item.id && answers[item.id.replace(/_/g, '.')]);
               const hasActivities = item.activities?.length > 0;
               const isOpen = !!openActivities[item.id];
               const isUnanswered = showValidation && !currentValue;
@@ -660,9 +666,11 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
                   </div>
 
                   {/* Question Observation Text */}
-                  <p style={{ margin: "8px 0 6px 0", fontSize: 13, color: "#334155", fontWeight: 500, lineHeight: 1.4 }}>
-                    {item.text} <span style={{ color: "#dc2626" }}>*</span>
-                  </p>
+                  {item.text && item.text !== item.title && (
+                    <p style={{ margin: "8px 0 6px 0", fontSize: 13, color: "#334155", fontWeight: 500, lineHeight: 1.4 }}>
+                      {item.text} <span style={{ color: "#dc2626" }}>*</span>
+                    </p>
+                  )}
 
                   {/* Rating buttons */}
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
