@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Logo, Toast, globalCSS } from "../components/Shared";
 import { t, getCurrentLanguageCode, LANG_CHANGE_EVENT } from "../services/i18n";
 import OverviewTab from "../admin/OverviewTab";
@@ -23,16 +23,11 @@ import MentorManagementTab from "../mentor/MentorManagementTab";
 //import ScheduleManagementTab from "../admin/ScheduleManagementTab";
 //import CertificateManagementTab from "../admin/CertificateManagementTab";
 import AutomationTab from "../admin/AutomationTab";
+import AssessmentManagementTab from "../admin/AssessmentManagementTab";
 //import SystemHealthTab from "../admin/SystemHealthTab";
 //import AdminProfileTab from "../admin/AdminProfileTab";
 //import HelpFAQTab from "../admin/HelpFAQTab";
-import { getAdminTeachers, getCourseAssignments, getCourses, updateTeacherStatus } from "../services/api";
-//import CourseManagementTab from "../admin/CourseManagementTab";
-//import BatchManagementTab from "../admin/BatchManagementTab";
-//import AssessmentManagementTab from "../admin/AssessmentManagementTab";
-//import CertificateManagementTab from "../admin/CertificateManagementTab";
-//import LiveSessionsTab from "../admin/LiveSessionsTab";
-
+import { getAdminTeachers, getCourseAssignments, getCourses, updateTeacherStatus, getAdminQuizzes } from "../services/api";
 
 /* ===========================================
    MAIN ADMIN DASHBOARD
@@ -42,6 +37,22 @@ export default function AdminDashboard({ user, onLogout }) {
   const [teachers,  setTeachers]  = useState([]);
   const [courses, setCourses] = useState([]);
   const [assignments,setAssignments] = useState([]);
+  const [assessmentsData, setAssessmentsData] = useState(() => {
+    try {
+      const stored = localStorage.getItem("spacece_admin_assessments");
+      return stored ? JSON.parse(stored) : [
+        { id: 1, title: "ECCE Fundamentals Quiz", course: "Early Childhood Pedagogy", questions: 10, passMark: 60, dueDate: "2026-09-30", status: "published", attempts: 12, avgScore: 82 },
+        { id: 2, title: "Child Assessment & Observation Test", course: "Assessment Methods", questions: 8, passMark: 70, dueDate: "2026-10-15", status: "published", attempts: 8, avgScore: 75 },
+        { id: 3, title: "Parent Engagement Evaluation", course: "Community Outreach", questions: 5, passMark: 50, dueDate: "2026-11-01", status: "draft", attempts: 0, avgScore: 0 }
+      ];
+    } catch {
+      return [
+        { id: 1, title: "ECCE Fundamentals Quiz", course: "Early Childhood Pedagogy", questions: 10, passMark: 60, dueDate: "2026-09-30", status: "published", attempts: 12, avgScore: 82 },
+        { id: 2, title: "Child Assessment & Observation Test", course: "Assessment Methods", questions: 8, passMark: 70, dueDate: "2026-10-15", status: "published", attempts: 8, avgScore: 75 },
+        { id: 3, title: "Parent Engagement Evaluation", course: "Community Outreach", questions: 5, passMark: 50, dueDate: "2026-11-01", status: "draft", attempts: 0, avgScore: 0 }
+      ];
+    }
+  });
   const [toast, setToast] = useState({msg:"",type:""});
   const [menuOpen, setMenuOpen] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
@@ -88,20 +99,18 @@ export default function AdminDashboard({ user, onLogout }) {
   };
 
   const navItems = [
-    { key:"overview",     label:t("Admin Dashboard"),          icon:"\uD83D\uDCCA" },
-    { key:"centers",      label:t("Center Management"), icon:"\uD83C\uDFEB" },
-    //{ key:"teacherMgmt",  label:t("Teacher Management"), icon:"\uD83D\uDC69\u200D\uD83C\uDFEB" },
+    { key:"overview",     label:t("Admin Dashboard"),          icon:"📊" },
+    { key:"centers",      label:t("Center Management"), icon:"🏫" },
     { key:"mentorMgmt",   label:t("Mentor Management"),  icon:"👨‍🏫" },
     { key: "curriculum", label:t("Course Management"), icon: "📚" },
+    { key: "assessments", label:t("Assessment Management"), icon: "📝" },
     { key: "delivery", label:t("Delivery Monitoring"), icon: "📋" },
-    // Start: Snehal change
     { key: "parentModules", label:t("Parent Capacity Building"), icon: "👪" },
-    // End: Snehal change
     { key: "activities", label:t("Activity Monitoring"), icon: "📸" },
     { key: "children", label:t("Children & Classes"), icon: "👶" },
-    { key:"attendance",   label:t("Attendance"),        icon:"\uD83D\uDCC5" },
-    { key:"reports",      label:t("Reports & Analytics"),icon:"\uD83D\uDCC8" },
-    { key:"feedback",     label:t("Feedback"),              icon:"\uD83D\uDCAC" },
+    { key:"attendance",   label:t("Attendance"),        icon:"📅" },
+    { key:"reports",      label:t("Reports & Analytics"),icon:"📈" },
+    { key:"feedback",     label:t("Feedback"),              icon:"💬" },
     { key: "childfeedback", label: "Child Feedback", icon: "💬" },
     { key: "automation", label: t("Automation"), icon: "🤖" },
   ];
@@ -125,23 +134,18 @@ export default function AdminDashboard({ user, onLogout }) {
     switch(activeTab) {
       case "overview":     return <OverviewTab teachers={teachers} courses={courses} batches={[]} sessions={[]}/>;
       case "centers": return <CenterManagementTab allTeachers={teachers} setToast={setToast}/>;
-      //case "teacherMgmt": return <TeacherManagementTab setToast={setToast} role="admin"/>;
       case "curriculum": return <CurriculumTrainingTab setToast={setToast}/>;
+      case "assessments": return <AssessmentManagementTab assessmentsData={assessmentsData} setAssessmentsData={setAssessmentsData} setToast={setToast}/>;
       case "delivery": return <DeliveryMonitoringTab setToast={setToast}/>;
-      // case "assessments": return <AssessmentResultsTab setToast={setToast}/>;
       case "activities": return <ActivityMonitoringTab setToast={setToast}/>;
       case "children": return <ChildrenManagementTab setToast={setToast}/>;
       case "attendance":   return <AttendanceTab teachers={teachers} sessions={[]}/>;
       case "reports":      return <ReportsTab teachers={teachers} courses={courses} batches={[]}/>;
       case "notifications":return <NotificationsTab teachers={teachers} setToast={setToast}/>;
       case "settings":     return <SettingsTab setToast={setToast} teachers={teachers} />;
-      //case "schedules":    return <ScheduleManagementTab setToast={setToast}/>;
-     // case "certificates": return <CertificateManagementTab setToast={setToast}/>;
       case "feedback":     return <FeedbackManagementTab setToast={setToast}/>;
       case "mentorMgmt":   return <MentorManagementTab setToast={setToast} role="admin" />;
-      // Start: Snehal change
       case "parentModules": return <ParentModulesManagementTab setToast={setToast}/>;
-      // End: Snehal change
       case "automation":   return <AutomationTab user={user} setToast={setToast}/>;
       case "childfeedback": return <ChildFeedbackTab/>;
       default:             return null;
@@ -152,12 +156,15 @@ export default function AdminDashboard({ user, onLogout }) {
     let isInitialLoad = true;
 
     const fetchDashboardData = () => {
-      Promise.all([getAdminTeachers(), getCourses({ lang: getCurrentLanguageCode() }), getCourseAssignments()])
-        .then(([teacherRes, courseRes, assignmentRes]) => {
+      Promise.all([getAdminTeachers(), getCourses({ lang: getCurrentLanguageCode() }), getCourseAssignments(), getAdminQuizzes()])
+        .then(([teacherRes, courseRes, assignmentRes, quizRes]) => {
           if (ignore) return;
           setTeachers(teacherRes.teachers || []);
           setCourses(courseRes.courses || []);
           setAssignments((assignmentRes.assignments || []).map(mapCourseAssignmentForReview));
+          if (quizRes && quizRes.quizzes && quizRes.quizzes.length > 0) {
+            setAssessmentsData(quizRes.quizzes);
+          }
           isInitialLoad = false;
         })
         .catch((error) => {

@@ -1723,3 +1723,40 @@ export function triggerHaalsAiReportStub(fellowId, month) {
     body: JSON.stringify({ fellowId, month })
   });
 }
+
+// ── Admin Quiz APIs ──
+export function getAdminQuizzes() {
+  return request("/api/admin/quizzes");
+}
+
+export function createAdminQuiz(payload) {
+  return request("/api/admin/quizzes", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateAdminQuiz(id, payload) {
+  return request(`/api/admin/quizzes/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteAdminQuiz(id) {
+  return request(`/api/admin/quizzes/${id}`, {
+    method: "DELETE"
+  });
+}
+
+export function duplicateAdminQuiz(id) {
+  return request(`/api/admin/quizzes/${id}/duplicate`, {
+    method: "POST"
+  });
+}
+
+export function toggleAdminQuizPublish(id) {
+  return request(`/api/admin/quizzes/${id}/toggle-publish`, {
+    method: "PATCH"
+  });
+}

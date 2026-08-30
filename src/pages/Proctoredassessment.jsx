@@ -717,6 +717,11 @@ export default function ProctoredAssessment({ assignments = [] }) {
                       <button
                         onClick={() => {
                           localStorage.removeItem("spacece_assessment_attempt_" + a._id);
+                          setMyResults(prev => {
+                            const copy = { ...prev };
+                            delete copy[a._id];
+                            return copy;
+                          });
                           startAssessmentFor(a, true);
                         }}
                         style={{ ...S.primaryBtn, background: "linear-gradient(135deg,#10b981,#059669)", fontSize: 12, cursor: "pointer" }}

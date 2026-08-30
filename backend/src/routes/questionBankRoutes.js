@@ -10,10 +10,40 @@ const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
 const getAgeGroupVariations = (ag) => {
-  const str = String(ag || "").trim();
+  const str = String(ag || "").trim().toLowerCase();
   if (!str) return [];
-  const alt = str.includes("–") ? str.replace(/–/g, "-") : str.replace(/-/g, "–");
-  return Array.from(new Set([str, alt]));
+
+  let range = "";
+  if (str.includes("1-2") || str.includes("1–2") || str.includes("toddler")) range = "1-2";
+  else if (str.includes("2-3") || str.includes("2–3") || str.includes("play")) range = "2-3";
+  else if (str.includes("3-4") || str.includes("3–4") || str.includes("nursery")) range = "3-4";
+  else if (str.includes("4-5") || str.includes("4–5") || str.includes("jr") || str.includes("junior")) range = "4-5";
+  else if (str.includes("5-6") || str.includes("5–6") || str.includes("sr") || str.includes("senior")) range = "5-6";
+
+  if (!range) {
+    const alt = str.includes("–") ? str.replace(/–/g, "-") : str.replace(/-/g, "–");
+    return Array.from(new Set([ag, str, alt]));
+  }
+
+  const [min, max] = range.split("-");
+  return Array.from(new Set([
+    ag,
+    str,
+    `${min}-${max}`,
+    `${min}–${max}`,
+    `${min}-${max} Years`,
+    `${min}–${max} Years`,
+    `${min}-${max} years`,
+    `${min}–${max} years`,
+    `jr kg (${min}-${max})`,
+    `jr kg (${min}–${max})`,
+    `sr kg (${min}-${max})`,
+    `sr kg (${min}–${max})`,
+    `play grp (${min}-${max})`,
+    `play grp (${min}–${max})`,
+    `nursery (${min}-${max})`,
+    `nursery (${min}–${max})`
+  ]));
 };
 
 // GET the currently active question bank for an age group (auto-creates default v1 if none exists)
