@@ -14,10 +14,11 @@ import {
   getCapstoneSubmissions, 
   getMenteeObservations 
 } from "../services/api";
-import { MentorProfileTab, MentorNotificationsTab, MentorFeedbackTab, MenteeManagementTab, ImpactCapstoneTab, PDCATab } from "./MentorDashboardTabs";
+import { MentorProfileTab, MentorNotificationsTab, MentorFeedbackTab, MenteeManagementTab, ImpactCapstoneTab, PDCATab, } from "./MentorDashboardTabs";
 import MentorActivitiesTab from "./MentorActivitiesTab";
 import MentorCurriculumTab from "./MentorCurriculumTab";
 import MentorLessonPlanTab from "./MentorLessonPlanTab";
+import MentorUserGuide from "./mentorusergiud";
 import { PendingApprovalsReminder } from "./PendingApprovalsReminder";
 import TeacherManagementTab from "../admin/TeacherManagementTab";
 import AttendanceTab from "../admin/AttendanceTab";
@@ -436,6 +437,9 @@ export default function MentorDashboard({ user, onLogout }) {
   const [currentUser, setCurrentUser] = useState(user);
   const [workingCenter, setWorkingCenter] = useState(null);
   const [toast, setToast] = useState({ msg: "", type: "" });
+  // ADDED: controls the full-page Mentor User Guide overlay, opened from the
+  // "User Guide" button placed next to the ⋮ profile menu (mirrors Admin Dashboard).
+  const [showGuide, setShowGuide] = useState(false);
   // ADDED: live pending-fellow-approvals count, fed by the reminder poller below.
   // Used to show a badge on the "Mentee Management" nav item.
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
@@ -566,6 +570,10 @@ export default function MentorDashboard({ user, onLogout }) {
       <style>{globalCSS}</style>
       <Toast msg={toast.msg} type={toast.type} onClose={() => setToast({ msg: "", type: "" })} />
 
+      {/* ADDED: full-page Mentor User Guide overlay, shown when the "User Guide"
+          button (top-right, next to the ⋮ profile menu) is clicked. */}
+      {showGuide && <MentorUserGuide onClose={() => setShowGuide(false)} />}
+
       {/* ADDED: mounted once here (not inside a specific tab) so it keeps polling
           for pending fellow approvals no matter which tab the mentor is viewing.
           It drives the in-app toast above, the "email nudge" to the mentor's own
@@ -643,7 +651,25 @@ export default function MentorDashboard({ user, onLogout }) {
 
       {/* Main Content Area */}
       <div style={{ flex: 1, width: "0px", minWidth: "0px", padding: "28px 32px", overflowY: "auto", maxHeight: "100vh" }}>
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16, position: "relative" }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, marginBottom: 16, position: "relative" }}>
+          {/* ADDED: User Guide button — mirrors the Admin Dashboard's top-right
+              "User Guide" pill, placed just left of the ⋮ profile menu. */}
+          <button
+            onClick={() => setShowGuide(true)}
+            title={t("User Guide")}
+            style={{
+              display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
+              padding: "8px 16px", borderRadius: 20, background: "white",
+              border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+              fontSize: 13, fontWeight: 700, color: "#374151",
+              fontFamily: "inherit", transition: "all 0.2s ease"
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = "#f8fafc"}
+            onMouseLeave={(e) => e.currentTarget.style.background = "white"}
+          >
+            📖 {t("User Guide")}
+          </button>
+
           <div
             onClick={() => setMenuOpen(!menuOpen)}
             style={{

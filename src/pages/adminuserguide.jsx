@@ -4,7 +4,9 @@ import { t } from "../services/i18n";
 /* ===========================================
    ADMIN USER GUIDE
    Full-page overlay explaining every tab in
-   the Admin Panel sidebar.
+   the Admin Panel sidebar. Section order and
+   set mirrors the navItems array in
+   AdminDashboard.jsx — update both together.
 =========================================== */
 
 const ADMIN_GUIDE_SECTIONS = [
@@ -31,14 +33,13 @@ const ADMIN_GUIDE_SECTIONS = [
     ],
   },
   {
-    icon: "👩‍🏫",
-    title: "Teacher Management",
-    summary: "Manage teacher accounts, roles, and center assignments.",
+    icon: "👨‍🏫",
+    title: "Mentor Management",
+    summary: "Manage mentor accounts and the teachers or centers they oversee.",
     steps: [
-      "Add a new teacher with their email — they'll receive login credentials.",
-      "Assign or reassign a teacher to a center from their profile page.",
-      "Use the status toggle to activate/deactivate a teacher's access.",
-      "Pending teacher approvals show as a badge on the sidebar tab.",
+      "Add a new mentor and assign them to one or more centers or teachers.",
+      "Open a mentor's profile to see their assigned teachers and oversight activity.",
+      "Update or deactivate a mentor's account when their role changes.",
     ],
   },
   {
@@ -53,6 +54,26 @@ const ADMIN_GUIDE_SECTIONS = [
     ],
   },
   {
+    icon: "📋",
+    title: "Delivery Monitoring",
+    summary: "Track how training content and sessions are being delivered across centers.",
+    steps: [
+      "View delivery status of courses and sessions across all centers.",
+      "Spot centers or teachers falling behind on scheduled delivery.",
+      "Drill into a center to see teacher-level delivery details.",
+    ],
+  },
+  {
+    icon: "👪",
+    title: "Parent Capacity Building",
+    summary: "Manage the parent-facing training modules teachers deliver.",
+    steps: [
+      "Create and edit the modules and sessions teachers run with parents.",
+      "Set the PTP (Parent Training Program) Google Form link per module and language.",
+      "Review the session completion status and feedback teachers submit after each session.",
+    ],
+  },
+  {
     icon: "📸",
     title: "Activity Monitoring",
     summary: "Track teacher and child activity logs across centers.",
@@ -63,26 +84,6 @@ const ADMIN_GUIDE_SECTIONS = [
     ],
   },
   {
-    icon: "📋",
-    title: "Lesson Plans",
-    summary: "Review and manage lesson plans submitted or generated for teachers.",
-    steps: [
-      "Browse lesson plans by center, age group, or activity type.",
-      "Approve, edit, or reject a submitted lesson plan from its detail view.",
-      "Plans generated via the AI Lesson Planner appear here too.",
-    ],
-  },
-  {
-    icon: "✏️",
-    title: "AI Lesson Planner",
-    summary: "Generate early-childhood lesson plans automatically.",
-    steps: [
-      "Select an age group, developmental focus, and duration to generate a plan instantly.",
-      "The generator draws from the curated activity dataset.",
-      "Review and edit the generated plan before publishing it.",
-    ],
-  },
-  {
     icon: "👶",
     title: "Children & Classes",
     summary: "Manage enrolled children and their class/section assignments.",
@@ -90,16 +91,6 @@ const ADMIN_GUIDE_SECTIONS = [
       "Add a child's profile with basic details and enrollment date.",
       "Assign each child to a class/section under a specific center.",
       "Move a child between classes as they progress.",
-    ],
-  },
-  {
-    icon: "📝",
-    title: "Assignment Review",
-    summary: "Review assessment submissions and scores awaiting approval.",
-    steps: [
-      "The badge count shows how many submissions are pending review.",
-      "Open a submission to see the teacher's answers and auto-graded score.",
-      "Approve or request resubmission — approved scores sync automatically to dashboards.",
     ],
   },
   {
@@ -121,12 +112,30 @@ const ADMIN_GUIDE_SECTIONS = [
     ],
   },
   {
-    icon: "🔔",
-    title: "Notifications",
-    summary: "System and platform notifications for admins.",
+    icon: "💬",
+    title: "Feedback",
+    summary: "Review feedback submitted by teachers about courses and trainers.",
     steps: [
-      "New approvals, flagged activities, or system alerts appear here.",
-      "Mark notifications as read or click through to the relevant page.",
+      "Browse feedback by tag, rating, or course.",
+      "Respond to feedback — your response is visible to the teacher who submitted it.",
+    ],
+  },
+  {
+    icon: "💬",
+    title: "Child Feedback",
+    summary: "Review feedback submitted about or by children in the program.",
+    steps: [
+      "Browse child feedback entries by center or class.",
+      "Use this to spot recurring concerns raised through the program.",
+    ],
+  },
+  {
+    icon: "🤖",
+    title: "Automation",
+    summary: "Configure automated tasks and notifications for the platform.",
+    steps: [
+      "Review the automated workflows currently configured for the platform.",
+      "Enable or disable specific automation rules as needed.",
     ],
   },
   {
@@ -134,17 +143,9 @@ const ADMIN_GUIDE_SECTIONS = [
     title: "Settings & Roles",
     summary: "Configure platform settings and manage admin/staff role permissions.",
     steps: [
+      "Open this from the ⋮ menu in the top-right corner — it isn't in the sidebar.",
       "Manage who has admin access and what permissions each role has.",
       "Update platform-wide settings and defaults.",
-    ],
-  },
-  {
-    icon: "💬",
-    title: "Feedback",
-    summary: "Review feedback submitted by teachers about courses and trainers.",
-    steps: [
-      "Browse feedback by tag, rating, or course.",
-      "Respond to feedback — your response is visible to the teacher who submitted it.",
     ],
   },
 ];

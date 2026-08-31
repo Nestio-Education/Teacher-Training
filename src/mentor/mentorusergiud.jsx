@@ -2,150 +2,131 @@ import { useState } from "react";
 import { t } from "../services/i18n";
 
 /* ===========================================
-   TEACHER USER GUIDE
+   MENTOR USER GUIDE
    Full-page overlay explaining every tab in
-   the Teacher Portal sidebar. Section order and
+   the Mentor Panel sidebar. Section order and
    set mirrors the navItems array in
-   TeacherDashboard.jsx — update both together.
+   MentorDashboard.jsx — update both together.
 =========================================== */
 
-const TEACHER_GUIDE_SECTIONS = [
+const MENTOR_GUIDE_SECTIONS = [
   {
     icon: "📊",
-    title: "Teacher's Dashboard",
-    summary: "Your personal overview — assigned classes, progress, and today's schedule.",
+    title: "Overview",
+    summary: "Your at-a-glance summary of assigned teachers, centers, and mentee progress.",
     steps: [
-      "See your total students, attendance %, average grade, certificates, and pending tasks at a glance.",
-      "Users with the Fellow role see this same page labeled 'Fellow's Dashboard'.",
-      "The Weekly Course Schedule & Task Planner shows your week — add, edit, or complete your own tasks alongside assigned lessons.",
-      "My Attendance Summary and Course Progress widgets link straight to those tabs.",
+      "See your assigned teachers, total centers, children enrolled, and assigned courses in the top stat cards.",
+      "Track average course completion, active vs. pending/inactive teacher status, and pending reviews.",
+      "The recent activity feed lists your latest Growth Cycles, Capstone milestones, and mentee observations.",
     ],
   },
   {
-    icon: "📋",
-    title: "Daily Attendance",
-    summary: "Mark and review daily attendance for your assigned class.",
+    icon: "👥",
+    title: "Teacher Management",
+    summary: "Manage the teachers and fellows assigned to you, and approve new fellow accounts.",
     steps: [
-      "Select your class and date, then mark each child present or absent.",
-      "Review past attendance records for patterns or corrections.",
+      "Review fellows awaiting approval — the badge on this tab shows how many are pending.",
+      "Approve or reject a fellow's account, or record an observation about a mentee's progress.",
+      "See at a glance which of your fellows are active vs. pending/inactive.",
+    ],
+  },
+  {
+    icon: "📅",
+    title: "Teacher Attendance",
+    summary: "Review the daily attendance your assigned fellows have logged.",
+    steps: [
+      "See present, absent, and late counts, plus an overall attendance rate, for the fellows you mentor.",
+      "Search by fellow name to check an individual's attendance history.",
+      "Each entry shows the date, status, and whether it was logged via geotag, manually, or through the app.",
     ],
   },
   {
     icon: "📍",
-    title: "Geotag Attendance",
-    summary: "Mark attendance with location verification for center-based check-ins.",
+    title: "My Attendance",
+    summary: "Mark your own attendance with location verification.",
     steps: [
-      "Allow location access when prompted so your attendance can be geotagged.",
-      "Confirm your location matches your assigned center before submitting.",
-    ],
-  },
-  {
-    icon: "🎓",
-    title: "Training & Lessons",
-    summary: "Manage classroom training sessions and lesson delivery.",
-    steps: [
-      "View and manage classroom sessions tied to your assigned classes.",
-      "Log session details as you conduct them.",
-    ],
-  },
-  {
-    icon: "✏️",
-    title: "AI Lesson Planner",
-    summary: "Generate a lesson plan tailored to your class's age group and focus area.",
-    steps: [
-      "Select an age group, developmental focus, and duration to generate a plan instantly.",
-      "Review and edit the generated plan before using it or submitting it for review.",
-    ],
-  },
-  {
-    icon: "📚",
-    title: "My Courses",
-    summary: "Access your assigned training courses and their notes-based content.",
-    steps: [
-      "Click a course to open its content — organized as readable notes/lessons, not videos.",
-      "Track your progress bar as you complete each section.",
-      "Once notes are complete, use 'Go to Assessment' to take the linked MCQ test.",
-      "'Restart Course' resets progress to 0% and removes any certificate — use with care.",
-    ],
-  },
-  {
-    icon: "📈",
-    title: "Growth Cycle (PDCA)",
-    summary: "Track your Plan–Do–Check–Act growth cycle for continuous improvement.",
-    steps: [
-      "Log your plan, the action you took, your review, and your reflection for each cycle.",
-      "Track how your cycles progress over time.",
-      "Use any mentor or admin feedback provided to inform your next cycle.",
-    ],
-  },
-  {
-    icon: "👪",
-    title: "Parent Capacity Building",
-    summary: "Deliver parent training sessions and log feedback after each one.",
-    steps: [
-      "Pick a module and language, then review the session's activities and content.",
-      "Click 'Fill PTP Form' to open the language-specific Google Form for that module.",
-      "Once you've delivered a session, click 'Mark as Completed' to log session details, participants, a photo/attendance sheet, and your feedback.",
+      "Allow location access when prompted so your check-in can be geotagged.",
+      "Confirm your location matches your working center before submitting.",
+      "Review your past check-in history and session log.",
     ],
   },
   {
     icon: "📝",
-    title: "Assessments",
-    summary: "Take proctored MCQ assessments tied to your courses.",
+    title: "Fellow Activities",
+    summary: "Review, grade, and give feedback on activity submissions from your fellows.",
     steps: [
-      "Start an assessment only when ready — it's proctored, so avoid switching tabs or exiting fullscreen.",
-      "Answer all questions, then submit — your score saves automatically.",
-      "A 'results pending review' message means an admin is verifying your submission.",
+      "Open a submission to review it, then approve, reject, or flag it for rework — rejecting or flagging requires feedback text.",
+      "Select multiple submissions and use 'Bulk Approve' to clear several at once.",
+      "Use the keyboard shortcuts in the review panel to move through submissions quickly.",
+    ],
+  },
+  {
+    icon: "📚",
+    title: "Curriculum Management",
+    summary: "Build and manage the fellowship curriculum, and assign it to your fellows.",
+    steps: [
+      "Click '+ Create New Plan', or 'Seed UMANG Plan' to start from the standard template.",
+      "Add modules to each semester, or use 'Bulk Import' to add several modules at once.",
+      "Open a plan's builder to edit its content, then use 'Assign Mentees' to assign it to specific fellows.",
+    ],
+  },
+  {
+    icon: "📋",
+    title: "Lesson Plans",
+    summary: "Manage, generate, and review lesson plans for your fellows.",
+    steps: [
+      "Use 'Import Excel' to bulk-add lesson plans, or 'Auto-Generate & Publish' to have AI draft one from a category, subject, and month.",
+      "Use 'Assign Plan' to assign a lesson plan to specific fellows.",
+      "Open a submitted assignment or report to review it, add feedback, and approve or reject it.",
     ],
   },
   {
     icon: "🏆",
-    title: "Certificates",
-    summary: "View and download certificates for completed, approved courses.",
+    title: "Impact & Capstone",
+    summary: "Track your own Semester 4 Capstone project and mentee leadership impact.",
     steps: [
-      "Certificates appear once a course is completed and reviewed/approved by an admin.",
-      "Use 'View Certificate' to preview, or 'Download' to save the PDF.",
+      "Submit each of the four milestones in order — Problem Identification, Solution Design, Implementation, and Evaluation.",
+      "Your Impact Score, teachers guided, and capstone progress are shown in the stat cards at the top.",
+      "Submissions sync automatically with program advisors — no separate notification needed.",
     ],
   },
   {
-    icon: "📖",
-    title: "Curriculum",
-    summary: "Browse curriculum content — visible only to users with the Fellow role.",
+    icon: "📝",
+    title: "Growth Cycle",
+    summary: "Assign Plan–Do–Check–Act growth cycles to your fellows and track their progress.",
     steps: [
-      "Review curriculum materials organized by topic.",
-      "This tab only appears in the sidebar for Fellows, not regular Teachers.",
+      "Use the AI-generated report to review and approve an official month 1–24 report for a fellow, grounded in their logged data, before it's sent to Admin.",
+      "Or fill out a custom Growth Cycle — Plan, Do, Check, Act — for a specific fellow under 'New Growth Cycle'.",
+      "Each fellow's cycles are numbered in their own sequence — check 'Fellow Progress' and 'Growth Cycle History' to see where each fellow stands.",
     ],
   },
   {
     icon: "💬",
     title: "Feedback",
-    summary: "Submit feedback about courses and trainers, and see admin responses.",
+    summary: "Share your own mentoring experience and see how past feedback was received.",
     steps: [
-      "Rate the course and (optionally) the trainer, tag the topic, and write your feedback.",
-      "Toggle 'Submit anonymously' if you'd rather not attach your name.",
-      "Your previous submissions and any admin responses are listed on the right.",
+      "Rate your experience and write your feedback under 'New Feedback'.",
+      "Your previously submitted feedback is listed under 'My Past Feedback'.",
     ],
   },
   {
     icon: "🔔",
     title: "Notifications",
-    summary: "Stay updated on assignments, deadlines, and admin messages.",
+    summary: "Stay updated on approvals, fellow submissions, and admin messages.",
     steps: [
-      "Open this from the bell/menu near your name in the top-right corner — it isn't in the sidebar.",
-      "New course assignments, deadline reminders, and admin feedback appear here.",
+      "Open this from the ⋮ menu near your name in the top-right corner — it isn't in the sidebar.",
+      "You'll also get an in-app reminder — and an email to your login address — whenever fellows are waiting on your approval.",
       "Click a notification to mark it read, or use 'Mark all read'.",
     ],
   },
   {
     icon: "👤",
-    title: "My Profile",
-    summary: "Manage your personal information, password, and preferences.",
+    title: "Profile",
+    summary: "Manage your personal information, professional details, and password.",
     steps: [
       "Open this from the ⋮ menu near your name in the top-right corner — it isn't in the sidebar.",
-      "Click 'Edit Profile' to update your name, phone, address, subject, and experience.",
-      "Upload a profile picture (PNG/JPG, max 2MB).",
-      "Change your password from the 'Change Password' section — minimum 8 characters.",
-      "Set your preferred language and notification channel (in-app, email, SMS, WhatsApp).",
+      "Update your personal information and professional details.",
+      "Change your password from the Security section.",
     ],
   },
 ];
@@ -209,11 +190,11 @@ function GuideSection({ section, isOpen, onToggle }) {
   );
 }
 
-export default function TeacherUserGuide({ onClose }) {
+export default function MentorUserGuide({ onClose }) {
   const [openIndex, setOpenIndex] = useState(0);
   const [search, setSearch] = useState("");
 
-  const filtered = TEACHER_GUIDE_SECTIONS.filter(
+  const filtered = MENTOR_GUIDE_SECTIONS.filter(
     (s) =>
       s.title.toLowerCase().includes(search.toLowerCase()) ||
       s.summary.toLowerCase().includes(search.toLowerCase())
@@ -246,13 +227,13 @@ export default function TeacherUserGuide({ onClose }) {
                 marginBottom: 10,
               }}
             >
-              🎓 {t("Teacher Panel")}
+              🎓 {t("Mentor Panel")}
             </div>
             <h1 style={{ fontSize: 22, fontWeight: 900, color: "#1c1917", margin: "0 0 4px", letterSpacing: "-0.3px" }}>
               📖 {t("User Guide")}
             </h1>
             <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-              {t("A quick walkthrough of every section in your Teacher Portal.")}
+              {t("A quick walkthrough of every section in the Mentor Panel.")}
             </p>
           </div>
           <button
@@ -279,7 +260,7 @@ export default function TeacherUserGuide({ onClose }) {
 
         <input
           type="text"
-          placeholder={t("Search a topic, e.g. assessment or attendance...")}
+          placeholder={t("Search a topic, e.g. growth cycle or attendance...")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{
