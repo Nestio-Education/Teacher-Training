@@ -281,29 +281,32 @@ export default function LessonPlannerTab({ setToast, user }) {
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
-      <h1 style={S.pageTitle}>✏️ Lesson Planner</h1>
-      <p style={S.pageSub}>
-        {isAdmin
-          ? "Generate lesson plans or review activities saved by teachers — filter by teacher or status below."
-          : "Generate a lesson plan, review it as cards, then add activities to your list below."}
-      </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <div>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: "0 0 4px", letterSpacing: "-0.3px" }}>AI Lesson Planner</h1>
+          <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>Generate customized lesson plans with AI</p>
+        </div>
+      </div>
 
       <form
         onSubmit={handleGenerate}
         style={{
-          ...cardStyle,
-          marginBottom: 20,
-          maxWidth: 720,
+          background: "white",
+          borderRadius: 20,
+          padding: 24,
+          border: "1px solid #f1f5f9",
+          boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
+          marginBottom: 24,
         }}
       >
-        <div style={{ fontSize: 13, fontWeight: 800, color: "#1c1917", marginBottom: 14 }}>
-          Plan details
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", marginBottom: 16 }}>
+          Lesson Parameters
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
           <div>
-            <label style={S.label}>Age group *</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 6, display: "block" }}>Age Group *</label>
             <select
-              style={S.input}
+              style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: 12, padding: "10px 14px", background: "white", fontSize: 12, fontWeight: 600, color: "#1e293b", outline: "none" }}
               value={ageGroup}
               onChange={(e) => setAgeGroup(e.target.value)}
               disabled={generating}
@@ -314,9 +317,9 @@ export default function LessonPlannerTab({ setToast, user }) {
             </select>
           </div>
           <div>
-            <label style={S.label}>Duration *</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 6, display: "block" }}>Duration *</label>
             <select
-              style={S.input}
+              style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: 12, padding: "10px 14px", background: "white", fontSize: 12, fontWeight: 600, color: "#1e293b", outline: "none" }}
               value={duration}
               onChange={(e) => setDuration(e.target.value)}
               disabled={generating}
@@ -326,38 +329,51 @@ export default function LessonPlannerTab({ setToast, user }) {
               ))}
             </select>
           </div>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <label style={S.label}>Topic *</label>
-            <input
-              style={S.input}
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-              placeholder="e.g. Colors, Animals, Numbers 1–10"
-              disabled={generating}
-            />
-          </div>
         </div>
-        <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: "#475569", marginBottom: 6, display: "block" }}>Lesson Topic *</label>
+          <input
+            style={{ width: "100%", border: "1px solid #cbd5e1", borderRadius: 12, padding: "10px 14px", background: "white", fontSize: 12, fontWeight: 500, color: "#1e293b", outline: "none", boxSizing: "border-box" }}
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+            placeholder="e.g. Introduction to the Solar System: focusing on the order of planets..."
+            disabled={generating}
+          />
+        </div>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
           <button
             type="submit"
             disabled={generating}
-            style={{ ...S.primaryBtn, opacity: generating ? 0.7 : 1 }}
+            style={{ padding: "10px 22px", borderRadius: 20, border: "none", background: "linear-gradient(135deg,#059669,#10b981)", color: "white", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 4px 12px rgba(16,185,129,0.25)", opacity: generating ? 0.7 : 1 }}
           >
-            {generating ? "⏳ Generating..." : "🤖 Generate Lesson Plan"}
+            {generating ? "⏳ Generating..." : "🪄 Generate Lesson Plan"}
           </button>
           {plan && (
             <>
-              <button type="button" onClick={handleDownload} style={S.btnGreen}>
+              <button type="button" onClick={handleDownload} style={{ padding: "10px 18px", borderRadius: 20, border: "1px solid #cbd5e1", background: "white", color: "#334155", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
                 ⬇ Download .txt
               </button>
-              <button type="button" onClick={handleClearPlan} style={S.exportBtn}>
-                Clear plan
+              <button type="button" onClick={handleClearPlan} style={{ padding: "10px 18px", borderRadius: 20, border: "1px solid #fca5a5", background: "#fef2f2", color: "#ef4444", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                Clear Plan
               </button>
             </>
           )}
         </div>
-      
       </form>
+
+      {!plan && (
+        <div style={{ background: "white", borderRadius: 20, padding: "48px 24px", border: "1px solid #f1f5f9", boxShadow: "0 2px 10px rgba(0,0,0,0.03)", textAlign: "center", marginBottom: 28 }}>
+          <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#fef3c7", color: "#d97706", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 32, marginBottom: 14 }}>
+            📖
+          </div>
+          <h3 style={{ fontSize: 16, fontWeight: 800, color: "#0f172a", margin: "0 0 6px" }}>No activities added yet.</h3>
+          <p style={{ fontSize: 12, color: "#64748b", maxWidth: 420, margin: "0 auto", lineHeight: 1.6 }}>
+            Choose a topic above to generate AI powered lesson activities or add your own custom plan.
+          </p>
+        </div>
+      )}
 
       {/* Generated plan — card layout */}
       {plan && (
