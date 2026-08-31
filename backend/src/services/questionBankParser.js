@@ -54,14 +54,20 @@ export async function parseDocxQuestionBank(buffer) {
       const end = i + 1 < domainMatches.length ? domainMatches[i + 1].index : text.length;
       const block = text.slice(start, end);
 
-      const qPattern = /(?:Question|\d+\.)\s*(\d+)?:?\s*(.+)/gi;
+      const qPattern = /(?:Question\s+(\d+)|\b(\d+)\.)\s*:?\s*(.+)/gi;
       const qMatches = [...block.matchAll(qPattern)];
 
       const items = [];
       for (let j = 0; j < qMatches.length; j++) {
         const qm = qMatches[j];
-        const qNum = qm[1] ? parseInt(qm[1], 10) : j + 1;
-        const qTitle = qm[2].split("\n")[0].trim();
+        const qNum = qm[1] ? parseInt(qm[1], 10) : (qm[2] ? parseInt(qm[2], 10) : j + 1);
+        const qTitle = (qm[3] || "").split("\n")[0].trim();
+
+        // Skip non-question summary header lines (e.g. "8 Questions (with 3+ activities per question)")
+        if (/\d+\s+Questions/i.test(qTitle) || /with 3\+ activities/i.test(qTitle) || /^s\s*\(/i.test(qTitle) || /^Questions\b/i.test(qTitle)) {
+          continue;
+        }
+
         const qStart = qm.index + qm[0].length;
         const qEnd = j + 1 < qMatches.length ? qMatches[j + 1].index : block.length;
         const qBlock = block.slice(qStart, qEnd);

@@ -5,6 +5,23 @@ import { sendNotification } from "../services/notificationService.js";
 
 const router = express.Router();
 
+// End-of-day submission cutoff: 11:59:59 PM IST (Asia/Kolkata, UTC+5:30), fixed —
+// computed explicitly rather than relying on server TZ, since all users are in India.
+const IST_OFFSET_MINUTES = 5 * 60 + 30;
+
+function isPastDeadlineIST(dateStr) {
+  if (!dateStr) return false;
+  const [y, m, d] = dateStr.split("-").map(Number);
+  if (!y || !m || !d) return false;
+  // Cutoff instant = 23:59:59.999 IST on dateStr, expressed in UTC.
+  const cutoffUTCms = Date.UTC(y, m - 1, d, 23, 59, 59, 999) - IST_OFFSET_MINUTES * 60 * 1000;
+  return Date.now() > cutoffUTCms;
+}
+
+function deadlineMessage(dateStr) {
+  return `Submission window closed at 11:59 PM IST for ${dateStr}. Contact your mentor for an exception.`;
+}
+
 // GET /api/teacher-tasks - Fetch all tasks for logged-in teacher
 router.get("/", requireAuth, async (req, res, next) => {
   try {
@@ -140,7 +157,49 @@ router.patch("/:id/toggle", requireAuth, async (req, res, next) => {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    task.completed = !task.completed;
+    const willBeCompleted = !task.completed;
+    if (willBeCompleted && isPastDeadlineIST(task.date)) {
+      return res.status(400).json({ message: deadlineMessage(task.date) });
+    }
+
+    task.completed = willBeCompleted;
+    await task.save();
+    res.json(task);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH /api/teacher-tasks/:id/report - Submit a completion report for a calendar
+// task (Field Visit, PCB Session, and other calendar-category activities).
+// Hard-blocks after the end-of-day (11:59 PM IST) deadline for the task's date.
+router.patch("/:id/report", requireAuth, async (req, res, next) => {
+  try {
+    const task = await TeacherTask.findById(req.params.id);
+    if (!task) return res.status(404).json({ message: "Task not found" });
+    if (task.teacher.toString() !== req.user.id && req.user.role !== "admin") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    if (isPastDeadlineIST(task.date)) {
+      return res.status(400).json({ message: deadlineMessage(task.date) });
+    }
+
+    const { completionStatus, notes, pdcaPhase, attachments } = req.body;
+    if (!["completed", "partial", "skipped"].includes(completionStatus)) {
+      return res.status(400).json({ message: "completionStatus must be one of: completed, partial, skipped." });
+    }
+    if (completionStatus === "completed" && !(notes || "").trim()) {
+      return res.status(400).json({ message: "Notes describing what was accomplished are required." });
+    }
+
+    task.completionStatus = completionStatus;
+    task.reportNotes = (notes || "").trim();
+    if (pdcaPhase) task.pdcaPhase = pdcaPhase;
+    if (Array.isArray(attachments)) task.reportAttachments = attachments;
+    task.reportSubmittedAt = new Date();
+    task.completed = true;
+
     await task.save();
     res.json(task);
   } catch (err) {

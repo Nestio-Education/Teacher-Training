@@ -6,6 +6,7 @@ const mentorTaskSchema = new mongoose.Schema(
     mentorId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     fellowId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     month: { type: Number, required: true, min: 1, max: 24 },
+    date: { type: String, default: () => new Date().toISOString().slice(0, 10) }, // YYYY-MM-DD — which calendar day this task shows on for the fellow
     title: { type: String, required: true },
     description: { type: String, default: "" },
     status: { type: String, enum: ["pending", "submitted", "approved"], default: "pending" },

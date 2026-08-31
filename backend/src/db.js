@@ -21,14 +21,14 @@ export async function connectDb() {
   }
 
   try {
-    await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 5001 });
+    await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 5000 });
     console.log(`MongoDB connected: ${mongoose.connection.name}`);
   } catch (error) {
     console.warn(`Primary database connection failed: ${error.message}`);
     const localUri = "mongodb://127.0.0.1:27017/teacher_training_portal";
     if (mongoUri !== localUri) {
       console.log(`Falling back to local database: ${localUri}`);
-      await mongoose.connect(localUri, { serverSelectionTimeoutMS: 5001 });
+      await mongoose.connect(localUri, { serverSelectionTimeoutMS: 5000 });
       console.log(`MongoDB connected (local fallback): ${mongoose.connection.name}`);
     } else {
       throw error;

@@ -208,29 +208,6 @@ function SectionPieChart({ data }) {
   );
 }
 
-export function getAgeGroupFromChild(child) {
-  if (!child) return "2–3 Years";
-  if (child.ageGroup && AGE_GROUPS[child.ageGroup]) return child.ageGroup;
-  if (child.dob) {
-    const dob = new Date(child.dob);
-    if (!isNaN(dob.getTime())) {
-      const ageInYears = (Date.now() - dob.getTime()) / 3.15576e10;
-      if (ageInYears < 2) return "1–2 Years";
-      if (ageInYears < 3) return "2–3 Years";
-      if (ageInYears < 4) return "3–4 Years";
-      return "4–5 Years";
-    }
-  }
-  if (typeof child.age === "number" || (child.age && !isNaN(Number(child.age)))) {
-    const age = Number(child.age);
-    if (age < 2) return "1–2 Years";
-    if (age < 3) return "2–3 Years";
-    if (age < 4) return "3–4 Years";
-    return "4–5 Years";
-  }
-  return "2–3 Years";
-}
-
 function ChildAssessmentTab({ child, onAssessmentSaved }) {
   const [stage, setStage] = useState("Baseline");
   const [savedAssessments, setSavedAssessments] = useState({});
@@ -272,9 +249,10 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
 
   // Load any previously saved assessments for this child from the backend database
   useEffect(() => {
-    if (!child) return;
+    const childId = child?.id || child?._id;
+    if (!childId) return;
     setLoading(true);
-    getChildAssessments(child.id)
+    getChildAssessments(childId)
       .then((data) => {
         setSavedAssessments(data || {});
       })
@@ -300,8 +278,17 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
     setShowValidation(false);
   }, [stage, savedAssessments]);
 
-  const totalItems = activeSections.reduce((sum, s) => sum + s.items.length, 0);
-  const answeredCount = Object.keys(answers).length;
+  const allItems = activeSections.flatMap((s) => s.items || []);
+  const totalItems = allItems.length;
+  const answeredCount = allItems.filter(item => {
+    const v = answers[item.id] || answers[item.id?.replace(/\./g, '_')] || answers[item.id?.replace(/_/g, '.')];
+    return v !== undefined && v !== "" && v !== null;
+  }).length;
+  const unansweredIds = allItems.filter(item => {
+    const v = answers[item.id] || answers[item.id?.replace(/\./g, '_')] || answers[item.id?.replace(/_/g, '.')];
+    return !v;
+  }).map(item => item.id);
+
   const totalScore = Object.values(answers).reduce((sum, r) => {
     const s = scoreOf(r);
     return sum + (s === null ? 0 : s);
@@ -309,9 +296,6 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
 
   const toggleActivities = (id) => setOpenActivities((p) => ({ ...p, [id]: !p[id] }));
   const setAnswer = (id, value) => setAnswers((p) => ({ ...p, [id]: value }));
-
-  const allItemIds = activeSections.flatMap((s) => s.items.map((it) => it.id));
-  const unansweredIds = allItemIds.filter((id) => !answers[id]);
 
   const handleSaveAssessment = () => {
     // Smart defaults for seamless saving
@@ -334,7 +318,8 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
     };
 
     setLoading(true);
-    saveChildAssessment(child.id, record)
+    const childId = child?.id || child?._id;
+    saveChildAssessment(childId, record)
       .then((res) => {
         const savedData = (res && res.assessment) ? res.assessment : (res && res.stage ? res : record);
         const updated = { ...savedAssessments, [stage]: savedData };
@@ -622,7 +607,7 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
 
             {section.items.map((item, idx) => {
               const scale = item.ratingScale || RATING_SCALE_3;
-              const currentValue = answers[item.id];
+              const currentValue = answers[item.id] || (item.id && answers[item.id.replace(/\./g, '_')]) || (item.id && answers[item.id.replace(/_/g, '.')]);
               const hasActivities = item.activities?.length > 0;
               const isOpen = !!openActivities[item.id];
               const isUnanswered = showValidation && !currentValue;
@@ -681,9 +666,11 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
                   </div>
 
                   {/* Question Observation Text */}
-                  <p style={{ margin: "8px 0 6px 0", fontSize: 13, color: "#334155", fontWeight: 500, lineHeight: 1.4 }}>
-                    {item.text} <span style={{ color: "#dc2626" }}>*</span>
-                  </p>
+                  {item.text && item.text !== item.title && (
+                    <p style={{ margin: "8px 0 6px 0", fontSize: 13, color: "#334155", fontWeight: 500, lineHeight: 1.4 }}>
+                      {item.text} <span style={{ color: "#dc2626" }}>*</span>
+                    </p>
+                  )}
 
                   {/* Rating buttons */}
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
@@ -818,8 +805,9 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
  * HIGH score → 1-2 suggestions only (child is doing well)
  * LOW score  → MORE suggestions (child needs support)
  */
-function buildRecommendationsFromChart(chartScores, answers) {
-  return SECTIONS.map((section) => {
+function buildRecommendationsFromChart(chartScores, answers, activeSections = SECTIONS_2_3_YEARS) {
+  const sectionsToUse = activeSections || SECTIONS_2_3_YEARS;
+  return sectionsToUse.map((section) => {
     const chartEntry = chartScores.find((cs) => cs.id === section.id);
     if (!chartEntry) return null;
 
@@ -891,9 +879,10 @@ function ActivitySuggestionsTab({ child }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!child) return;
+    const childId = child?.id || child?._id;
+    if (!childId) return;
     setLoading(true);
-    getChildAssessments(child.id)
+    getChildAssessments(childId)
       .then((data) => {
         setSavedAssessments(data || {});
       })
@@ -917,11 +906,14 @@ function ActivitySuggestionsTab({ child }) {
   let answers = {};
   let latestStage = "";
 
+  const ageGroup = getAgeGroupFromChild(child);
+  const activeSections = AGE_GROUPS[ageGroup] || SECTIONS_2_3_YEARS;
+
   for (const stage of ["Endline", "Midline", "Baseline"]) {
     if (savedAssessments[stage] && savedAssessments[stage].answers && Object.keys(savedAssessments[stage].answers).length > 0) {
       const rec = savedAssessments[stage];
       answers = rec.answers || {};
-      chartScores = rec.sectionScores || computeSectionScores(answers);
+      chartScores = rec.sectionScores || computeSectionScores(answers, activeSections);
       latestStage = stage;
       break;
     }
@@ -974,7 +966,7 @@ function ActivitySuggestionsTab({ child }) {
     );
   }
 
-  const recommendations = buildRecommendationsFromChart(chartScores, answers);
+  const recommendations = buildRecommendationsFromChart(chartScores, answers, activeSections);
   const totalActivities = recommendations.reduce((sum, r) => sum + r.totalActivities, 0);
   const completedCount = Object.values(completedActivities).filter(Boolean).length;
 
@@ -1390,3 +1382,68 @@ export default function ChildDashboardModal({ child, onClose }) {
   );
 }
 // Prajwal end
+
+export function normalizeAgeGroup(strVal) {
+  if (strVal === undefined || strVal === null || strVal === "") return null;
+  const s = String(strVal).trim().toLowerCase();
+
+  if (s.includes("1-2") || s.includes("1–2") || s.includes("toddler")) return "1–2 Years";
+  if (s.includes("2-3") || s.includes("2–3") || s.includes("playgroup")) return "2–3 Years";
+  if (s.includes("3-4") || s.includes("3–4") || s.includes("nursery")) return "3–4 Years";
+  if (s.includes("4-5") || s.includes("4–5") || s.includes("jr") || s.includes("junior")) return "4–5 Years";
+  if (s.includes("5-6") || s.includes("5–6") || s.includes("sr") || s.includes("senior")) return "5–6 Years";
+
+  const num = Number(s);
+  if (!isNaN(num)) {
+    if (num < 2.0) return "1–2 Years";
+    if (num < 3.0) return "2–3 Years";
+    if (num < 4.0) return "3–4 Years";
+    if (num < 5.0) return "4–5 Years";
+    return "5–6 Years";
+  }
+
+  return null;
+}
+
+export function getAgeGroupFromChild(child) {
+  if (!child) return "2–3 Years";
+
+  // 1. Explicit ageGroup property
+  if (child.ageGroup) {
+    const norm = normalizeAgeGroup(child.ageGroup);
+    if (norm) return norm;
+  }
+  if (child.class?.ageGroup) {
+    const norm = normalizeAgeGroup(child.class.ageGroup);
+    if (norm) return norm;
+  }
+
+  // 2. DOB calculation
+  const dobVal = child.dateOfBirth || child.dob;
+  if (dobVal) {
+    const dob = new Date(dobVal);
+    if (!isNaN(dob.getTime())) {
+      const ageInYears = (Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+      if (ageInYears < 2.0) return "1–2 Years";
+      if (ageInYears < 3.0) return "2–3 Years";
+      if (ageInYears < 4.0) return "3–4 Years";
+      if (ageInYears < 5.0) return "4–5 Years";
+      return "5–6 Years";
+    }
+  }
+
+  // 3. Numeric/string age property (e.g. 5, "5", "5-6")
+  if (child.age !== undefined && child.age !== null) {
+    const normAge = normalizeAgeGroup(child.age);
+    if (normAge) return normAge;
+  }
+
+  // 4. Class Name / Label Fallback (e.g. "sr (5-6)", "5-6", "Senior KG")
+  const classNameStr = child.className || child.class?.name || child.class;
+  if (classNameStr) {
+    const normClass = normalizeAgeGroup(classNameStr);
+    if (normClass) return normClass;
+  }
+
+  return "2–3 Years";
+}

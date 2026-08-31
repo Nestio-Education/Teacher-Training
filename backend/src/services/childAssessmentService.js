@@ -102,3 +102,70 @@ export function getLatestStageWithData(assessments) {
 
   return null;
 }
+
+
+
+export function normalizeAgeGroup(strVal) {
+  if (strVal === undefined || strVal === null || strVal === "") return null;
+  const s = String(strVal).trim().toLowerCase();
+
+  if (s.includes("1-2") || s.includes("1–2") || s.includes("toddler")) return "1–2 Years";
+  if (s.includes("2-3") || s.includes("2–3") || s.includes("playgroup")) return "2–3 Years";
+  if (s.includes("3-4") || s.includes("3–4") || s.includes("nursery")) return "3–4 Years";
+  if (s.includes("4-5") || s.includes("4–5") || s.includes("jr") || s.includes("junior")) return "4–5 Years";
+  if (s.includes("5-6") || s.includes("5–6") || s.includes("sr") || s.includes("senior")) return "5–6 Years";
+
+  const num = Number(s);
+  if (!isNaN(num)) {
+    if (num < 2.0) return "1–2 Years";
+    if (num < 3.0) return "2–3 Years";
+    if (num < 4.0) return "3–4 Years";
+    if (num < 5.0) return "4–5 Years";
+    return "5–6 Years";
+  }
+
+  return null;
+}
+
+export function getAgeGroupFromChild(child) {
+  if (!child) return "2–3 Years";
+
+  // 1. Explicit ageGroup property
+  if (child.ageGroup) {
+    const norm = normalizeAgeGroup(child.ageGroup);
+    if (norm) return norm;
+  }
+  if (child.class?.ageGroup) {
+    const norm = normalizeAgeGroup(child.class.ageGroup);
+    if (norm) return norm;
+  }
+
+  // 2. DOB calculation
+  const dobVal = child.dateOfBirth || child.dob;
+  if (dobVal) {
+    const dob = new Date(dobVal);
+    if (!isNaN(dob.getTime())) {
+      const ageInYears = (Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+      if (ageInYears < 2.0) return "1–2 Years";
+      if (ageInYears < 3.0) return "2–3 Years";
+      if (ageInYears < 4.0) return "3–4 Years";
+      if (ageInYears < 5.0) return "4–5 Years";
+      return "5–6 Years";
+    }
+  }
+
+  // 3. Numeric/string age property (e.g. 5, "5", "5-6")
+  if (child.age !== undefined && child.age !== null) {
+    const normAge = normalizeAgeGroup(child.age);
+    if (normAge) return normAge;
+  }
+
+  // 4. Class Name / Label Fallback (e.g. "sr (5-6)", "5-6", "Senior KG")
+  const classNameStr = child.className || child.class?.name || child.class;
+  if (classNameStr) {
+    const normClass = normalizeAgeGroup(classNameStr);
+    if (normClass) return normClass;
+  }
+
+  return "2–3 Years";
+}

@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5001").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL !== undefined ? import.meta.env.VITE_API_BASE_URL : "").replace(/\/$/, "");
 
 async function request(path, options = {}) {
   const token = localStorage.getItem("spaceece_auth_token");
@@ -1549,6 +1549,13 @@ export function toggleTeacherTask(id) {
   });
 }
 
+export function submitTeacherTaskReport(id, payload) {
+  return request(`/api/teacher-tasks/${id}/report`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function deleteTeacherTask(id) {
   return request(`/api/teacher-tasks/${id}`, {
     method: "DELETE"
@@ -1633,10 +1640,10 @@ export function submitWeeklyReport(cycleId, payload) {
 }
 
 // ── Mentor-assigned Custom Tasks (MentorTask) ──
-export function createMentorTask({ fellowId, month, title, description }) {
+export function createMentorTask({ fellowId, month, title, description, date }) {
   return request("/api/mentor-tasks", {
     method: "POST",
-    body: JSON.stringify({ fellowId, month, title, description }),
+    body: JSON.stringify({ fellowId, month, title, description, date }),
   });
 }
 
@@ -1700,3 +1707,56 @@ export function updateQuestionBankSections(ageGroup, sections) {
   });
 }
 // End: Prajwal
+// ── HAALS / Home Visit Observation APIs ──
+export function getFellowHaalsMetrics(fellowId) {
+  const path = fellowId ? `/api/haals/fellow/metrics?fellowId=${fellowId}` : "/api/haals/fellow/metrics";
+  return request(path);
+}
+
+export function getMentorHaalsMetrics() {
+  return request("/api/haals/mentor/metrics");
+}
+
+export function triggerHaalsAiReportStub(fellowId, month) {
+  return request("/api/haals/reports/generate-stub", {
+    method: "POST",
+    body: JSON.stringify({ fellowId, month })
+  });
+}
+
+// ── Admin Quiz APIs ──
+export function getAdminQuizzes() {
+  return request("/api/admin/quizzes");
+}
+
+export function createAdminQuiz(payload) {
+  return request("/api/admin/quizzes", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateAdminQuiz(id, payload) {
+  return request(`/api/admin/quizzes/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteAdminQuiz(id) {
+  return request(`/api/admin/quizzes/${id}`, {
+    method: "DELETE"
+  });
+}
+
+export function duplicateAdminQuiz(id) {
+  return request(`/api/admin/quizzes/${id}/duplicate`, {
+    method: "POST"
+  });
+}
+
+export function toggleAdminQuizPublish(id) {
+  return request(`/api/admin/quizzes/${id}/toggle-publish`, {
+    method: "PATCH"
+  });
+}
