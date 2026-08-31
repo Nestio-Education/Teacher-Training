@@ -416,13 +416,21 @@ export default function GeotagAttendance({ user }) {
   const absentDays = Math.max(0, totalWorkdays - presentDays);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 20, animation: "fadeIn 0.3s ease" }}>
       <div>
-        <h1 style={S.pageTitle}>Geotag Attendance</h1>
-        <p style={S.pageSub}>Register physical site attendance securely using real-time coordinates and snapshot metadata checks.</p>
+        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: "0 0 4px", letterSpacing: "-0.3px" }}>Geotag Attendance</h1>
+        <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>Register physical site attendance securely using real-time coordinates and camera checks</p>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 24, alignItems: "start" }}>
+      {/* Geofence Alert Banner */}
+      <div style={{ background: "#fff1f2", border: "1px solid #fecdd3", borderRadius: 14, padding: "12px 18px", display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ fontSize: 18 }}>📍</div>
+        <div style={{ fontSize: 12, color: "#be123c", fontWeight: 600 }}>
+          <b>Location Required:</b> You must be within 500m of your assigned center to log verified attendance.
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 20, alignItems: "start" }}>
 
         {/* LEFT: CAMERA + CHECK-IN/OUT */}
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>

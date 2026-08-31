@@ -666,71 +666,71 @@ export default function ProctoredAssessment({ assignments = [] }) {
   if (screen === "list") {
     return (
       <div style={{ animation: "fadeIn 0.3s ease" }}>
-        <h1 style={S.pageTitle}>📋 Assessments</h1>
-        <p style={S.pageSub}>Complete a course's notes to unlock its assessment — one attempt is recorded per session, and your admin can see every score.</p>
+        <div style={{ marginBottom: 20 }}>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: "0 0 4px", letterSpacing: "-0.3px" }}>Assessments</h1>
+          <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>Track progress and milestone assessment domain status</p>
+        </div>
 
-        <div style={{ background: "#fffbeb", border: "1px solid #fbbf24", borderRadius: 14, padding: "16px 20px", marginBottom: 24, display: "flex", gap: 14, alignItems: "flex-start" }}>
-          <div style={{ fontSize: 24 }}>🔐</div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 800, color: "#92400e", marginBottom: 6 }}>Proctoring Notice</div>
-            <div style={{ fontSize: 12, color: "#78350f", lineHeight: 1.7 }}>
-              • Camera activates automatically during the exam<br />
-              • Tab switching, window sharing, and right-click are not allowed<br />
-              • After 5 warnings, the exam is auto-submitted<br />
-              • Your score is saved and visible to your admin
-            </div>
+        <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 16, padding: "14px 18px", marginBottom: 20, display: "flex", gap: 12, alignItems: "center" }}>
+          <div style={{ fontSize: 20 }}>🔐</div>
+          <div style={{ fontSize: 12, color: "#92400e", lineHeight: 1.5, fontWeight: 600 }}>
+            <b>Proctoring Notice:</b> Camera activates automatically during the exam. Tab switching, window sharing, and multi-face detections trigger warnings. After 5 warnings, the exam auto-submits.
           </div>
         </div>
 
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 10 }}>✅ Ready for Assessment</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 24 }}>
-          {eligible.length === 0 && <div style={{ color: "#9ca3af", fontSize: 13 }}>No courses fully read yet — finish a course's notes in "My Courses" first.</div>}
-          {eligible.map((a) => {
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#0f172a", marginBottom: 12 }}>Ready for Assessment</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 24 }}>
+          {eligible.length === 0 && <div style={{ color: "#94a3b8", fontSize: 13, background: "white", padding: 24, borderRadius: 16, border: "1px dashed #cbd5e1", textAlign: "center" }}>No courses fully read yet — finish a course's notes in "My Courses" first.</div>}
+          {eligible.map((a, idx) => {
             const title = a.course?.title;
             const attempt = myResults[a._id];
             const hasBank = !!resolveLibraryId(a.course);
+            const domainIcons = ["🧩", "🍎", "🎨", "🏃", "📖"];
+            const icon = domainIcons[idx % domainIcons.length];
             return (
-              <div key={a._id} style={{ background: "white", borderRadius: 16, padding: "20px 24px", border: "1px solid #f1f5f9", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", borderLeft: `4px solid ${attempt ? "#3b82f6" : "#10b981"}` }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div key={a._id} style={{ background: "white", borderRadius: 18, padding: "18px 22px", border: "1px solid #f1f5f9", boxShadow: "0 2px 8px rgba(0,0,0,0.03)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                  <div style={{ width: 42, height: 42, borderRadius: 12, background: "#f8fafc", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>
+                    {icon}
+                  </div>
                   <div>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: "#1c1917" }}>{title}</div>
-                    <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 3 }}>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: "#0f172a" }}>{title}</div>
+                    <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
                       {hasBank ? "10 MCQ · AI-scored · 20 minutes" : "Assessment · AI-scored · 20 minutes"}
                     </div>
                     {attempt && (
                       <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 11, background: "#eff6ff", color: "#1d4ed8", padding: "2px 10px", borderRadius: 20, fontWeight: 700 }}>✓ Attempt recorded — one attempt only</span>
-                        <span style={{ fontSize: 11, background: "#fffbeb", color: "#92400e", padding: "2px 10px", borderRadius: 20, fontWeight: 700 }}>{attempt.score}/{attempt.total} · {attempt.percentage}%</span>
-                        <span style={{ fontSize: 11, background: "#f0f9ff", color: "#1d4ed8", padding: "2px 10px", borderRadius: 20, fontWeight: 800 }}>Grade: {attempt.grade}</span>
+                        <span style={{ fontSize: 10, background: "#eff6ff", color: "#1d4ed8", padding: "2px 10px", borderRadius: 12, fontWeight: 700 }}>✓ Attempt recorded</span>
+                        <span style={{ fontSize: 10, background: "#fef3c7", color: "#92400e", padding: "2px 10px", borderRadius: 12, fontWeight: 700 }}>{attempt.score}/{attempt.total} · {attempt.percentage}%</span>
+                        <span style={{ fontSize: 10, background: "#dcfce7", color: "#15803d", padding: "2px 10px", borderRadius: 12, fontWeight: 800 }}>Grade: {attempt.grade}</span>
                       </div>
                     )}
                   </div>
-                  {/* Start: Dnyaneshwari Thorat */}
-                  {attempt ? (
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button
-                        onClick={() => { setActiveAssignment(a); setResult({ ...attempt, courseTitle: title }); setScreen("result"); }}
-                        style={{ ...S.exportBtn, fontSize: 12, color: "#1d4ed8", borderColor: "#bfdbfe" }}
-                      >
-                        📄 View Result
-                      </button>
-                      <button
-                        onClick={() => {
-                          localStorage.removeItem("spacece_assessment_attempt_" + a._id);
-                          startAssessmentFor(a, true);
-                        }}
-                        style={{ ...S.primaryBtn, background: "linear-gradient(135deg,#10b981,#059669)", fontSize: 12, cursor: "pointer" }}
-                      >
-                        🔄 Retake Exam
-                      </button>
-                    </div>
-                  ) : (
-                    <button onClick={() => startAssessmentFor(a)} style={{ ...S.primaryBtn, background: "linear-gradient(135deg,#10b981,#059669)", fontSize: 12, cursor: "pointer" }}>
-                      Start Exam →
-                    </button>
-                  )}
-                  {/* End: Dnyaneshwari Thorat */}
                 </div>
+
+                {attempt ? (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={() => { setActiveAssignment(a); setResult({ ...attempt, courseTitle: title }); setScreen("result"); }}
+                      style={{ padding: "8px 14px", borderRadius: 12, border: "1px solid #cbd5e1", background: "white", color: "#3b82f6", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                    >
+                      View Result
+                    </button>
+                    <button
+                      onClick={() => {
+                        localStorage.removeItem("spacece_assessment_attempt_" + a._id);
+                        startAssessmentFor(a, true);
+                      }}
+                      style={{ padding: "8px 14px", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#6366f1,#4f46e5)", color: "white", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 2px 8px rgba(99,102,241,0.25)" }}
+                    >
+                      Retake Exam
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => startAssessmentFor(a)} style={{ padding: "9px 18px", borderRadius: 14, border: "none", background: "linear-gradient(135deg,#6366f1,#4f46e5)", color: "white", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 4px 12px rgba(99,102,241,0.25)" }}>
+                    Start Exam →
+                  </button>
+                )}
               </div>
             );
           })}
@@ -738,18 +738,18 @@ export default function ProctoredAssessment({ assignments = [] }) {
 
         {notReady.length > 0 && (
           <>
-            <div style={{ fontSize: 13, fontWeight: 700, color: "#9ca3af", marginBottom: 10 }}>🔒 Locked — Finish Reading First</div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#64748b", marginBottom: 12 }}>🔒 Locked Assessments (Complete Reading First)</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {notReady.map((a) => (
-                <div key={a._id} style={{ background: "#f9fafb", borderRadius: 12, padding: "14px 18px", border: "1px dashed #e5e7eb", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#6b7280" }}>{a.course?.title}</div>
-                  <div style={{ fontSize: 12, color: "#9ca3af" }}>{a.progressPercent || 0}% notes read</div>
+                <div key={a._id} style={{ background: "#f8fafc", borderRadius: 14, padding: "12px 18px", border: "1px dashed #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#64748b" }}>{a.course?.title}</div>
+                  <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600 }}>{a.progressPercent || 0}% notes read</div>
                 </div>
               ))}
             </div>
           </>
         )}
-        {loadError && <div style={{ marginTop: 16, background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 10, padding: "10px 14px", color: "#991b1b", fontSize: 12 }}>{loadError}</div>}
+        {loadError && <div style={{ marginTop: 16, background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 12, padding: "10px 14px", color: "#991b1b", fontSize: 12 }}>{loadError}</div>}
       </div>
     );
   }
