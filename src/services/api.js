@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL !== undefined ? import.meta.env.VITE_API_BASE_URL : "").replace(/\/$/, "");
 
 async function request(path, options = {}) {
   const token = localStorage.getItem("spaceece_auth_token");
@@ -35,7 +35,9 @@ async function request(path, options = {}) {
     if (response.status === 401 && (data.message === "Invalid authorization token" || data.message === "Token expired" || data.message === "Invalid token type")) {
       clearSession();
     }
-    throw new Error(data.message || `Request failed (${response.status})`);
+    const err = new Error(data.message || `Request failed (${response.status})`);
+    err.response = { status: response.status, data };
+    throw err;
   }
 
   return data;
@@ -1680,6 +1682,39 @@ export function sendPDCANotification(payload) {
     method: "POST",
     body: JSON.stringify(payload),
 
+// Start: Prajwal — add these to services/api.js, alongside your existing functions
+
+export function getActiveQuestionBank(ageGroup) {
+  return request(`/api/teacher/question-banks/active?ageGroup=${encodeURIComponent(ageGroup)}`);
+}
+
+export function getQuestionBankVersions(ageGroup) {
+  return request(`/api/teacher/question-banks/versions?ageGroup=${encodeURIComponent(ageGroup)}`);
+}
+
+export function uploadQuestionBank(ageGroup, file) {
+  const formData = new FormData();
+  formData.append("ageGroup", ageGroup);
+  formData.append("file", file);
+  return request("/api/teacher/question-banks/upload", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export function activateQuestionBankVersion(versionId) {
+  return request(`/api/teacher/question-banks/${versionId}/activate`, {
+    method: "POST",
+  });
+}
+
+export function updateQuestionBankSections(ageGroup, sections) {
+  return request("/api/teacher/question-banks/update-sections", {
+    method: "POST",
+    body: JSON.stringify({ ageGroup, sections }),
+  });
+}
+// End: Prajwal
 // ── HAALS / Home Visit Observation APIs ──
 export function getFellowHaalsMetrics(fellowId) {
   const path = fellowId ? `/api/haals/fellow/metrics?fellowId=${fellowId}` : "/api/haals/fellow/metrics";
@@ -1694,5 +1729,42 @@ export function triggerHaalsAiReportStub(fellowId, month) {
   return request("/api/haals/reports/generate-stub", {
     method: "POST",
     body: JSON.stringify({ fellowId, month })
+  });
+}
+
+// ── Admin Quiz APIs ──
+export function getAdminQuizzes() {
+  return request("/api/admin/quizzes");
+}
+
+export function createAdminQuiz(payload) {
+  return request("/api/admin/quizzes", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateAdminQuiz(id, payload) {
+  return request(`/api/admin/quizzes/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteAdminQuiz(id) {
+  return request(`/api/admin/quizzes/${id}`, {
+    method: "DELETE"
+  });
+}
+
+export function duplicateAdminQuiz(id) {
+  return request(`/api/admin/quizzes/${id}/duplicate`, {
+    method: "POST"
+  });
+}
+
+export function toggleAdminQuizPublish(id) {
+  return request(`/api/admin/quizzes/${id}/toggle-publish`, {
+    method: "PATCH"
   });
 }

@@ -13,6 +13,7 @@ import { fileURLToPath } from "url";
 import multer from "multer";
 import mongoose from "mongoose";
 import { connectDb } from "./db.js";
+import { Quiz } from "./models/Quiz.js";
 import { hashPassword, requireAuth, requireRole, signToken, verifyPassword, validatePasswordAgainstPolicy, createPasswordResetToken, verifyPasswordResetToken } from "./auth.js";
 import { generateOtp, storeOtp, verifyOtp, deleteOtp, OTP_TTL_MINUTES } from "./otp.js";
 // Start: Dnyaneshwari Thorat
@@ -95,6 +96,7 @@ import { ClassLog } from "./models/ClassLog.js";
 import { Child } from "./models/Child.js";
 // Start: Dnyaneshwari Thorat
 import { ChildAssessment } from "./models/ChildAssessment.js";
+import { QuestionBank } from "./models/QuestionBank.js";
 import ActivityCompletion from "./models/ActivityCompletion.js";
 import { buildRecommendations, getLatestStageWithData } from "./services/childAssessmentService.js";
 // End: Dnyaneshwari Thorat
@@ -149,6 +151,7 @@ const databaseModels = [
   // Start: Dnyaneshwari Thorat
   ChildAssessment,
   ActivityCompletion,
+  QuestionBank,
   // End: Dnyaneshwari Thorat
   Child,
   ClassLog,
@@ -635,7 +638,7 @@ const bypassRoutes = [
   "/api/auth/verify-otp",
   "/api/auth/reset-password",
   "/api/auth/reset-password/verify",
-  "/api/public/centers" 
+  "/api/public/centers"
 ];
 
 app.use(async (req, res, next) => {
@@ -5976,7 +5979,7 @@ app.post("/api/automation/attendance-reminders", requireAuth, requireRole("admin
 
     // Send reminders via preferred channel
     const channel = req.body.channel || "in_app";
-    
+
     // Send individually to capture per-user errors
     const sendResults = await Promise.allSettled(
       pendingTeachers.map(async (teacher) => {
@@ -6011,8 +6014,8 @@ app.post("/api/automation/attendance-reminders", requireAuth, requireRole("admin
         .flatMap(r => r.value.channelErrors)
     )];
 
-    console.log("[automation] attendance_reminders", JSON.stringify({ 
-      sent: sentTeachers.length, 
+    console.log("[automation] attendance_reminders", JSON.stringify({
+      sent: sentTeachers.length,
       pending: pendingTeachers.length,
       channelErrors: allChannelErrors,
     }));
@@ -6894,7 +6897,8 @@ app.use("/api/pdca", requireAuth, pdcaGenerateRouter);
 
 import mentorTasksRouter from "./routes/mentorTasks.js";
 app.use("/api/mentor-tasks", requireAuth, mentorTasksRouter);
-
+import questionBankRoutes from "./routes/questionBankRoutes.js";
+app.use("/api/teacher/question-banks", requireAuth, requireRole("teacher", "fellow"), questionBankRoutes);
 // ── Teacher/Fellow: View goals set by Mentor (My Goals panel) ──
 app.get("/api/teacher/goals", requireAuth, (req, res, next) => {
   if (!req.user || !(["teacher", "fellow"].includes(req.user.role))) {
@@ -7147,8 +7151,103 @@ ${roughNotes}`;
 app.use("/api/teacher-tasks", teacherTasksRouter);
 app.use("/api/haals", haalsRouter);
 
-await connectDb();
-await ensureDatabaseReady();
+// ── Admin Quiz / Assessment Management API endpoints ──
+app.get("/api/admin/quizzes", async (req, res) => {
+  try {
+    let quizzes = await Quiz.find({}).sort({ createdAt: -1 });
+    if (quizzes.length === 0) {
+      const defaults = [
+        { title: "ECCE Fundamentals Quiz", course: "Early Childhood Pedagogy", questions: 10, passMark: 60, dueDate: "2026-09-30", status: "published", attempts: 12, avgScore: 82, questionsList: [{ id: "q1", question: "What is ECCE primary focus?", options: ["Brain development & play", "Rote learning", "Formal exams", "Homework"], answer: 0 }] },
+        { title: "Child Assessment & Observation Test", course: "Assessment Methods", questions: 8, passMark: 70, dueDate: "2026-10-15", status: "published", attempts: 8, avgScore: 75, questionsList: [{ id: "q1", question: "Observation should be done:", options: ["In natural play contexts", "Only in exams", "Never", "Once a year"], answer: 0 }] },
+        { title: "Parent Engagement Evaluation", course: "Community Outreach", questions: 5, passMark: 50, dueDate: "2026-11-01", status: "draft", attempts: 0, avgScore: 0, questionsList: [] }
+      ];
+      quizzes = await Quiz.insertMany(defaults);
+    }
+    const formatted = quizzes.map(q => ({
+      id: q._id.toString(),
+      _id: q._id.toString(),
+      title: q.title,
+      course: q.course,
+      questions: q.questions || (q.questionsList ? q.questionsList.length : 10),
+      passMark: q.passMark,
+      dueDate: q.dueDate,
+      status: q.status,
+      attempts: q.attempts || 0,
+      avgScore: q.avgScore || 0,
+      questionsList: q.questionsList || []
+    }));
+    res.json({ quizzes: formatted });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch quizzes: " + err.message });
+  }
+});
+
+app.post("/api/admin/quizzes", async (req, res) => {
+  try {
+    const quiz = new Quiz(req.body);
+    await quiz.save();
+    res.status(201).json({ message: "Quiz created successfully", quiz: { ...quiz.toObject(), id: quiz._id.toString() } });
+  } catch (err) {
+    res.status(400).json({ message: "Failed to create quiz: " + err.message });
+  }
+});
+
+app.put("/api/admin/quizzes/:id", async (req, res) => {
+  try {
+    const quiz = await Quiz.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!quiz) return res.status(404).json({ message: "Quiz not found" });
+    res.json({ message: "Quiz updated successfully", quiz: { ...quiz.toObject(), id: quiz._id.toString() } });
+  } catch (err) {
+    res.status(400).json({ message: "Failed to update quiz: " + err.message });
+  }
+});
+
+app.delete("/api/admin/quizzes/:id", async (req, res) => {
+  try {
+    await Quiz.findByIdAndDelete(req.params.id);
+    res.json({ message: "Quiz deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to delete quiz: " + err.message });
+  }
+});
+
+app.post("/api/admin/quizzes/:id/duplicate", async (req, res) => {
+  try {
+    const original = await Quiz.findById(req.params.id);
+    if (!original) return res.status(404).json({ message: "Quiz not found" });
+    const obj = original.toObject();
+    delete obj._id;
+    delete obj.createdAt;
+    delete obj.updatedAt;
+    obj.title = `${obj.title} (Copy)`;
+    obj.attempts = 0;
+    obj.avgScore = 0;
+    const duplicated = new Quiz(obj);
+    await duplicated.save();
+    res.status(201).json({ message: "Quiz duplicated successfully", quiz: { ...duplicated.toObject(), id: duplicated._id.toString() } });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to duplicate quiz: " + err.message });
+  }
+});
+
+app.patch("/api/admin/quizzes/:id/toggle-publish", async (req, res) => {
+  try {
+    const quiz = await Quiz.findById(req.params.id);
+    if (!quiz) return res.status(404).json({ message: "Quiz not found" });
+    quiz.status = quiz.status === "published" ? "draft" : "published";
+    await quiz.save();
+    res.json({ message: "Quiz status updated", quiz: { ...quiz.toObject(), id: quiz._id.toString() } });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to update status: " + err.message });
+  }
+});
+
+try {
+  await connectDb();
+} catch (dbError) {
+  console.warn("⚠️ Could not connect to MongoDB database:", dbError.message);
+  console.warn("⚠️ Express server will run, but database features require MongoDB service or MONGODB_URI in backend/.env.");
+}
 
 const server = http.createServer(app);
 
@@ -7204,7 +7303,3 @@ server.on("error", (error) => {
   console.error("Failed to start API server:", error);
   process.exit(1);
 });
-
-export function getCourseAssessment(courseId) {
-  return request(`/api/courses/${courseId}/assessment`);
-}

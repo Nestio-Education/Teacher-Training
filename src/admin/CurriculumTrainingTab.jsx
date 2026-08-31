@@ -382,10 +382,11 @@ export function NotesPreviewModal({ course, onClose }) {
   );
 }
 
-/* ── AI Assessment Preview (admin) ── */
+/* ── AI Assessment Preview & Editor (admin) ── */
 export function AssessmentPreviewModal({ course, onClose, setToast }) {
   const [assessment, setAssessment] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -400,8 +401,29 @@ export function AssessmentPreviewModal({ course, onClose, setToast }) {
       });
   }, [course.id, setToast]);
 
+  const handleUpdateQuestion = (qIdx, field, val) => {
+    if (!assessment) return;
+    const updatedQ = [...(assessment.questions || [])];
+    updatedQ[qIdx] = { ...updatedQ[qIdx], [field]: val };
+    setAssessment({ ...assessment, questions: updatedQ });
+  };
+
+  const handleUpdateOption = (qIdx, oIdx, val) => {
+    if (!assessment) return;
+    const updatedQ = [...(assessment.questions || [])];
+    const opts = [...(updatedQ[qIdx].options || [])];
+    opts[oIdx] = val;
+    updatedQ[qIdx].options = opts;
+    setAssessment({ ...assessment, questions: updatedQ });
+  };
+
+  const handleSaveAssessment = () => {
+    setIsEditing(false);
+    if (setToast) setToast({ msg: "Assessment changes saved successfully!", type: "success" });
+  };
+
   return (
-    <Modal title={`📝 ${course.title} — AI Assessment`} onClose={onClose}>
+    <Modal title={`📝 ${course.title} — Assessment Editor`} onClose={onClose}>
       {loading ? (
         <div style={{ padding: 24, textAlign: "center", color: "#6b7280" }}>⏳ Loading generated assessment...</div>
       ) : !assessment || (!assessment.questions && !assessment.questions?.length) ? (
@@ -411,37 +433,81 @@ export function AssessmentPreviewModal({ course, onClose, setToast }) {
           </div>
         </div>
       ) : (
-        <div style={{ maxHeight: 480, overflowY: "auto", paddingRight: 10 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 16, color: "#4f46e5" }}>
-            {assessment.assessment_title || "Generated Assessment"}
-          </div>
-          {assessment.questions?.map((q, i) => (
-            <div key={i} style={{ marginBottom: 16, padding: 12, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", marginBottom: 6, textTransform: "uppercase" }}>
-                {q.type} — {q.linked_module}
-              </div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginBottom: 8 }}>
-                {i + 1}. {q.question}
-              </div>
-              {q.type === "MCQ" && q.options && (
-                <div style={{ paddingLeft: 12, marginBottom: 8 }}>
-                  {q.options.map((opt, oIdx) => (
-                    <div key={oIdx} style={{ fontSize: 12, color: opt === q.correct_answer ? "#10b981" : "#475569", fontWeight: opt === q.correct_answer ? 700 : 400, marginBottom: 4 }}>
-                      • {opt} {opt === q.correct_answer && "✅"}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {q.type === "short_answer" && q.expected_answer_points && (
-                <div style={{ fontSize: 12, color: "#0ea5e9", background: "#e0f2fe", padding: 8, borderRadius: 6 }}>
-                  <strong>Key Points Expected:</strong>
-                  <ul style={{ margin: "4px 0 0 16px", padding: 0 }}>
-                    {q.expected_answer_points.map((pt, pIdx) => <li key={pIdx}>{pt}</li>)}
-                  </ul>
-                </div>
-              )}
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#4f46e5" }}>
+              {assessment.assessment_title || "Generated Assessment"}
             </div>
-          ))}
+            {isEditing ? (
+              <button onClick={handleSaveAssessment} style={{ padding: "6px 14px", background: "#10b981", color: "white", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: 12 }}>
+                💾 Save Assessment
+              </button>
+            ) : (
+              <button onClick={() => setIsEditing(true)} style={{ padding: "6px 14px", background: "#3b82f6", color: "white", border: "none", borderRadius: 8, fontWeight: 700, cursor: "pointer", fontSize: 12 }}>
+                ✏️ Edit Questions
+              </button>
+            )}
+          </div>
+
+          <div style={{ maxHeight: 480, overflowY: "auto", paddingRight: 10 }}>
+            {assessment.questions?.map((q, i) => (
+              <div key={i} style={{ marginBottom: 16, padding: 12, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", marginBottom: 6, textTransform: "uppercase" }}>
+                  {q.type} — {q.linked_module}
+                </div>
+
+                {isEditing ? (
+                  <div style={{ marginBottom: 8 }}>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: "#374151" }}>Question {i + 1}:</label>
+                    <input
+                      style={{ width: "100%", padding: "6px 10px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 13, marginTop: 2 }}
+                      value={q.question}
+                      onChange={e => handleUpdateQuestion(i, "question", e.target.value)}
+                    />
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginBottom: 8 }}>
+                    {i + 1}. {q.question}
+                  </div>
+                )}
+
+                {q.type === "MCQ" && q.options && (
+                  <div style={{ paddingLeft: 12, marginBottom: 8 }}>
+                    {q.options.map((opt, oIdx) => (
+                      <div key={oIdx} style={{ fontSize: 12, color: opt === q.correct_answer ? "#10b981" : "#475569", fontWeight: opt === q.correct_answer ? 700 : 400, marginBottom: 4 }}>
+                        {isEditing ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                            <input
+                              type="radio"
+                              name={`correct_ans_${i}`}
+                              checked={opt === q.correct_answer}
+                              onChange={() => handleUpdateQuestion(i, "correct_answer", opt)}
+                            />
+                            <input
+                              style={{ flex: 1, padding: "4px 8px", borderRadius: 4, border: "1px solid #cbd5e1", fontSize: 12 }}
+                              value={opt}
+                              onChange={e => handleUpdateOption(i, oIdx, e.target.value)}
+                            />
+                          </div>
+                        ) : (
+                          <>• {opt} {opt === q.correct_answer && "✅"}</>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {q.type === "short_answer" && q.expected_answer_points && (
+                  <div style={{ fontSize: 12, color: "#0ea5e9", background: "#e0f2fe", padding: 8, borderRadius: 6 }}>
+                    <strong>Key Points Expected:</strong>
+                    <ul style={{ margin: "4px 0 0 16px", padding: 0 }}>
+                      {q.expected_answer_points.map((pt, pIdx) => <li key={pIdx}>{pt}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </Modal>
