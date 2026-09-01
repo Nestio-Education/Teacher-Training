@@ -228,8 +228,12 @@ async function resolveIdsForBatch(parsedRows) {
 // Accepts a single row object or an array of row objects
 router.post("/visits", async (req, res, next) => {
   try {
-    // Secret sync token check (mandatory)
-    const expectedSecret = process.env.HAALS_SYNC_SECRET || "spaceece_haals_sync_secret_token_2026";
+    // Secret sync token check (mandatory from environment variable)
+    const expectedSecret = process.env.HAALS_SYNC_SECRET;
+    if (!expectedSecret) {
+      console.error("[HAALS Sync] HAALS_SYNC_SECRET environment variable is not configured on the server.");
+      return res.status(500).json({ success: false, message: "HAALS_SYNC_SECRET is not configured on the server." });
+    }
     const clientSecret = req.headers["x-sync-secret"] || req.query.secret;
     if (!clientSecret || clientSecret !== expectedSecret) {
       return res.status(401).json({ success: false, message: "Unauthorized sync attempt." });
@@ -548,7 +552,10 @@ router.post("/reports/generate-stub", requireAuth, async (req, res, next) => {
 // ── 5. Debug Stats for Ingestion Audit ──
 router.get("/debug-stats", async (req, res, next) => {
   try {
-    const expectedSecret = process.env.HAALS_SYNC_SECRET || "spaceece_haals_sync_secret_token_2026";
+    const expectedSecret = process.env.HAALS_SYNC_SECRET;
+    if (!expectedSecret) {
+      return res.status(500).json({ success: false, message: "HAALS_SYNC_SECRET is not configured on the server." });
+    }
     const clientSecret = req.query.secret || req.headers["x-sync-secret"];
     if (!clientSecret || clientSecret !== expectedSecret) {
       return res.status(401).json({ success: false, message: "Unauthorized debug check." });

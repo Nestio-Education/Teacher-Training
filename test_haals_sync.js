@@ -36,7 +36,7 @@ async function runTest() {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-sync-secret": "spaceece_haals_sync_secret_token_2026"
+        "x-sync-secret": process.env.HAALS_SYNC_SECRET || process.argv[2] || ""
       },
       body: JSON.stringify(sampleRow)
     });

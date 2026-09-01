@@ -1,5 +1,6 @@
 async function queryRender() {
-  const url = "https://nestio-preschool-website.onrender.com/api/haals/debug-stats?secret=spaceece_haals_sync_secret_token_2026";
+  const secret = process.env.HAALS_SYNC_SECRET || process.argv[2] || "";
+  const url = `https://nestio-preschool-website.onrender.com/api/haals/debug-stats?secret=${encodeURIComponent(secret)}`;
   console.log("Fetching stats from production Render server...");
   try {
     const response = await fetch(url);

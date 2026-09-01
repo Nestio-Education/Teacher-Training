@@ -7,7 +7,8 @@
  */
 
 var HAALS_BACKEND_URL = "https://nestio-preschool-website.onrender.com/api/haals/visits";
-var HAALS_SYNC_SECRET = "spaceece_haals_sync_secret_token_2026";
+// Securely loaded from Google Apps Script 'Script Properties' (Project Settings -> Script Properties)
+var HAALS_SYNC_SECRET = PropertiesService.getScriptProperties().getProperty("HAALS_SYNC_SECRET") || "PASTE_YOUR_NEW_SECRET_HERE";
 var SHEET_TAB_NAME = "Form responses 1";
 var BATCH_SIZE = 150; // Optimized batch size
 
