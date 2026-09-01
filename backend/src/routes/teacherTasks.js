@@ -5,6 +5,50 @@ import { sendNotification } from "../services/notificationService.js";
 
 const router = express.Router();
 
+const normalizeTaskCategory = (category, role = "") => {
+  if (category === "mentor_assigned") return "mentor_task";
+  if (category === "mentor_task") return "mentor_task";
+  if (category === "admin_assigned") return "admin_assigned";
+  return category || (role === "mentor" ? "mentor_task" : "homework");
+};
+
+const getHolidaySet = (holidayDates = "") => {
+  const set = new Set();
+  for (const entry of String(holidayDates || "").split(",")) {
+    const trimmed = entry.trim();
+    if (trimmed) set.add(trimmed);
+  }
+  return set;
+};
+
+const expandTaskDates = ({ startDate, endDate, skipWeekends = false, holidayDates = "" }) => {
+  const normalizedStart = startDate || endDate;
+  const normalizedEnd = endDate || startDate;
+  if (!normalizedStart || !normalizedEnd) return [];
+
+  const start = new Date(`${normalizedStart}T12:00:00`);
+  const end = new Date(`${normalizedEnd}T12:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [];
+
+  const dates = [];
+  const holidaySet = getHolidaySet(holidayDates);
+  const current = new Date(start);
+
+  while (current <= end) {
+    const isoDate = current.toISOString().slice(0, 10);
+    const isWeekend = current.getDay() === 0 || current.getDay() === 6;
+    const isHoliday = holidaySet.has(isoDate);
+
+    if (!isWeekend || !skipWeekends) {
+      if (!isHoliday) dates.push(isoDate);
+    }
+
+    current.setDate(current.getDate() + 1);
+  }
+
+  return dates;
+};
+
 // End-of-day submission cutoff: 11:59:59 PM IST (Asia/Kolkata, UTC+5:30), fixed —
 // computed explicitly rather than relying on server TZ, since all users are in India.
 const IST_OFFSET_MINUTES = 5 * 60 + 30;
@@ -46,10 +90,24 @@ router.get("/for-teacher/:teacherId", requireAuth, async (req, res, next) => {
   }
 });
 
-// POST /api/teacher-tasks/admin-assign - Admin assigns task to a target teacher
+// POST /api/teacher-tasks/admin-assign - Admin/Mentor assigns task to a target teacher
 router.post("/admin-assign", requireAuth, async (req, res, next) => {
   try {
-    const { teacherId, title, category, date, startTime, endTime, time } = req.body;
+    const {
+      teacherId,
+      title,
+      category,
+      date,
+      startDate,
+      endDate,
+      startTime,
+      endTime,
+      time,
+      taskMode,
+      skipWeekends,
+      holidayDates
+    } = req.body;
+
     if (!teacherId) {
       return res.status(400).json({ message: "target teacherId is required" });
     }
@@ -57,18 +115,36 @@ router.post("/admin-assign", requireAuth, async (req, res, next) => {
       return res.status(400).json({ message: "Task title is required" });
     }
 
-    const doc = await TeacherTask.create({
-      teacher: teacherId,
-      createdBy: req.user.id,
-      assignedByAdmin: true,
-      title: title.trim(),
-      category: category || "admin_assigned",
-      date: date || new Date().toISOString().split("T")[0],
-      startTime: startTime || "11:30",
-      endTime: endTime || "12:30",
-      time: time || `${startTime || "11:30"} - ${endTime || "12:30"}`,
-      completed: false
-    });
+    const isRecurringDaily = taskMode === "daily" && (startDate || endDate);
+    const taskDates = isRecurringDaily
+      ? expandTaskDates({ startDate, endDate, skipWeekends: !!skipWeekends, holidayDates })
+      : [date || new Date().toISOString().split("T")[0]];
+
+    if (taskDates.length === 0) {
+      return res.status(400).json({ message: "No valid dates were generated for the task range." });
+    }
+
+    const normalizedCategory = normalizeTaskCategory(category, req.user.role);
+    const createdDocs = [];
+
+    for (const taskDate of taskDates) {
+      const created = await TeacherTask.create({
+        teacher: teacherId,
+        createdBy: req.user.id,
+        assignedByAdmin: req.user.role === "admin" || req.user.role === "super_admin",
+        assignedByMentor: req.user.role === "mentor",
+        title: title.trim(),
+        category: normalizedCategory,
+        date: taskDate,
+        startTime: startTime || "11:30",
+        endTime: endTime || "12:30",
+        time: time || `${startTime || "11:30"} - ${endTime || "12:30"}`,
+        completed: false
+      });
+      createdDocs.push(created);
+    }
+
+    const primaryDoc = createdDocs[0];
 
     // Alert only the teacher/fellow this task was assigned to.
     try {
@@ -78,21 +154,27 @@ router.post("/admin-assign", requireAuth, async (req, res, next) => {
         channel: "in_app",
         priority: "normal",
         replacements: {
-          assignerName: req.user.name || "Admin",
-          taskTitle: doc.title,
-          taskDate: doc.date
+          assignerName: req.user.name || (req.user.role === "mentor" ? "Mentor" : "Admin"),
+          taskTitle: primaryDoc.title,
+          taskDate: primaryDoc.date
         },
         metadata: {
-          taskId: doc._id,
+          taskId: primaryDoc._id,
           assignedBy: req.user.id,
-          notificationType: "task_assigned"
+          notificationType: "task_assigned",
+          createdCount: createdDocs.length
         }
       });
     } catch (notifyErr) {
       console.warn("Failed to send task_assigned notification:", notifyErr.message);
     }
 
-    res.status(201).json(doc);
+    res.status(201).json({
+      success: true,
+      createdCount: createdDocs.length,
+      tasks: createdDocs,
+      task: primaryDoc
+    });
   } catch (err) {
     next(err);
   }

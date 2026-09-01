@@ -26,6 +26,10 @@ const teacherTaskSchema = new mongoose.Schema(
       type: Boolean,
       default: false
     },
+    assignedByMentor: {
+      type: Boolean,
+      default: false
+    },
     title: {
       type: String,
       required: true,
@@ -35,9 +39,9 @@ const teacherTaskSchema = new mongoose.Schema(
       type: String,
       enum: [
         // Legacy categories (kept for backward compatibility with existing docs)
-        "homework", "exam", "workshop", "class", "tech", "admin_assigned",
-        // Calendar categories used by ACTIVITY_CATEGORIES (UniversalActivityReportModal.jsx)
-        "class_lesson", "field_visit", "pcb_session", "pdca_deliverable", "self_learning", "custom_task"
+        "homework", "exam", "workshop", "class", "tech", "admin_assigned", "mentor_assigned",
+        // Mentor and calendar categories used by the UI and reports
+        "mentor_task", "class_lesson", "field_visit", "pcb_session", "pdca_deliverable", "self_learning", "custom_task"
       ],
       default: "homework"
     },

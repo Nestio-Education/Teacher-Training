@@ -133,7 +133,7 @@ export default function FellowGrowthCycleTab({ user, setToast }) {
     setLoadingMentorTasks(true);
     getFellowAssignedTasks({ month: selectedMonth })
       .then((res) => { if (res.success) setMentorTasks(res.tasks || []); })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoadingMentorTasks(false));
   }, [selectedMonth]);
 
@@ -315,54 +315,67 @@ export default function FellowGrowthCycleTab({ user, setToast }) {
   return (
     <div style={{ animation: "fadeIn 0.3s ease", paddingBottom: 40 }}>
       {/* ── Page Header ── */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16, marginBottom: 20 }}>
+      <div style={{
+        display: "flex",
+        justify: "space-between",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: 16,
+        marginBottom: 24,
+        background: "linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,250,252,0.9) 100%)",
+        padding: "20px 24px",
+        borderRadius: "20px",
+        border: "1px solid rgba(226, 232, 240, 0.8)",
+        boxShadow: "0 10px 25px -5px rgba(0,0,0,0.03)",
+        backdropFilter: "blur(12px)"
+      }}>
         <div>
-          <h1 style={{ ...S.pageTitle, display: "flex", alignItems: "center", gap: 10 }}>
+          <h1 style={{ ...S.pageTitle, display: "flex", alignItems: "center", gap: 10, margin: 0, fontSize: "22px", color: "#0f172a" }}>
             <span>📈 UMANG Growth Cycle (PDCA)</span>
-            <span style={{ fontSize: 12, fontWeight: 700, padding: "3px 10px", borderRadius: 999, background: "#ede9fe", color: "#6d28d9", border: "1px solid #c4b5fd" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 12px", borderRadius: 999, background: "linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)", color: "#6d28d9", border: "1px solid #c4b5fd" }}>
               24-Month Fellowship
             </span>
           </h1>
-          <p style={S.pageSub}>
+          <p style={{ ...S.pageSub, margin: "6px 0 0 0", color: "#64748b" }}>
             Track your monthly milestone targets, check off daily & weekly deliverables, and view mentor evaluation reports.
           </p>
         </div>
 
         {assignedMentor && (
-          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: "8px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 20 }}>💼</span>
+          <div style={{ background: "rgba(241, 245, 249, 0.8)", border: "1px solid #e2e8f0", borderRadius: 14, padding: "10px 16px", display: "flex", alignItems: "center", gap: 12, marginLeft: "auto", }}>
+            <span style={{ fontSize: 24 }}>💼</span>
             <div>
-              <div style={{ fontSize: 11, fontWeight: 800, color: "#64748b", textTransform: "uppercase" }}>Assigned Mentor</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a" }}>{assignedMentor.name}</div>
+              <div style={{ fontSize: 10, fontWeight: 800, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>Assigned Mentor</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{assignedMentor.name}</div>
             </div>
           </div>
         )}
       </div>
 
       {/* ── Metric Summary Cards ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 14, marginBottom: 24 }}>
-        <div style={{ background: "white", borderRadius: 14, border: "1px solid #e2e8f0", borderTop: "4px solid #7c3aed", padding: "14px 16px" }}>
-          <div style={{ fontSize: 22, fontWeight: 900, color: "#7c3aed" }}>{approvedMonthsCount} / 24</div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>Months Approved ✅</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16, marginBottom: 26 }}>
+        <div className="teacher-stat-card glass-panel" style={{ borderRadius: 16, borderTop: "4px solid #7c3aed", padding: "18px 20px", background: "white" }}>
+          <div style={{ fontSize: 24, fontWeight: 900, color: "#7c3aed", letterSpacing: "-0.5px" }}>{approvedMonthsCount} / 24</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginTop: 4 }}>Months Approved ✅</div>
         </div>
-        <div style={{ background: "white", borderRadius: 14, border: "1px solid #e2e8f0", borderTop: "4px solid #3b82f6", padding: "14px 16px" }}>
-          <div style={{ fontSize: 22, fontWeight: 900, color: "#0f172a" }}>Month {selectedMonth}</div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>Current Selected</div>
+        <div className="teacher-stat-card glass-panel" style={{ borderRadius: 16, borderTop: "4px solid #3b82f6", padding: "18px 20px", background: "white" }}>
+          <div style={{ fontSize: 24, fontWeight: 900, color: "#0f172a", letterSpacing: "-0.5px" }}>Month {selectedMonth}</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginTop: 4 }}>Current Selected</div>
         </div>
-        <div style={{ background: "white", borderRadius: 14, border: "1px solid #e2e8f0", borderTop: "4px solid #10b981", padding: "14px 16px" }}>
-          <div style={{ fontSize: 22, fontWeight: 900, color: "#059669" }}>{metCount} / {totalDeliverables}</div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>Month Deliverables Met</div>
+        <div className="teacher-stat-card glass-panel" style={{ borderRadius: 16, borderTop: "4px solid #10b981", padding: "18px 20px", background: "white" }}>
+          <div style={{ fontSize: 24, fontWeight: 900, color: "#059669", letterSpacing: "-0.5px" }}>{metCount} / {totalDeliverables}</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginTop: 4 }}>Month Deliverables Met</div>
         </div>
-        <div style={{ background: "white", borderRadius: 14, border: "1px solid #e2e8f0", borderTop: "4px solid #f59e0b", padding: "14px 16px" }}>
-          <div style={{ fontSize: 22, fontWeight: 900, color: progressPercent === 100 ? "#059669" : "#d97706" }}>{progressPercent}%</div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>Month Completion</div>
+        <div className="teacher-stat-card glass-panel" style={{ borderRadius: 16, borderTop: "4px solid #f59e0b", padding: "18px 20px", background: "white" }}>
+          <div style={{ fontSize: 24, fontWeight: 900, color: progressPercent === 100 ? "#059669" : "#d97706", letterSpacing: "-0.5px" }}>{progressPercent}%</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginTop: 4 }}>Month Completion</div>
         </div>
       </div>
 
       {/* ── 24-Month Roadmap Navigator ── */}
-      <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 16, padding: "18px 20px", marginBottom: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: "#0f172a", display: "flex", alignItems: "center", gap: 8 }}>
+      <div className="glass-panel" style={{ borderRadius: 20, padding: "20px 24px", marginBottom: 24, boxShadow: "0 4px 20px -4px rgba(0,0,0,0.04)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a", display: "flex", alignItems: "center", gap: 8 }}>
             <span>🗺️ Fellowship Roadmap (24 Months)</span>
             <span style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>— Click any month to view & track</span>
           </div>
@@ -380,15 +393,16 @@ export default function FellowGrowthCycleTab({ user, setToast }) {
                 key={sem.id}
                 onClick={() => setActiveSemFilter(sem.id)}
                 style={{
-                  padding: "5px 12px",
-                  borderRadius: 8,
+                  padding: "6px 14px",
+                  borderRadius: 10,
                   border: "none",
                   fontSize: 11.5,
                   fontWeight: 700,
                   cursor: "pointer",
-                  background: activeSemFilter === sem.id ? "#7c3aed" : "#f1f5f9",
+                  background: activeSemFilter === sem.id ? "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)" : "#f1f5f9",
                   color: activeSemFilter === sem.id ? "white" : "#475569",
-                  transition: "all 0.15s",
+                  boxShadow: activeSemFilter === sem.id ? "0 4px 12px -2px rgba(124, 58, 237, 0.3)" : "none",
+                  transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                 }}
               >
                 {sem.label}
@@ -398,7 +412,7 @@ export default function FellowGrowthCycleTab({ user, setToast }) {
         </div>
 
         {/* Horizontal Card Strip */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(135px, 1fr))", gap: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 12 }}>
           {filteredMonths.map((m) => {
             const isSelected = selectedMonth === m.month;
             const isApproved = m.status === "approved";
@@ -423,35 +437,36 @@ export default function FellowGrowthCycleTab({ user, setToast }) {
                 key={m.month}
                 onClick={() => setSelectedMonth(m.month)}
                 style={{
-                  padding: "10px 12px",
-                  borderRadius: 12,
+                  padding: "12px 14px",
+                  borderRadius: 14,
                   cursor: "pointer",
                   border: isSelected ? "2px solid #7c3aed" : "1px solid #e2e8f0",
-                  background: isSelected ? "#f5f3ff" : "white",
-                  boxShadow: isSelected ? "0 4px 12px rgba(124,58,237,0.15)" : "none",
-                  transition: "all 0.15s ease",
+                  background: isSelected ? "linear-gradient(135deg, #ffffff 0%, #f5f3ff 100%)" : "white",
+                  boxShadow: isSelected ? "0 8px 20px -4px rgba(124,58,237,0.2)" : "0 2px 6px rgba(0,0,0,0.02)",
+                  transform: isSelected ? "translateY(-2px)" : "none",
+                  transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                   display: "flex",
                   flexDirection: "column",
-                  justifyContent: "space-between",
+                  justify: "space-between",
                 }}
               >
                 <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                     <span style={{ fontSize: 13, fontWeight: 900, color: isSelected ? "#7c3aed" : "#0f172a" }}>
                       M{m.month}
                     </span>
-                    <span style={{ fontSize: 9.5, fontWeight: 800, background: badgeBg, color: badgeColor, padding: "1px 6px", borderRadius: 4 }}>
+                    <span style={{ fontSize: 9.5, fontWeight: 800, background: badgeBg, color: badgeColor, padding: "2px 6px", borderRadius: 6 }}>
                       {badgeText}
                     </span>
                   </div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "#334155", lineHeight: 1.3, marginBottom: 8, minHeight: 28 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "#334155", lineHeight: 1.35, marginBottom: 10, minHeight: 28 }}>
                     {m.title}
                   </div>
                 </div>
 
                 <div>
-                  <div style={{ height: 4, borderRadius: 2, background: "#e2e8f0", overflow: "hidden", marginBottom: 4 }}>
-                    <div style={{ height: "100%", width: `${m.percent}%`, background: isApproved ? "#10b981" : "#7c3aed" }} />
+                  <div style={{ height: 5, borderRadius: 3, background: "#e2e8f0", overflow: "hidden", marginBottom: 4 }}>
+                    <div style={{ height: "100%", width: `${m.percent}%`, background: isApproved ? "linear-gradient(90deg, #10b981, #059669)" : "linear-gradient(90deg, #6366f1, #7c3aed)" }} />
                   </div>
                   <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", textAlign: "right" }}>
                     {m.metCount}/{m.totalCount}
@@ -466,29 +481,29 @@ export default function FellowGrowthCycleTab({ user, setToast }) {
       {/* ── Selected Month Detail & Action Workspace ── */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 20 }}>
         {/* Top Month Header Card */}
-        <div style={{ background: "white", border: "1px solid #e2e8f0", borderRadius: 16, padding: "20px 24px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
+        <div className="glass-panel" style={{ borderRadius: 20, padding: "24px 28px", boxShadow: "0 4px 20px -4px rgba(0,0,0,0.04)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 11, fontWeight: 800, color: "#7c3aed", background: "#f3e8ff", padding: "2px 8px", borderRadius: 6, textTransform: "uppercase" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: "#6d28d9", background: "linear-gradient(135deg, #f3e8ff 0%, #ede9fe 100%)", border: "1px solid #ddd6fe", padding: "3px 10px", borderRadius: 8, textTransform: "uppercase", letterSpacing: "0.5px" }}>
                   {SEMESTER_LABELS[semesterOf(selectedMonth)]}
                 </span>
                 {isMonthLocked && (
-                  <span style={{ fontSize: 11, fontWeight: 800, color: "#065f46", background: "#d1fae5", padding: "2px 8px", borderRadius: 6 }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: "#065f46", background: "#d1fae5", border: "1px solid #a7f3d0", padding: "3px 10px", borderRadius: 8 }}>
                     ✓ Locked & Approved by Mentor
                   </span>
                 )}
               </div>
-              <h2 style={{ fontSize: 18, fontWeight: 900, color: "#0f172a", margin: "4px 0" }}>
+              <h2 style={{ fontSize: 20, fontWeight: 900, color: "#0f172a", margin: "4px 0" }}>
                 Month {selectedMonth}: {MONTH_TITLES[selectedMonth] || `Month ${selectedMonth}`}
               </h2>
             </div>
 
             {!isMonthLocked && (
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                 {hasUnsavedChanges && (
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#d97706" }}>
-                    ● Unsaved changes
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#ea580c", display: "flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ea580c", display: "inline-block" }}></span> Unsaved changes
                   </span>
                 )}
                 <button
@@ -496,16 +511,16 @@ export default function FellowGrowthCycleTab({ user, setToast }) {
                   onClick={handleSaveChecklist}
                   disabled={saving || !hasUnsavedChanges}
                   style={{
-                    padding: "9px 20px",
-                    borderRadius: 10,
+                    padding: "10px 24px",
+                    borderRadius: 12,
                     border: "none",
-                    background: hasUnsavedChanges ? "#7c3aed" : "#e2e8f0",
+                    background: hasUnsavedChanges ? "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)" : "#e2e8f0",
                     color: hasUnsavedChanges ? "white" : "#94a3b8",
                     fontSize: 13,
                     fontWeight: 700,
                     cursor: hasUnsavedChanges ? "pointer" : "not-allowed",
-                    boxShadow: hasUnsavedChanges ? "0 2px 8px rgba(124,58,237,0.3)" : "none",
-                    transition: "all 0.15s ease",
+                    boxShadow: hasUnsavedChanges ? "0 4px 14px -2px rgba(124,58,237,0.4)" : "none",
+                    transition: "all 0.2s ease",
                   }}
                 >
                   {saving ? "Saving…" : "💾 Save My Progress"}
@@ -515,28 +530,28 @@ export default function FellowGrowthCycleTab({ user, setToast }) {
           </div>
 
           {/* Objective Box */}
-          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: "14px 16px", marginBottom: 16 }}>
-            <div style={{ fontSize: 11, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>
+          <div style={{ background: "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)", border: "1px solid #e2e8f0", borderRadius: 14, padding: "16px 18px", marginBottom: 18 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: "#475569", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
               🎯 Monthly Learning Objective
             </div>
-            <div style={{ fontSize: 13, color: "#1e293b", lineHeight: 1.5 }}>
+            <div style={{ fontSize: 13.5, color: "#1e293b", lineHeight: 1.55, fontWeight: 500 }}>
               {currentObjective}
             </div>
           </div>
 
           {/* Weekly Focus (Collapsible) */}
           {currentWeeklyFocus?.length > 0 && (
-            <div style={{ border: "1px solid #eef2ff", background: "#f5f7ff", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: "#4338ca", textTransform: "uppercase", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ border: "1px solid #c7d2fe", background: "linear-gradient(135deg, #f5f7ff 0%, #eef2ff 100%)", borderRadius: 14, padding: "14px 18px", marginBottom: 18 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: "#4338ca", textTransform: "uppercase", marginBottom: 10, display: "flex", alignItems: "center", gap: 6, letterSpacing: "0.5px" }}>
                 <span>📅 4-Week Focus Roadmap</span>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
                 {currentWeeklyFocus.map((w) => (
-                  <div key={w.week} style={{ background: "white", padding: "10px 12px", borderRadius: 8, border: "1px solid #e0e7ff" }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: "#4338ca", marginBottom: 2 }}>
+                  <div key={w.week} style={{ background: "white", padding: "12px 14px", borderRadius: 10, border: "1px solid #e0e7ff", boxShadow: "0 2px 6px rgba(0,0,0,0.02)" }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: "#4338ca", marginBottom: 3 }}>
                       Week {w.week}
                     </div>
-                    <div style={{ fontSize: 12, color: "#334155", lineHeight: 1.4 }}>
+                    <div style={{ fontSize: 12, color: "#334155", lineHeight: 1.45 }}>
                       {w.focus}
                     </div>
                   </div>

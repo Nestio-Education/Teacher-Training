@@ -208,16 +208,16 @@ function UnderConstructionTab({ label = "This page", icon = "🚧" }) {
 /* ── Colorful KPI Stat Card (Admin-dashboard style) ── */
 function TeacherStatCard({ icon, label, val, accent = "#3b82f6", subtitle, subtitleColor }) {
   return (
-    <div style={{
+    <div className="teacher-stat-card" style={{
+      "--stat-accent": accent,
       background: "white",
       borderRadius: 16,
-      border: "1px solid #f1f5f9",
-      borderTop: `4px solid ${accent}`,
-      padding: "18px 18px 16px",
-      boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+      border: "1px solid #e2e8f0",
+      padding: "18px",
+      boxShadow: "0 1px 3px rgba(15,23,42,0.05)",
       transition: "transform 0.15s ease, box-shadow 0.15s ease"
     }}>
-      <div style={{
+      <div className="teacher-stat-icon" style={{
         width: 40, height: 40, borderRadius: 12,
         background: `${accent}1A`,
         display: "flex", alignItems: "center", justifyContent: "center",
@@ -530,29 +530,29 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
   // Flat pastel block palette — solid fills + a matching darker text tone for contrast.
   // Local to this component. Independent from ACTIVITY_CATEGORIES (used by the report modal).
   const categoryBlock = {
-    class_lesson:     { fill: ACTIVITY_CATEGORIES.class_lesson.bg,     text: ACTIVITY_CATEGORIES.class_lesson.color,     icon: "📖" },
-    field_visit:      { fill: ACTIVITY_CATEGORIES.field_visit.bg,      text: ACTIVITY_CATEGORIES.field_visit.color,      icon: "🏕️" },
-    pcb_session:      { fill: ACTIVITY_CATEGORIES.pcb_session.bg,      text: ACTIVITY_CATEGORIES.pcb_session.color,      icon: "🧪" },
+    class_lesson: { fill: ACTIVITY_CATEGORIES.class_lesson.bg, text: ACTIVITY_CATEGORIES.class_lesson.color, icon: "📖" },
+    field_visit: { fill: ACTIVITY_CATEGORIES.field_visit.bg, text: ACTIVITY_CATEGORIES.field_visit.color, icon: "🏕️" },
+    pcb_session: { fill: ACTIVITY_CATEGORIES.pcb_session.bg, text: ACTIVITY_CATEGORIES.pcb_session.color, icon: "🧪" },
     pdca_deliverable: { fill: ACTIVITY_CATEGORIES.pdca_deliverable.bg, text: ACTIVITY_CATEGORIES.pdca_deliverable.color, icon: "📈" },
-    self_learning:    { fill: ACTIVITY_CATEGORIES.self_learning.bg,    text: ACTIVITY_CATEGORIES.self_learning.color,    icon: "🧠" },
-    custom_task:      { fill: ACTIVITY_CATEGORIES.custom_task.bg,      text: ACTIVITY_CATEGORIES.custom_task.color,      icon: "📝" },
-    mentor_task:      { fill: "#e0e7ff", text: "#3730a3", icon: "👨🏫" },
+    self_learning: { fill: ACTIVITY_CATEGORIES.self_learning.bg, text: ACTIVITY_CATEGORIES.self_learning.color, icon: "🧠" },
+    custom_task: { fill: ACTIVITY_CATEGORIES.custom_task.bg, text: ACTIVITY_CATEGORIES.custom_task.color, icon: "📝" },
+    mentor_task: { fill: "#e0e7ff", text: "#3730a3", icon: "👨🏫" },
   };
 
   const categoryMeta = {
-    class_lesson:     { bg: ACTIVITY_CATEGORIES.class_lesson.bg,     border: ACTIVITY_CATEGORIES.class_lesson.border,     color: ACTIVITY_CATEGORIES.class_lesson.color,     label: ACTIVITY_CATEGORIES.class_lesson.label },
-    field_visit:      { bg: ACTIVITY_CATEGORIES.field_visit.bg,      border: ACTIVITY_CATEGORIES.field_visit.border,      color: ACTIVITY_CATEGORIES.field_visit.color,      label: ACTIVITY_CATEGORIES.field_visit.label },
-    pcb_session:      { bg: ACTIVITY_CATEGORIES.pcb_session.bg,      border: ACTIVITY_CATEGORIES.pcb_session.border,      color: ACTIVITY_CATEGORIES.pcb_session.color,      label: ACTIVITY_CATEGORIES.pcb_session.label },
+    class_lesson: { bg: ACTIVITY_CATEGORIES.class_lesson.bg, border: ACTIVITY_CATEGORIES.class_lesson.border, color: ACTIVITY_CATEGORIES.class_lesson.color, label: ACTIVITY_CATEGORIES.class_lesson.label },
+    field_visit: { bg: ACTIVITY_CATEGORIES.field_visit.bg, border: ACTIVITY_CATEGORIES.field_visit.border, color: ACTIVITY_CATEGORIES.field_visit.color, label: ACTIVITY_CATEGORIES.field_visit.label },
+    pcb_session: { bg: ACTIVITY_CATEGORIES.pcb_session.bg, border: ACTIVITY_CATEGORIES.pcb_session.border, color: ACTIVITY_CATEGORIES.pcb_session.color, label: ACTIVITY_CATEGORIES.pcb_session.label },
     pdca_deliverable: { bg: ACTIVITY_CATEGORIES.pdca_deliverable.bg, border: ACTIVITY_CATEGORIES.pdca_deliverable.border, color: ACTIVITY_CATEGORIES.pdca_deliverable.color, label: ACTIVITY_CATEGORIES.pdca_deliverable.label },
-    self_learning:    { bg: ACTIVITY_CATEGORIES.self_learning.bg,    border: ACTIVITY_CATEGORIES.self_learning.border,    color: ACTIVITY_CATEGORIES.self_learning.color,    label: ACTIVITY_CATEGORIES.self_learning.label },
-    custom_task:      { bg: ACTIVITY_CATEGORIES.custom_task.bg,      border: ACTIVITY_CATEGORIES.custom_task.border,      color: ACTIVITY_CATEGORIES.custom_task.color,      label: ACTIVITY_CATEGORIES.custom_task.label },
-    mentor_task:      { bg: "#e0e7ff", border: "#6366f1", color: "#3730a3", label: "Mentor Task" },
+    self_learning: { bg: ACTIVITY_CATEGORIES.self_learning.bg, border: ACTIVITY_CATEGORIES.self_learning.border, color: ACTIVITY_CATEGORIES.self_learning.color, label: ACTIVITY_CATEGORIES.self_learning.label },
+    custom_task: { bg: ACTIVITY_CATEGORIES.custom_task.bg, border: ACTIVITY_CATEGORIES.custom_task.border, color: ACTIVITY_CATEGORIES.custom_task.color, label: ACTIVITY_CATEGORIES.custom_task.label },
+    mentor_task: { bg: "#e0e7ff", border: "#6366f1", color: "#3730a3", label: "Mentor Task" },
     // Legacy fallbacks so old tasks don't break
     homework: { bg: "#fee2e2", border: "#ef4444", color: "#991b1b", label: "Homework" },
-    exam:     { bg: "#ffedd5", border: "#f97316", color: "#9a3412", label: "Exam" },
+    exam: { bg: "#ffedd5", border: "#f97316", color: "#9a3412", label: "Exam" },
     workshop: { bg: "#fef9c3", border: "#eab308", color: "#854d0e", label: "Workshop" },
-    class:    { bg: "#dcfce7", border: "#22c55e", color: "#166534", label: "Class" },
-    tech:     { bg: "#e0e7ff", border: "#6366f1", color: "#3730a3", label: "Technology" },
+    class: { bg: "#dcfce7", border: "#22c55e", color: "#166534", label: "Class" },
+    tech: { bg: "#e0e7ff", border: "#6366f1", color: "#3730a3", label: "Technology" },
     admin_assigned: { bg: "#fef3c7", border: "#f59e0b", color: "#92400e", label: "Admin Task" }
   };
 
@@ -700,7 +700,7 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
   const scheduleGridEvents = dynamicScheduleEvents;
 
   return (
-    <div style={{
+    <div className="teacher-schedule" style={{
       background: "linear-gradient(160deg,#0f172a 0%,#1e293b 55%,#1e3a8a 100%)",
       borderRadius: 24,
       padding: 2,
@@ -711,7 +711,7 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
           <div>
             <h2 style={{ fontSize: 20, fontWeight: 900, color: "#0f172a", margin: 0, letterSpacing: "-0.5px", display: "flex", alignItems: "center", gap: 8 }}>
-              📅 Weekly Course Schedule & Task Planner
+              Weekly Course Schedule & Task Planner
             </h2>
             <p style={{ fontSize: 12, color: "#64748b", margin: "2px 0 0" }}>Manage timetable sessions, track upcoming deadlines, and mark tasks as complete</p>
           </div>
@@ -726,7 +726,7 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
                   style={{
                     padding: "6px 14px", borderRadius: 8, border: "none",
                     background: mode === "Week" ? "white" : "transparent",
-                    color: mode === "Week" ? "#0f172a" : "#94a3b8",
+                    color: mode === "Week" ? "#2a0f1e" : "#94a3b8",
                     fontSize: 12, fontWeight: 700, cursor: mode === "Week" ? "default" : "not-allowed",
                     boxShadow: mode === "Week" ? "0 1px 4px rgba(0,0,0,0.08)" : "none"
                   }}
@@ -736,11 +736,11 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
               ))}
             </div>
 
-            <button
+            <button className="teacher-calendar-add"
               onClick={() => setSelectedWeekOffset(0)}
               style={{
                 padding: "7px 14px", background: "white", border: "1px solid #e2e8f0",
-                borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer", color: "#334155"
+                borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: "pointer", color: "#100f0c"
               }}
             >
               Today
@@ -763,448 +763,448 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
           </div>
         </div>
 
-      {/* ── Full-Width 7-Day Calendar Grid ── */}
-      {(() => {
-        const SLOT_HEIGHT = 90;
-        const TOTAL_HEIGHT = timeSlots.length * SLOT_HEIGHT;
-        const PX_PER_MIN = SLOT_HEIGHT / 60;
-        const GRID_START_HOUR = 9; // 09:00
+        {/* ── Full-Width 7-Day Calendar Grid ── */}
+        {(() => {
+          const SLOT_HEIGHT = 90;
+          const TOTAL_HEIGHT = timeSlots.length * SLOT_HEIGHT;
+          const PX_PER_MIN = SLOT_HEIGHT / 60;
+          const GRID_START_HOUR = 9; // 09:00
 
-        // Compute event positions using real pixel math relative to this grid
-        const getEventTopPx = (timeStr) => {
-          if (!timeStr) return 0;
-          const match = timeStr.match(/(\d{1,2}):(\d{2})/);
-          if (!match) return 0;
-          let h = parseInt(match[1], 10);
-          const m = parseInt(match[2], 10);
-          if (h < 8) h += 12;
-          return Math.max(0, ((h - GRID_START_HOUR) * 60 + m) * PX_PER_MIN);
-        };
+          // Compute event positions using real pixel math relative to this grid
+          const getEventTopPx = (timeStr) => {
+            if (!timeStr) return 0;
+            const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+            if (!match) return 0;
+            let h = parseInt(match[1], 10);
+            const m = parseInt(match[2], 10);
+            if (h < 8) h += 12;
+            return Math.max(0, ((h - GRID_START_HOUR) * 60 + m) * PX_PER_MIN);
+          };
 
-        const getEventHeightPx = (timeStr) => {
-          const parts = (timeStr || "").split("-").map(s => s.trim());
-          if (parts.length < 2) return SLOT_HEIGHT; // default 1-hour
-          const topStart = getEventTopPx(parts[0]);
-          const topEnd = getEventTopPx(parts[1]);
-          return Math.max(40, topEnd - topStart);
-        };
+          const getEventHeightPx = (timeStr) => {
+            const parts = (timeStr || "").split("-").map(s => s.trim());
+            if (parts.length < 2) return SLOT_HEIGHT; // default 1-hour
+            const topStart = getEventTopPx(parts[0]);
+            const topEnd = getEventTopPx(parts[1]);
+            return Math.max(40, topEnd - topStart);
+          };
 
-        return (
-          <div style={{ position: "relative" }}>
+          return (
+            <div style={{ position: "relative" }}>
 
-            {/* ── Add Event button ── */}
-            <button
-              onClick={openCreateModal}
-              style={{
-                position: "absolute", top: 10, right: 0, zIndex: 30,
-                padding: "9px 18px",
-                background: "linear-gradient(135deg,#f97316,#ea580c)",
-                color: "white", border: "none", borderRadius: 999,
-                fontSize: 12, fontWeight: 800, cursor: "pointer",
-                boxShadow: "0 6px 18px rgba(249,115,22,0.4)",
-                display: "flex", alignItems: "center", gap: 6,
-                letterSpacing: "0.2px"
-              }}
-            >
-              + Add Event
-            </button>
+              {/* ── Add Event button ── */}
+              <button
+                onClick={openCreateModal}
+                style={{
+                  position: "absolute", top: 10, right: 0, zIndex: 30,
+                  padding: "9px 18px",
+                  background: "linear-gradient(135deg,#f97316,#ea580c)",
+                  color: "white", border: "none", borderRadius: 999,
+                  fontSize: 12, fontWeight: 800, cursor: "pointer",
+                  boxShadow: "0 6px 18px rgba(249,115,22,0.4)",
+                  display: "flex", alignItems: "center", gap: 6,
+                  letterSpacing: "0.2px"
+                }}
+              >
+                + Add Event
+              </button>
 
-            {/* ── Day Header Row ── */}
-            <div style={{ display: "flex", marginBottom: 0 }}>
-              {/* Time column header */}
-              <div style={{ width: 54, flexShrink: 0 }} />
-              {/* Day headers */}
-              {weekDays.map((d) => {
-                const isSelected = selectedDayDate === d.fullDate;
-                const hasEvents = scheduleGridEvents.some(ev => ev.dayIdx === weekDays.indexOf(d));
-                return (
-                  <button
-                    key={d.fullDate}
-                    onClick={() => setSelectedDayDate(d.fullDate)}
-                    style={{
-                      flex: 1, minWidth: 0,
-                      padding: "10px 2px 6px",
-                      background: "transparent",
-                      border: "none",
-                      borderBottom: isSelected ? "3px solid #2563eb" : "3px solid transparent",
-                      cursor: "pointer",
-                      textAlign: "center",
-                      transition: "all 0.18s"
-                    }}
-                  >
-                    <div style={{
-                      display: "inline-flex", alignItems: "center", gap: 6,
-                      padding: "4px 10px",
-                      borderRadius: 8,
-                      border: isSelected ? "1.5px solid #0f172a" : "1.5px solid transparent",
+              {/* ── Day Header Row ── */}
+              <div style={{ display: "flex", marginBottom: 0 }}>
+                {/* Time column header */}
+                <div style={{ width: 54, flexShrink: 0 }} />
+                {/* Day headers */}
+                {weekDays.map((d) => {
+                  const isSelected = selectedDayDate === d.fullDate;
+                  const hasEvents = scheduleGridEvents.some(ev => ev.dayIdx === weekDays.indexOf(d));
+                  return (
+                    <button
+                      key={d.fullDate}
+                      onClick={() => setSelectedDayDate(d.fullDate)}
+                      style={{
+                        flex: 1, minWidth: 0,
+                        padding: "10px 2px 6px",
+                        background: "transparent",
+                        border: "none",
+                        borderBottom: isSelected ? "3px solid #2563eb" : "3px solid transparent",
+                        cursor: "pointer",
+                        textAlign: "center",
+                        transition: "all 0.18s"
+                      }}
+                    >
+                      <div style={{
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                        padding: "4px 10px",
+                        borderRadius: 8,
+                        border: isSelected ? "1.5px solid #0f172a" : "1.5px solid transparent",
+                      }}>
+                        <span style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>{d.dateNum}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.4px", color: "#64748b" }}>
+                          {d.name}
+                        </span>
+                      </div>
+                      {hasEvents && !d.isToday && (
+                        <div style={{ width: 4, height: 4, borderRadius: "50%", background: "#3b82f6", margin: "3px auto 0" }} />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* ── Calendar Body: Time column + 7 Day columns ── */}
+              <div style={{
+                display: "flex",
+                border: "1px solid #e2e8f0",
+                borderRadius: 16,
+                overflow: "hidden",
+                background: "white"
+              }}>
+
+                {/* Time labels column */}
+                <div style={{ width: 54, flexShrink: 0, background: "#fafbfc", borderRight: "1px solid #e9ecef" }}>
+                  {timeSlots.map((slotTime, si) => (
+                    <div key={slotTime} style={{
+                      height: SLOT_HEIGHT,
+                      display: "flex", alignItems: "flex-start", justifyContent: "flex-end",
+                      padding: "0 6px",
+                      borderBottom: si < timeSlots.length - 1 ? "1px dashed #f1f5f9" : "none"
                     }}>
-                      <span style={{ fontSize: 15, fontWeight: 800, color: "#0f172a" }}>{d.dateNum}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.4px", color: "#64748b" }}>
-                        {d.name}
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", marginTop: si === 0 ? 6 : -7, lineHeight: 1 }}>
+                        {slotTime}
                       </span>
                     </div>
-                    {hasEvents && !d.isToday && (
-                      <div style={{ width: 4, height: 4, borderRadius: "50%", background: "#3b82f6", margin: "3px auto 0" }} />
-                    )}
-                  </button>
-                );
-              })}
+                  ))}
+                </div>
+
+                {/* 7 Day columns — each is position:relative to contain its events */}
+                {weekDays.map((d, dayIdx) => {
+                  const isSelected = selectedDayDate === d.fullDate;
+                  const dayEvents = scheduleGridEvents.filter(ev => ev.dayIdx === dayIdx);
+
+                  return (
+                    <div
+                      key={d.fullDate}
+                      onClick={() => setSelectedDayDate(d.fullDate)}
+                      style={{
+                        flex: 1, minWidth: 0,
+                        position: "relative",
+                        height: TOTAL_HEIGHT,
+                        borderRight: dayIdx < 6 ? "1px solid #f1f5f9" : "none",
+                        background: d.isToday ? "rgba(37,99,235,0.03)" : isSelected ? "rgba(37,99,235,0.02)" : "transparent",
+                        cursor: "pointer",
+                        overflow: "hidden"           /* ← clips events to column */
+                      }}
+                    >
+                      {/* Horizontal time-slot grid lines */}
+                      {timeSlots.map((_, si) => (
+                        <div key={si} style={{
+                          position: "absolute", left: 0, right: 0,
+                          top: si * SLOT_HEIGHT,
+                          height: SLOT_HEIGHT,
+                          borderBottom: si < timeSlots.length - 1 ? "1px dashed #f1f5f9" : "none",
+                          pointerEvents: "none"
+                        }} />
+                      ))}
+
+                      {/* Event cards — positioned within this column */}
+                      {dayEvents.map((ev, evIdx) => {
+                        const block = categoryBlock[ev.category] || categoryBlock.class_lesson;
+                        const topPx = getEventTopPx(ev.time);
+                        const heightPx = getEventHeightPx(ev.time);
+                        const originalTask = combinedTasks.find(t => (t.id || t._id) === ev.id);
+                        const initials = (user?.name || "T").trim().split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase();
+
+                        return (
+                          <div className="teacher-calendar-event"
+                            key={ev.id || evIdx}
+                            onClick={(e) => { e.stopPropagation(); setSelectedDayDate(d.fullDate); }}
+                            style={{
+                              position: "absolute",
+                              top: topPx,
+                              left: 1, right: 1,
+                              height: heightPx,
+                              background: block.fill,
+                              border: "none",
+                              borderRadius: 14,
+                              padding: "8px 6px",
+                              cursor: "pointer",
+                              zIndex: isSelected ? 20 : 10,
+                              boxShadow: isSelected ? "0 2px 8px rgba(15,23,42,0.12)" : "none",
+                              overflow: "hidden",
+                              display: "flex",
+                              flexDirection: "column",
+                              justifyContent: "space-between"
+                            }}
+                          >
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: block.text, opacity: 0.8, lineHeight: 1.3 }}>
+                                {ev.time || ""}
+                              </div>
+                              <div style={{
+                                fontSize: 12, fontWeight: 800, color: block.text,
+                                lineHeight: 1.3, overflow: "hidden",
+                                display: "-webkit-box", WebkitLineClamp: heightPx >= 90 ? 3 : 2,
+                                WebkitBoxOrient: "vertical", marginTop: 3
+                              }}>
+                                {block.icon} {ev.title}
+                              </div>
+                            </div>
+
+                            {heightPx >= 56 && (
+                              <div style={{
+                                width: 24, height: 24, borderRadius: "50%",
+                                background: "white", color: block.text,
+                                fontSize: 10, fontWeight: 800,
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                border: `1.5px solid ${block.text}22`
+                              }}>
+                                {initials}
+                              </div>
+                            )}
+
+                            {isSelected && originalTask && (
+                              <div style={{ display: "flex", gap: 4, marginTop: 2, alignItems: "center" }}>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (originalTask.isMentorTask) {
+                                      if (!originalTask.completed) setEvidenceTask(originalTask);
+                                      return;
+                                    }
+                                    if (originalTask.completed) {
+                                      if (originalTask.isCustom) toggleTaskStatus(originalTask.id);
+                                    } else {
+                                      setReportTask(originalTask);
+                                      setShowReportModal(true);
+                                    }
+                                  }}
+                                  disabled={!originalTask.completed && !originalTask.isMentorTask && isPastDeadlineIST(originalTask.date)}
+                                  style={{
+                                    padding: "2px 7px", borderRadius: 999, border: "none",
+                                    background: originalTask.completed ? "white" : (!originalTask.completed && !originalTask.isMentorTask && isPastDeadlineIST(originalTask.date)) ? "rgba(100,116,139,0.3)" : "rgba(15,23,42,0.85)",
+                                    color: originalTask.completed ? "#059669" : "white",
+                                    fontSize: 8, fontWeight: 800,
+                                    cursor: (!originalTask.completed && !originalTask.isMentorTask && isPastDeadlineIST(originalTask.date)) ? "not-allowed" : "pointer",
+                                    opacity: (!originalTask.completed && !originalTask.isMentorTask && isPastDeadlineIST(originalTask.date)) ? 0.6 : 1
+                                  }}
+                                >
+                                  {originalTask.completed
+                                    ? "✓"
+                                    : originalTask.isMentorTask
+                                      ? "📤 Submit Evidence"
+                                      : isPastDeadlineIST(originalTask.date)
+                                        ? "⏰ Deadline passed"
+                                        : "📋 Report"}
+                                </button>
+                                {originalTask.isCustom && (
+                                  <>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); openEditModal(originalTask); }}
+                                      style={{ padding: "2px 6px", borderRadius: 999, border: "none", background: "rgba(255,255,255,0.85)", color: block.text, fontSize: 8, fontWeight: 700, cursor: "pointer" }}
+                                    >✏️</button>
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); deleteTask(originalTask.id); }}
+                                      style={{ padding: "2px 6px", borderRadius: 999, border: "none", background: "rgba(255,255,255,0.85)", color: "#dc2626", fontSize: 8, fontWeight: 700, cursor: "pointer" }}
+                                    >🗑</button>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+
+
+                    </div>
+                  );
+                })}
+              </div>
             </div>
+          );
+        })()}
 
-            {/* ── Calendar Body: Time column + 7 Day columns ── */}
+        {/* ── Category Legend ── */}
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 14, padding: "8px 0" }}>
+          {Object.entries(ACTIVITY_CATEGORIES)
+            .filter(([key]) => !HIDDEN_CALENDAR_CATEGORIES.includes(key))
+            .map(([key]) => {
+              const block = categoryBlock[key] || categoryBlock.class_lesson;
+              return (
+                <div key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 700, color: "#64748b" }}>
+                  <div style={{ width: 11, height: 11, borderRadius: "50%", background: block.fill, border: `1.5px solid ${block.text}33` }} />
+                  {ACTIVITY_CATEGORIES[key].label}
+                </div>
+              );
+            })}
+        </div>
+
+        {showAddTaskModal && (
+          <div style={{
+            position: "fixed", inset: 0, background: "rgba(15,23,42,0.35)",
+            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999
+          }}>
             <div style={{
-              display: "flex",
-              border: "1px solid #e2e8f0",
-              borderRadius: 16,
-              overflow: "hidden",
-              background: "white"
+              background: "white", borderRadius: 20, padding: 28, width: "100%", maxWidth: 460,
+              boxShadow: "0 24px 60px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto"
             }}>
-
-              {/* Time labels column */}
-              <div style={{ width: 54, flexShrink: 0, background: "#fafbfc", borderRight: "1px solid #e9ecef" }}>
-                {timeSlots.map((slotTime, si) => (
-                  <div key={slotTime} style={{
-                    height: SLOT_HEIGHT,
-                    display: "flex", alignItems: "flex-start", justifyContent: "flex-end",
-                    padding: "0 6px",
-                    borderBottom: si < timeSlots.length - 1 ? "1px dashed #f1f5f9" : "none"
-                  }}>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", marginTop: si === 0 ? 6 : -7, lineHeight: 1 }}>
-                      {slotTime}
-                    </span>
-                  </div>
-                ))}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+                <h3 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: 0 }}>
+                  {editingTaskId ? "Edit task" : "New task"}
+                </h3>
+                <button
+                  onClick={() => setShowAddTaskModal(false)}
+                  style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#94a3b8" }}
+                >✕</button>
               </div>
 
-              {/* 7 Day columns — each is position:relative to contain its events */}
-              {weekDays.map((d, dayIdx) => {
-                const isSelected = selectedDayDate === d.fullDate;
-                const dayEvents = scheduleGridEvents.filter(ev => ev.dayIdx === dayIdx);
+              <form onSubmit={handleSaveTask} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {formError && (
+                  <div style={{ padding: "10px 14px", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 10, color: "#991b1b", fontSize: 12, fontWeight: 700, lineHeight: 1.4 }}>
+                    {formError}
+                  </div>
+                )}
 
-                return (
-                  <div
-                    key={d.fullDate}
-                    onClick={() => setSelectedDayDate(d.fullDate)}
-                    style={{
-                      flex: 1, minWidth: 0,
-                      position: "relative",
-                      height: TOTAL_HEIGHT,
-                      borderRight: dayIdx < 6 ? "1px solid #f1f5f9" : "none",
-                      background: d.isToday ? "rgba(37,99,235,0.03)" : isSelected ? "rgba(37,99,235,0.02)" : "transparent",
-                      cursor: "pointer",
-                      overflow: "hidden"           /* ← clips events to column */
-                    }}
-                  >
-                    {/* Horizontal time-slot grid lines */}
-                    {timeSlots.map((_, si) => (
-                      <div key={si} style={{
-                        position: "absolute", left: 0, right: 0,
-                        top: si * SLOT_HEIGHT,
-                        height: SLOT_HEIGHT,
-                        borderBottom: si < timeSlots.length - 1 ? "1px dashed #f1f5f9" : "none",
-                        pointerEvents: "none"
-                      }} />
-                    ))}
+                <input
+                  type="text"
+                  value={taskTitle}
+                  onChange={e => setTaskTitle(e.target.value)}
+                  placeholder="Task title"
+                  required
+                  style={{ width: "100%", padding: "10px 4px", border: "none", borderBottom: "2px solid #e2e8f0", fontSize: 16, fontWeight: 700, outline: "none", boxSizing: "border-box" }}
+                />
 
-                    {/* Event cards — positioned within this column */}
-                    {dayEvents.map((ev, evIdx) => {
-                      const block = categoryBlock[ev.category] || categoryBlock.class_lesson;
-                      const topPx = getEventTopPx(ev.time);
-                      const heightPx = getEventHeightPx(ev.time);
-                      const originalTask = combinedTasks.find(t => (t.id || t._id) === ev.id);
-                      const initials = (user?.name || "T").trim().split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase();
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#f8fafc", borderRadius: 10 }}>
+                  <span style={{ fontSize: 14 }}>📅</span>
+                  <input
+                    type="date"
+                    value={taskDate}
+                    onChange={e => setTaskDate(e.target.value)}
+                    style={{ flex: 1, border: "none", background: "transparent", fontSize: 13, fontWeight: 600, outline: "none", color: "#334155" }}
+                  />
+                </div>
 
+                <div style={{ display: "flex", gap: 10 }}>
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#f8fafc", borderRadius: 10 }}>
+                    <span style={{ fontSize: 14 }}>⏱</span>
+                    <input
+                      type="text"
+                      value={taskStartTime}
+                      onChange={e => setTaskStartTime(e.target.value)}
+                      placeholder="09:30"
+                      style={{ flex: 1, border: "none", background: "transparent", fontSize: 13, fontWeight: 600, outline: "none", color: "#334155" }}
+                    />
+                  </div>
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#f8fafc", borderRadius: 10 }}>
+                    <span style={{ fontSize: 14 }}>⏱</span>
+                    <input
+                      type="text"
+                      value={taskEndTime}
+                      onChange={e => setTaskEndTime(e.target.value)}
+                      placeholder="11:20"
+                      style={{ flex: 1, border: "none", background: "transparent", fontSize: 13, fontWeight: 600, outline: "none", color: "#334155" }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#94a3b8", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                    Category
+                  </label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {Object.entries(ACTIVITY_CATEGORIES).map(([key, cat]) => {
+                      const block = categoryBlock[key] || categoryBlock.class_lesson;
+                      const isActive = taskCategory === key;
                       return (
-                        <div
-                          key={ev.id || evIdx}
-                          onClick={(e) => { e.stopPropagation(); setSelectedDayDate(d.fullDate); }}
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setTaskCategory(key)}
                           style={{
-                            position: "absolute",
-                            top: topPx,
-                            left: 1, right: 1,
-                            height: heightPx,
-                            background: block.fill,
-                            border: "none",
-                            borderRadius: 14,
-                            padding: "8px 6px",
-                            cursor: "pointer",
-                            zIndex: isSelected ? 20 : 10,
-                            boxShadow: isSelected ? "0 2px 8px rgba(15,23,42,0.12)" : "none",
-                            overflow: "hidden",
-                            display: "flex",
-                            flexDirection: "column",
-                            justifyContent: "space-between"
+                            padding: "7px 14px", borderRadius: 999, cursor: "pointer",
+                            border: isActive ? `1.5px solid ${block.text}` : "1.5px solid transparent",
+                            background: block.fill, color: block.text,
+                            fontSize: 11, fontWeight: 800,
+                            opacity: isActive ? 1 : 0.55,
+                            transition: "opacity 0.15s"
                           }}
                         >
-                          <div>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: block.text, opacity: 0.8, lineHeight: 1.3 }}>
-                              {ev.time || ""}
-                            </div>
-                            <div style={{
-                              fontSize: 12, fontWeight: 800, color: block.text,
-                              lineHeight: 1.3, overflow: "hidden",
-                              display: "-webkit-box", WebkitLineClamp: heightPx >= 90 ? 3 : 2,
-                              WebkitBoxOrient: "vertical", marginTop: 3
-                            }}>
-                              {block.icon} {ev.title}
-                            </div>
-                          </div>
-
-                          {heightPx >= 56 && (
-                            <div style={{
-                              width: 24, height: 24, borderRadius: "50%",
-                              background: "white", color: block.text,
-                              fontSize: 10, fontWeight: 800,
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                              border: `1.5px solid ${block.text}22`
-                            }}>
-                              {initials}
-                            </div>
-                          )}
-
-                          {isSelected && originalTask && (
-                            <div style={{ display: "flex", gap: 4, marginTop: 2, alignItems: "center" }}>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (originalTask.isMentorTask) {
-                                    if (!originalTask.completed) setEvidenceTask(originalTask);
-                                    return;
-                                  }
-                                  if (originalTask.completed) {
-                                    if (originalTask.isCustom) toggleTaskStatus(originalTask.id);
-                                  } else {
-                                    setReportTask(originalTask);
-                                    setShowReportModal(true);
-                                  }
-                                }}
-                                disabled={!originalTask.completed && !originalTask.isMentorTask && isPastDeadlineIST(originalTask.date)}
-                                style={{
-                                  padding: "2px 7px", borderRadius: 999, border: "none",
-                                  background: originalTask.completed ? "white" : (!originalTask.completed && !originalTask.isMentorTask && isPastDeadlineIST(originalTask.date)) ? "rgba(100,116,139,0.3)" : "rgba(15,23,42,0.85)",
-                                  color: originalTask.completed ? "#059669" : "white",
-                                  fontSize: 8, fontWeight: 800,
-                                  cursor: (!originalTask.completed && !originalTask.isMentorTask && isPastDeadlineIST(originalTask.date)) ? "not-allowed" : "pointer",
-                                  opacity: (!originalTask.completed && !originalTask.isMentorTask && isPastDeadlineIST(originalTask.date)) ? 0.6 : 1
-                                }}
-                              >
-                                {originalTask.completed 
-                                  ? "✓" 
-                                  : originalTask.isMentorTask 
-                                    ? "📤 Submit Evidence" 
-                                    : isPastDeadlineIST(originalTask.date) 
-                                      ? "⏰ Deadline passed" 
-                                      : "📋 Report"}
-                              </button>
-                              {originalTask.isCustom && (
-                                <>
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); openEditModal(originalTask); }}
-                                    style={{ padding: "2px 6px", borderRadius: 999, border: "none", background: "rgba(255,255,255,0.85)", color: block.text, fontSize: 8, fontWeight: 700, cursor: "pointer" }}
-                                  >✏️</button>
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); deleteTask(originalTask.id); }}
-                                    style={{ padding: "2px 6px", borderRadius: 999, border: "none", background: "rgba(255,255,255,0.85)", color: "#dc2626", fontSize: 8, fontWeight: 700, cursor: "pointer" }}
-                                  >🗑</button>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                          {cat.icon} {cat.label}
+                        </button>
                       );
                     })}
-
-
                   </div>
-                );
-              })}
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 6 }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddTaskModal(false)}
+                    style={{ padding: "10px 18px", background: "transparent", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", color: "#64748b" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveTask}
+                    style={{
+                      flex: 1, padding: "12px 20px", background: "#0f172a", border: "none",
+                      borderRadius: 12, fontSize: 13, fontWeight: 800, color: "white", cursor: "pointer"
+                    }}
+                  >
+                    {editingTaskId ? "Update event" : "Add event"}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
-        );
-      })()}
+        )}
 
-      {/* ── Category Legend ── */}
-      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 14, padding: "8px 0" }}>
-        {Object.entries(ACTIVITY_CATEGORIES)
-          .filter(([key]) => !HIDDEN_CALENDAR_CATEGORIES.includes(key))
-          .map(([key]) => {
-            const block = categoryBlock[key] || categoryBlock.class_lesson;
-          return (
-            <div key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 700, color: "#64748b" }}>
-              <div style={{ width: 11, height: 11, borderRadius: "50%", background: block.fill, border: `1.5px solid ${block.text}33` }} />
-              {ACTIVITY_CATEGORIES[key].label}
-            </div>
-          );
-        })}
-      </div>
+        {/* ── Universal Activity Report Modal / Mark Complete ── */}
+        {showReportModal && reportTask && (
+          (() => {
+            // Use the rich AI modal for class lessons, custom tasks, pdca, etc.
+            // Leave out home/anganwadi visits (pcb_session, field_visit)
+            const useRichModal = !["field_visit", "pcb_session"].includes(reportTask.category);
 
-      {showAddTaskModal && (
-        <div style={{
-          position: "fixed", inset: 0, background: "rgba(15,23,42,0.35)",
-          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999
-        }}>
-          <div style={{
-            background: "white", borderRadius: 20, padding: 28, width: "100%", maxWidth: 460,
-            boxShadow: "0 24px 60px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto"
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-              <h3 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: 0 }}>
-                {editingTaskId ? "Edit task" : "New task"}
-              </h3>
-              <button
-                onClick={() => setShowAddTaskModal(false)}
-                style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#94a3b8" }}
-              >✕</button>
-            </div>
-
-            <form onSubmit={handleSaveTask} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              {formError && (
-                <div style={{ padding: "10px 14px", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 10, color: "#991b1b", fontSize: 12, fontWeight: 700, lineHeight: 1.4 }}>
-                  {formError}
-                </div>
-              )}
-
-              <input
-                type="text"
-                value={taskTitle}
-                onChange={e => setTaskTitle(e.target.value)}
-                placeholder="Task title"
-                required
-                style={{ width: "100%", padding: "10px 4px", border: "none", borderBottom: "2px solid #e2e8f0", fontSize: 16, fontWeight: 700, outline: "none", boxSizing: "border-box" }}
-              />
-
-              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#f8fafc", borderRadius: 10 }}>
-                <span style={{ fontSize: 14 }}>📅</span>
-                <input
-                  type="date"
-                  value={taskDate}
-                  onChange={e => setTaskDate(e.target.value)}
-                  style={{ flex: 1, border: "none", background: "transparent", fontSize: 13, fontWeight: 600, outline: "none", color: "#334155" }}
-                />
-              </div>
-
-              <div style={{ display: "flex", gap: 10 }}>
-                <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#f8fafc", borderRadius: 10 }}>
-                  <span style={{ fontSize: 14 }}>⏱</span>
-                  <input
-                    type="text"
-                    value={taskStartTime}
-                    onChange={e => setTaskStartTime(e.target.value)}
-                    placeholder="09:30"
-                    style={{ flex: 1, border: "none", background: "transparent", fontSize: 13, fontWeight: 600, outline: "none", color: "#334155" }}
-                  />
-                </div>
-                <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#f8fafc", borderRadius: 10 }}>
-                  <span style={{ fontSize: 14 }}>⏱</span>
-                  <input
-                    type="text"
-                    value={taskEndTime}
-                    onChange={e => setTaskEndTime(e.target.value)}
-                    placeholder="11:20"
-                    style={{ flex: 1, border: "none", background: "transparent", fontSize: 13, fontWeight: 600, outline: "none", color: "#334155" }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#94a3b8", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.4px" }}>
-                  Category
-                </label>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                  {Object.entries(ACTIVITY_CATEGORIES).map(([key, cat]) => {
-                    const block = categoryBlock[key] || categoryBlock.class_lesson;
-                    const isActive = taskCategory === key;
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => setTaskCategory(key)}
-                        style={{
-                          padding: "7px 14px", borderRadius: 999, cursor: "pointer",
-                          border: isActive ? `1.5px solid ${block.text}` : "1.5px solid transparent",
-                          background: block.fill, color: block.text,
-                          fontSize: 11, fontWeight: 800,
-                          opacity: isActive ? 1 : 0.55,
-                          transition: "opacity 0.15s"
-                        }}
-                      >
-                        {cat.icon} {cat.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 6 }}>
-                <button
-                  type="button"
-                  onClick={() => setShowAddTaskModal(false)}
-                  style={{ padding: "10px 18px", background: "transparent", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", color: "#64748b" }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveTask}
-                  style={{
-                    flex: 1, padding: "12px 20px", background: "#0f172a", border: "none",
-                    borderRadius: 12, fontSize: 13, fontWeight: 800, color: "white", cursor: "pointer"
+            if (useRichModal) {
+              return (
+                <MarkCompleteModal
+                  activity={reportTask}
+                  itemType="activity"
+                  user={user}
+                  onSubmit={(payload) => {
+                    toggleTaskStatus(reportTask.id);
+                    setShowReportModal(false);
+                    setReportTask(null);
                   }}
-                >
-                  {editingTaskId ? "Update event" : "Add event"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+                  onClose={() => { setShowReportModal(false); setReportTask(null); }}
+                />
+              );
+            }
 
-      {/* ── Universal Activity Report Modal / Mark Complete ── */}
-      {showReportModal && reportTask && (
-        (() => {
-          // Use the rich AI modal for class lessons, custom tasks, pdca, etc.
-          // Leave out home/anganwadi visits (pcb_session, field_visit)
-          const useRichModal = !["field_visit", "pcb_session"].includes(reportTask.category);
-
-          if (useRichModal) {
             return (
-              <MarkCompleteModal
-                activity={reportTask}
-                itemType="activity"
-                user={user}
-                onSubmit={(payload) => {
-                  toggleTaskStatus(reportTask.id);
-                  setShowReportModal(false);
-                  setReportTask(null);
-                }}
+              <UniversalActivityReportModal
+                task={reportTask}
                 onClose={() => { setShowReportModal(false); setReportTask(null); }}
+                onSubmitSuccess={(taskId, status) => {
+                  if (status === "completed") {
+                    toggleTaskStatus(taskId);
+                  }
+                }}
               />
             );
-          }
+          })()
+        )}
 
-          return (
-            <UniversalActivityReportModal
-              task={reportTask}
-              onClose={() => { setShowReportModal(false); setReportTask(null); }}
-              onSubmitSuccess={(taskId, status) => {
-                if (status === "completed") {
-                  toggleTaskStatus(taskId);
-                }
-              }}
-            />
-          );
-        })()
-      )}
-
-      {evidenceTask && (
-        <MentorTaskEvidenceModal
-          task={evidenceTask}
-          onClose={() => setEvidenceTask(null)}
-          onSubmitSuccess={(taskId) => {
-            setMentorTasks(prev => prev.map(t => (t._id || t.id) === taskId ? { ...t, status: "submitted" } : t));
-          }}
-        />
-      )}
+        {evidenceTask && (
+          <MentorTaskEvidenceModal
+            task={evidenceTask}
+            onClose={() => setEvidenceTask(null)}
+            onSubmitSuccess={(taskId) => {
+              setMentorTasks(prev => prev.map(t => (t._id || t.id) === taskId ? { ...t, status: "submitted" } : t));
+            }}
+          />
+        )}
       </div>
     </div>
   );
@@ -1320,191 +1320,191 @@ function MyAttendanceSummaryCard({ attendance = 0, summary = {}, attendanceMap =
   const graphTrend = build6MonthTrend();
 
   return (
-    <SectionCard title="My Attendance Summary">
+    <div className="teacher-attendance-summary"><SectionCard title="My Attendance Summary">
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {/* Top Stat Badges */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-              <div style={{ background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: 10, padding: "8px 10px", textAlign: "center" }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#065f46" }}>🟢 PRESENT</div>
-                <div style={{ fontSize: 16, fontWeight: 900, color: "#047857", marginTop: 2 }}>{presentDays} Days</div>
-              </div>
-              <div style={{ background: "#fefce8", border: "1px solid #fef08a", borderRadius: 10, padding: "8px 10px", textAlign: "center" }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#854d0e" }}>🟡 LEAVES</div>
-                <div style={{ fontSize: 16, fontWeight: 900, color: "#a16207", marginTop: 2 }}>0 Days</div>
-              </div>
-              <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "8px 10px", textAlign: "center" }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: "#991b1b" }}>🔴 ABSENT</div>
-                <div style={{ fontSize: 16, fontWeight: 900, color: "#b91c1c", marginTop: 2 }}>{absentDays} Days</div>
-              </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* Top Stat Badges */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+            <div style={{ background: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: 10, padding: "8px 10px", textAlign: "center" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#065f46" }}>🟢 PRESENT</div>
+              <div style={{ fontSize: 16, fontWeight: 900, color: "#047857", marginTop: 2 }}>{presentDays} Days</div>
             </div>
+            <div style={{ background: "#fefce8", border: "1px solid #fef08a", borderRadius: 10, padding: "8px 10px", textAlign: "center" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#854d0e" }}>🟡 LEAVES</div>
+              <div style={{ fontSize: 16, fontWeight: 900, color: "#a16207", marginTop: 2 }}>0 Days</div>
+            </div>
+            <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "8px 10px", textAlign: "center" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "#991b1b" }}>🔴 ABSENT</div>
+              <div style={{ fontSize: 16, fontWeight: 900, color: "#b91c1c", marginTop: 2 }}>{absentDays} Days</div>
+            </div>
+          </div>
 
-            {/* ── 6-Month Attendance Bar Chart ── */}
-            {(() => {
-              const CHART_H = 180;
-              const gridPcts = [0, 25, 50, 75, 100];
+          {/* ── 6-Month Attendance Bar Chart ── */}
+          {(() => {
+            const CHART_H = 180;
+            const gridPcts = [0, 25, 50, 75, 100];
 
-              return (
-                <div style={{ background: "#f8fafc", borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px 12px" }}>
-                  {/* Chart body: value-labels + bars side by side with Y-axis */}
-                  <div style={{ display: "flex", alignItems: "stretch", gap: 6 }}>
+            return (
+              <div style={{ background: "#f8fafc", borderRadius: 12, border: "1px solid #e2e8f0", padding: "10px 14px 12px" }}>
+                {/* Chart body: value-labels + bars side by side with Y-axis */}
+                <div style={{ display: "flex", alignItems: "stretch", gap: 6 }}>
 
-                    {/* Y-axis tick labels */}
-                    <div style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "space-between",
-                      height: CHART_H,
-                      flexShrink: 0,
-                      paddingBottom: 2
-                    }}>
-                      {[...gridPcts].reverse().map(g => (
-                        <span key={g} style={{ fontSize: 8, color: "#b0bec5", fontWeight: 600, lineHeight: 1 }}>{g}%</span>
-                      ))}
-                    </div>
-
-                    {/* Bar area */}
-                    <div style={{ flex: 1, position: "relative", height: CHART_H }}>
-                      {/* Horizontal grid lines (anchored bottom of this box) */}
-                      {gridPcts.map(g => (
-                        <div key={g} style={{
-                          position: "absolute",
-                          left: 0, right: 0,
-                          bottom: `${g}%`,
-                          borderTop: g === 100
-                            ? "1px solid #e2e8f0"
-                            : "1px dashed #e9eef4",
-                          zIndex: 0
-                        }} />
-                      ))}
-                      {/* Floor */}
-                      <div style={{
-                        position: "absolute", bottom: 0, left: 0, right: 0,
-                        borderTop: "2px solid #d1d9e0", zIndex: 1
-                      }} />
-
-                      {/* Bars — absolutely pinned to the bottom */}
-                      <div style={{
-                        position: "absolute", bottom: 0, left: 0, right: 0,
-                        display: "flex",
-                        alignItems: "flex-end",
-                        justifyContent: "space-around",
-                        height: "100%",
-                        zIndex: 2
-                      }}>
-                        {graphTrend.map((d, i) => {
-                          const barH = d.val > 0 ? Math.max(6, (d.val / 100) * CHART_H) : 0;
-                          const barColor = d.val >= 90
-                            ? "linear-gradient(180deg,#34d399,#10b981)"
-                            : d.val >= 80
-                              ? "linear-gradient(180deg,#fbbf24,#f59e0b)"
-                              : d.val > 0
-                                ? "linear-gradient(180deg,#f87171,#ef4444)"
-                                : "transparent";
-                          const valColor = d.val >= 90 ? "#10b981" : d.val >= 80 ? "#f59e0b" : d.val > 0 ? "#ef4444" : "#c8d0da";
-                          const barW = d.isCurrent ? 30 : 22;
-
-                          return (
-                            <div
-                              key={i}
-                              style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                alignItems: "center",
-                                justifyContent: "flex-end",
-                                height: "100%",
-                                flex: 1,
-                              }}
-                            >
-                              {/* Value label pinned just above bar */}
-                              <span style={{
-                                fontSize: 10,
-                                fontWeight: 800,
-                                color: valColor,
-                                marginBottom: 3,
-                                lineHeight: 1,
-                                minHeight: 12
-                              }}>
-                                {d.val > 0 ? `${d.val}%` : "0%"}
-                              </span>
-
-                              {/* Bar */}
-                              {barH > 0 ? (
-                                <div style={{
-                                  width: barW,
-                                  height: barH,
-                                  borderRadius: "5px 5px 0 0",
-                                  background: barColor,
-                                  boxShadow: d.isCurrent && d.val > 0 ? "0 3px 10px rgba(16,185,129,0.25)" : "none",
-                                  border: d.isCurrent ? "2px solid #059669" : "none",
-                                  transition: "all .4s ease",
-                                  flexShrink: 0
-                                }} />
-                              ) : (
-                                /* Ghost bar for 0% months */
-                                <div style={{
-                                  width: barW,
-                                  height: 6,
-                                  borderRadius: "3px 3px 0 0",
-                                  background: d.isCurrent ? "transparent" : "#eef0f3",
-                                  border: d.isCurrent ? "1.5px dashed #059669" : "1px solid #e2e8f0",
-                                  flexShrink: 0
-                                }} />
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Month labels row */}
-                  <div style={{ display: "flex", paddingLeft: 20, marginTop: 8 }}>
-                    {graphTrend.map((d, i) => (
-                      <span key={i} style={{
-                        flex: 1,
-                        textAlign: "center",
-                        fontSize: 10,
-                        fontWeight: d.isCurrent ? 900 : 500,
-                        color: d.isCurrent ? "#1e293b" : "#94a3b8"
-                      }}>
-                        {d.month}
-                      </span>
+                  {/* Y-axis tick labels */}
+                  <div style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between",
+                    height: CHART_H,
+                    flexShrink: 0,
+                    paddingBottom: 2
+                  }}>
+                    {[...gridPcts].reverse().map(g => (
+                      <span key={g} style={{ fontSize: 8, color: "#b0bec5", fontWeight: 600, lineHeight: 1 }}>{g}%</span>
                     ))}
                   </div>
-                </div>
-              );
-            })()}
 
-          </div>
+                  {/* Bar area */}
+                  <div style={{ flex: 1, position: "relative", height: CHART_H }}>
+                    {/* Horizontal grid lines (anchored bottom of this box) */}
+                    {gridPcts.map(g => (
+                      <div key={g} style={{
+                        position: "absolute",
+                        left: 0, right: 0,
+                        bottom: `${g}%`,
+                        borderTop: g === 100
+                          ? "1px solid #e2e8f0"
+                          : "1px dashed #e9eef4",
+                        zIndex: 0
+                      }} />
+                    ))}
+                    {/* Floor */}
+                    <div style={{
+                      position: "absolute", bottom: 0, left: 0, right: 0,
+                      borderTop: "2px solid #d1d9e0", zIndex: 1
+                    }} />
+
+                    {/* Bars — absolutely pinned to the bottom */}
+                    <div style={{
+                      position: "absolute", bottom: 0, left: 0, right: 0,
+                      display: "flex",
+                      alignItems: "flex-end",
+                      justifyContent: "space-around",
+                      height: "100%",
+                      zIndex: 2
+                    }}>
+                      {graphTrend.map((d, i) => {
+                        const barH = d.val > 0 ? Math.max(6, (d.val / 100) * CHART_H) : 0;
+                        const barColor = d.val >= 90
+                          ? "linear-gradient(180deg,#34d399,#10b981)"
+                          : d.val >= 80
+                            ? "linear-gradient(180deg,#fbbf24,#f59e0b)"
+                            : d.val > 0
+                              ? "linear-gradient(180deg,#f87171,#ef4444)"
+                              : "transparent";
+                        const valColor = d.val >= 90 ? "#10b981" : d.val >= 80 ? "#f59e0b" : d.val > 0 ? "#ef4444" : "#c8d0da";
+                        const barW = d.isCurrent ? 30 : 22;
+
+                        return (
+                          <div
+                            key={i}
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              alignItems: "center",
+                              justifyContent: "flex-end",
+                              height: "100%",
+                              flex: 1,
+                            }}
+                          >
+                            {/* Value label pinned just above bar */}
+                            <span style={{
+                              fontSize: 10,
+                              fontWeight: 800,
+                              color: valColor,
+                              marginBottom: 3,
+                              lineHeight: 1,
+                              minHeight: 12
+                            }}>
+                              {d.val > 0 ? `${d.val}%` : "0%"}
+                            </span>
+
+                            {/* Bar */}
+                            {barH > 0 ? (
+                              <div style={{
+                                width: barW,
+                                height: barH,
+                                borderRadius: "5px 5px 0 0",
+                                background: barColor,
+                                boxShadow: d.isCurrent && d.val > 0 ? "0 3px 10px rgba(16,185,129,0.25)" : "none",
+                                border: d.isCurrent ? "2px solid #059669" : "none",
+                                transition: "all .4s ease",
+                                flexShrink: 0
+                              }} />
+                            ) : (
+                              /* Ghost bar for 0% months */
+                              <div style={{
+                                width: barW,
+                                height: 6,
+                                borderRadius: "3px 3px 0 0",
+                                background: d.isCurrent ? "transparent" : "#eef0f3",
+                                border: d.isCurrent ? "1.5px dashed #059669" : "1px solid #e2e8f0",
+                                flexShrink: 0
+                              }} />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Month labels row */}
+                <div style={{ display: "flex", paddingLeft: 20, marginTop: 8 }}>
+                  {graphTrend.map((d, i) => (
+                    <span key={i} style={{
+                      flex: 1,
+                      textAlign: "center",
+                      fontSize: 10,
+                      fontWeight: d.isCurrent ? 900 : 500,
+                      color: d.isCurrent ? "#1e293b" : "#94a3b8"
+                    }}>
+                      {d.month}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+        </div>
       </div>
-    </SectionCard>
+    </SectionCard></div>
   );
 }
 
 /* ── OverviewTab ── */
 function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lessons = [], activities = [], summary = {} }) {
   const attendanceMap = summary.attendanceMap || {};
-const today = new Date();
-const todayDate = today.getDate();
-const currentMonth = today.getMonth();
-const currentYear = today.getFullYear();
+  const today = new Date();
+  const todayDate = today.getDate();
+  const currentMonth = today.getMonth();
+  const currentYear = today.getFullYear();
 
-const isWeekend = (day) => {
-  const d = new Date(currentYear, currentMonth, day).getDay();
-  return d === 0 || d === 6;
-};
-const getDayKey = (day) =>
-  `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const isWeekend = (day) => {
+    const d = new Date(currentYear, currentMonth, day).getDay();
+    return d === 0 || d === 6;
+  };
+  const getDayKey = (day) =>
+    `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
-const totalWorkdays = Array.from({ length: todayDate }, (_, i) => i + 1).filter(d => !isWeekend(d)).length;
-const presentWorkdays = Array.from({ length: todayDate }, (_, i) => i + 1)
-  .filter(d => !isWeekend(d) && (attendanceMap[getDayKey(d)]?.checkedIn || attendanceMap[getDayKey(d)]?.status === "present"))
-  .length;
+  const totalWorkdays = Array.from({ length: todayDate }, (_, i) => i + 1).filter(d => !isWeekend(d)).length;
+  const presentWorkdays = Array.from({ length: todayDate }, (_, i) => i + 1)
+    .filter(d => !isWeekend(d) && (attendanceMap[getDayKey(d)]?.checkedIn || attendanceMap[getDayKey(d)]?.status === "present"))
+    .length;
 
-const attendance = totalWorkdays > 0
-  ? Math.round((presentWorkdays / totalWorkdays) * 100)
-  : (summary.attendanceRate !== undefined ? summary.attendanceRate : 0);
+  const attendance = totalWorkdays > 0
+    ? Math.round((presentWorkdays / totalWorkdays) * 100)
+    : (summary.attendanceRate !== undefined ? summary.attendanceRate : 0);
   const attColor = attendance >= 85 ? "#10b981" : attendance >= 70 ? "#f59e0b" : "#ef4444";
   const photoUrl = getTeacherPhotoUrl(user);
 
@@ -1540,7 +1540,7 @@ const attendance = totalWorkdays > 0
   const allAssignedClasses = user.teacherProfile?.classes || [];
 
   return (
-    <div style={{ animation: "fadeIn 0.3s ease" }}>
+    <div className="teacher-overview" style={{ animation: "fadeIn 0.3s ease" }}>
 
 
       {/* KPI Cards Section */}
@@ -1562,10 +1562,10 @@ const attendance = totalWorkdays > 0
       />
 
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+      <div className="teacher-support-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
         <MyAttendanceSummaryCard attendance={attendance} summary={summary} attendanceMap={summary.attendanceMap || {}} setActiveTab={setActiveTab} />
 
-        <SectionCard title="Course Progress">
+        <div className="teacher-course-progress"><SectionCard title="Course Progress">
           {courses.length === 0 ? (
             <div style={{ padding: 20, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>No assigned courses yet.</div>
           ) : (
@@ -1574,13 +1574,13 @@ const attendance = totalWorkdays > 0
               // End: Dnyaneshwari Thorat
               const progress = c.progressPercent || 0;
               return (
-                <div key={i} style={{ marginBottom: 14 }}>
+                <div className="teacher-course-row" key={i} style={{ marginBottom: 14 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
                     <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{c.course?.title?.split(" ").slice(0, 3).join(" ") || "Course"}...</span>
                     <span style={{ fontSize: 12, fontWeight: 800, color: "#f59e0b" }}>{progress}%</span>
                   </div>
-                  <div style={{ height: 6, background: "#f3f4f6", borderRadius: 4, overflow: "hidden", marginBottom: 2 }}>
-                    <div style={{ height: "100%", width: `${progress}%`, background: "linear-gradient(90deg,#f59e0b,#d97706)", borderRadius: 4 }} />
+                  <div className="teacher-progress-track" style={{ height: 6, background: "#f3f4f6", borderRadius: 4, overflow: "hidden", marginBottom: 2 }}>
+                    <div className="teacher-progress-fill" style={{ height: "100%", width: `${progress}%`, background: "linear-gradient(90deg,#f59e0b,#d97706)", borderRadius: 4 }} />
                   </div>
                   <div style={{ fontSize: 10, color: "#9ca3af" }}>{c.status || "Assigned"} · Due: {c.dueDate ? new Date(c.dueDate).toLocaleDateString() : "No deadline"}</div>
                 </div>
@@ -1588,7 +1588,7 @@ const attendance = totalWorkdays > 0
             })
           )}
           <button onClick={() => setActiveTab("courses")} style={{ fontSize: 12, color: "#d97706", fontWeight: 700, background: "none", border: "none", cursor: "pointer", padding: 0, marginTop: 4 }}>View all courses →</button>
-        </SectionCard>
+        </SectionCard></div>
       </div>
 
     </div>
@@ -2991,7 +2991,7 @@ function ParentCapacityBuildingTab({ user, setToast }) {
                   {sess.homePractice && (
                     <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 8 }}>Home Practice: {sess.homePractice}</div>
                   )}
-                {sess.content?.length > 0 && (
+                  {sess.content?.length > 0 && (
                     <div style={{ marginTop: 12 }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", marginBottom: 6 }}>Content</div>
                       {sess.content.map((block, ci) => (
@@ -3301,10 +3301,10 @@ export default function TeacherDashboard({ user, onLogout }) {
       };
       setNotifications((prev) => [mapped, ...prev]);
       setToast({ msg: `🔔 ${newNotif.title}`, type: "info" });
-      
+
       // Dynamically refresh the dashboard if it's an approval, claim, status update, or class/center assignment
       if (
-        ["status_update", "approval", "mentor_assigned", "class_assigned", "class_assignment"].includes(newNotif.type) || 
+        ["status_update", "approval", "mentor_assigned", "class_assigned", "class_assignment"].includes(newNotif.type) ||
         newNotif.title?.includes("Mentor Assigned") ||
         newNotif.title?.includes("Class Assigned") ||
         newNotif.title?.includes("Center Assigned")
@@ -3480,28 +3480,43 @@ export default function TeacherDashboard({ user, onLogout }) {
       case "overview":
         return (
           <div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 18, borderBottom: "1px solid #e2e8f0", paddingBottom: 2 }}>
+            <div style={{
+              display: "flex",
+              gap: 10,
+              marginBottom: 22,
+              background: "rgba(241, 245, 249, 0.7)",
+              padding: "5px",
+              borderRadius: "14px",
+              width: "fit-content",
+              border: "1px solid rgba(226, 232, 240, 0.8)",
+              backdropFilter: "blur(8px)"
+            }}>
               {[
-                { key: "dashboard", label: "📊 Dashboard" },
-                { key: "pdca", label: "📈 PDCA Cycle" }
-              ].map(sub => (
-                <button
-                  key={sub.key}
-                  onClick={() => setOverviewSubTab(sub.key)}
-                  style={{
-                    padding: "9px 18px",
-                    border: "none",
-                    borderBottom: overviewSubTab === sub.key ? "2.5px solid #7c3aed" : "2.5px solid transparent",
-                    background: "transparent",
-                    color: overviewSubTab === sub.key ? "#7c3aed" : "#64748b",
-                    fontWeight: 700,
-                    fontSize: 13,
-                    cursor: "pointer"
-                  }}
-                >
-                  {sub.label}
-                </button>
-              ))}
+                { key: "dashboard", label: "Dashboard 📊" },
+                { key: "pdca", label: "PDCA Cycle 📈" }
+              ].map(sub => {
+                const isActive = overviewSubTab === sub.key;
+                return (
+                  <button
+                    key={sub.key}
+                    onClick={() => setOverviewSubTab(sub.key)}
+                    style={{
+                      padding: "8px 22px",
+                      border: "none",
+                      borderRadius: "10px",
+                      background: isActive ? "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)" : "transparent",
+                      color: isActive ? "#ffffff" : "#64748b",
+                      fontWeight: isActive ? 700 : 600,
+                      fontSize: 13,
+                      cursor: "pointer",
+                      boxShadow: isActive ? "0 4px 14px -2px rgba(99, 102, 241, 0.35)" : "none",
+                      transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)"
+                    }}
+                  >
+                    {sub.label}
+                  </button>
+                );
+              })}
             </div>
             {overviewSubTab === "dashboard" ? (
               <OverviewTab user={enrichedUser} setActiveTab={handleTabSwitch} courses={courses} assignments={courses} lessons={lessons} activities={activities} summary={summary} />
@@ -3547,13 +3562,20 @@ export default function TeacherDashboard({ user, onLogout }) {
   const topClassName = topClassNames.length > 0 ? topClassNames.join(", ") : "No class assigned";
 
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "#f8fafc", fontFamily: "'Segoe UI','Inter',-apple-system,sans-serif" }}>
-      <style>{globalCSS}</style>
+    <div className="teacher-dashboard" style={{ display: "flex", height: "100vh", overflow: "hidden", background: "#f8fafc", fontFamily: "'Segoe UI','Inter',-apple-system,sans-serif" }}>
+      <style>{globalCSS}{teacherDashboardCSS}</style>
       <Toast msg={toast.msg} type={toast.type} onClose={() => setToast({ msg: "", type: "" })} />
 
-      <div style={{ width: 240, background: "white", borderRight: "1px solid #f1f5f9", display: "flex", flexDirection: "column", flexShrink: 0, boxShadow: "2px 0 12px rgba(0,0,0,0.04)", position: "relative", height: "100vh" }}>
-        <div style={{ padding: "20px 16px 12px" }}>
-          <Logo size={120} />
+      <div className="teacher-sidebar" style={{ width: 240, background: "white", borderRight: "1px solid #f1f5f9", display: "flex", flexDirection: "column", flexShrink: 0, boxShadow: "2px 0 12px rgba(0,0,0,0.04)", position: "relative", height: "100vh" }}>
+        <div className="teacher-sidebar-logo" style={{ padding: "20px 16px 12px" }}>
+          <a
+            href="/landing-pages/Teacher-Training-Program/"
+            aria-label="Back to Portal Website"
+            title="Back to Portal Website"
+            style={{ display: "inline-flex", justifyContent: "center", width: "100%" }}
+          >
+            <Logo size={120} />
+          </a>
           <div style={{ textAlign: "center", padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "#dbeafe", color: "#1e40af", border: "1px solid #bfdbfe", margin: "6px auto 0", display: "inline-block", width: "fit-content" }}>
             🎓 {t(currentUser?.role === "fellow" ? "Fellow Panel" : "Teacher Panel")}
           </div>
@@ -3565,6 +3587,8 @@ export default function TeacherDashboard({ user, onLogout }) {
             return (
               <button
                 key={item.key}
+                className={`teacher-nav-item ${isActive ? "teacher-nav-active" : ""}`}
+                title={t(item.label)}
                 onClick={() => setActiveTab(item.key)}
                 style={{
                   width: "100%", display: "flex", alignItems: "center", gap: 10,
@@ -3592,7 +3616,7 @@ export default function TeacherDashboard({ user, onLogout }) {
             );
           })}
         </nav>
-        <div style={{
+        <div className="teacher-sidebar-profile" style={{
           position: "fixed", bottom: 0, left: 0, width: 240,
           padding: "12px 16px", borderTop: "1px solid #f1f5f9",
           display: "flex", alignItems: "center", gap: 10, background: "white", zIndex: 50
@@ -3615,47 +3639,30 @@ export default function TeacherDashboard({ user, onLogout }) {
         </div>
       </div>
 
-      <div style={{ flex: 1, width: "0px", minWidth: "0px", padding: "28px 32px", overflowY: "auto", maxHeight: "100vh" }}>
-        <a href="/landing-pages/Teacher-Training-Program/" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, color: "#d97706", textDecoration: "none", marginBottom: 12 }}>
-            <span>&larr;</span> Back to website
-          </a>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginBottom: 20, position: "relative" }}>
+      <div className="teacher-main" style={{ flex: 1, width: "0px", minWidth: "0px", padding: "24px 32px", overflowY: "auto", maxHeight: "100vh" }}>
+        <div className="teacher-header glass-panel" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginBottom: 24, padding: "20px 24px", borderRadius: 20, boxShadow: "0 4px 20px rgba(0,0,0,0.03)", position: "relative" }}>
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: "#1c1917", margin: 0, letterSpacing: "-0.3px" }}>
-              Hi, {currentUser.name?.split(" ")[0] || (currentUser.role === "fellow" ? "Fellow" : "Teacher")}! 👋
+            <h1 className="teacher-heading" style={{ fontSize: 24, fontWeight: 900, color: "#0f172a", margin: 0, letterSpacing: "-0.5px" }}>
+              Hi, {currentUser.name?.split(" ")[0] || (currentUser.role === "fellow" ? "Fellow" : "Teacher")}! 
             </h1>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 500, background: "#f8fafc", padding: "3px 10px", borderRadius: 12, border: "1px solid #e2e8f0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+              <span className="teacher-meta" style={{ fontSize: 11, color: "#475569", fontWeight: 600, background: "#f1f5f9", padding: "4px 12px", borderRadius: 20, border: "1px solid #e2e8f0" }}>
                 📅 {new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
               </span>
-              <span style={{ fontSize: 11, color: "#92400e", fontWeight: 600, background: "#fef3c7", padding: "3px 10px", borderRadius: 12, border: "1px solid #fde68a", display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <span className="teacher-meta teacher-center" style={{ fontSize: 11, color: "#9a3412", fontWeight: 700, background: "#ffedd5", padding: "4px 12px", borderRadius: 20, border: "1px solid #fed7aa", display: "inline-flex", alignItems: "center", gap: 4 }}>
                 📍 {topCenterName}
               </span>
-              <span style={{ fontSize: 11, color: "#1e40af", fontWeight: 600, background: "#dbeafe", padding: "3px 10px", borderRadius: 12, border: "1px solid #bfdbfe", display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <span className="teacher-meta teacher-class" style={{ fontSize: 11, color: "#1e40af", fontWeight: 700, background: "#dbeafe", padding: "4px 12px", borderRadius: 20, border: "1px solid #bfdbfe", display: "inline-flex", alignItems: "center", gap: 4 }}>
                 📚 {topClassName}
               </span>
-
-              <span
-  style={{
-    fontSize: 11,
-    color: "#1e40af",
-    fontWeight: 600,
-    background: "#dbeafe",
-    padding: "3px 10px",
-    borderRadius: 12,
-    border: "1px solid #bfdbfe",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 4,
-  }}
->
-  Mentor: {user.assignedMentor?.name || "Not Assigned"}
-</span>
+              <span className="teacher-meta teacher-class" style={{ fontSize: 11, color: "#6b21a8", fontWeight: 700, background: "#f3e8ff", padding: "4px 12px", borderRadius: 20, border: "1px solid #e9d5ff", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                👨‍🏫 Mentor: {user.assignedMentor?.name || "Not Assigned"}
+              </span>
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button
+          <div className="teacher-header-actions" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button className="teacher-header-action"
               onClick={() => setShowGuide(true)}
               title={t("User Guide")}
               style={{
@@ -3674,7 +3681,7 @@ export default function TeacherDashboard({ user, onLogout }) {
               {t("User Guide")}
             </button>
 
-            <div
+            <div className="teacher-profile-trigger"
               onClick={() => setMenuOpen(!menuOpen)}
               style={{
                 display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
@@ -3753,7 +3760,7 @@ export default function TeacherDashboard({ user, onLogout }) {
 
       <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 1000, display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
         {chatOpen && (
-          <div style={{ width: 340, height: 460, background: "rgba(255, 255, 255, 0.95)", backdropFilter: "blur(12px)", border: "1px solid #fbbf24", borderRadius: 20, boxShadow: "0 10px 40px rgba(0,0,0,0.12)", marginBottom: 16, display: "flex", flexDirection: "column", overflow: "hidden", animation: "slideUp 0.3s ease" }}>
+          <div className="teacher-chat-panel" style={{ width: 340, height: 460, background: "rgba(255, 255, 255, 0.95)", backdropFilter: "blur(12px)", border: "1px solid #fbbf24", borderRadius: 20, boxShadow: "0 10px 40px rgba(0,0,0,0.12)", marginBottom: 16, display: "flex", flexDirection: "column", overflow: "hidden", animation: "slideUp 0.3s ease" }}>
             <div style={{ background: "linear-gradient(135deg,#f59e0b 0%,#d97706 100%)", padding: "16px 20px", color: "white", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 24 }}>🤖</span>
@@ -3811,8 +3818,10 @@ export default function TeacherDashboard({ user, onLogout }) {
             </div>
           </div>
         )}
-        <button
+        <button className="teacher-chat-button"
           onClick={() => setChatOpen(!chatOpen)}
+          aria-label={chatOpen ? "Close SpaceCE assistant" : "Open SpaceCE assistant"}
+          title={chatOpen ? "Close assistant" : "Ask SpaceCE assistant"}
           style={{
             width: 54,
             height: 54,
@@ -3837,3 +3846,77 @@ export default function TeacherDashboard({ user, onLogout }) {
     </div>
   );
 }
+/* Scoped visual tokens for the teacher portal shell. They deliberately do not
+   affect the admin, mentor, or public pages. */
+const teacherDashboardCSS = `
+  .teacher-dashboard {
+    --td-bg: #f7f8fa;
+    --td-surface: #ffffff;
+    --td-text: #0f172a;
+    --td-muted: #64748b;
+    --td-border: #e2e8f0;
+    --td-blue: #0052ff;
+    --td-blue-2: #4d7cff;
+    --td-shadow: 0 1px 3px rgba(15,23,42,.05), 0 8px 24px rgba(15,23,42,.035);
+    color: var(--td-text);
+  }
+  .teacher-dashboard *, .teacher-dashboard *::before, .teacher-dashboard *::after { box-sizing: border-box; }
+  .teacher-dashboard button:focus-visible, .teacher-dashboard a:focus-visible {
+    outline: 3px solid rgba(0,82,255,.25); outline-offset: 2px;
+  }
+  .teacher-sidebar { background: rgba(255,255,255,.94) !important; border-color: var(--td-border) !important; box-shadow: 1px 0 0 rgba(15,23,42,.02) !important; }
+  .teacher-sidebar-logo { padding: 24px 18px 16px !important; border-bottom: 1px solid #f1f5f9; }
+  .teacher-sidebar nav { padding: 16px 10px !important; }
+  .teacher-nav-item { min-height: 44px; border-radius: 10px !important; margin-bottom: 4px !important; }
+  .teacher-nav-item:hover { background: #f8fafc !important; color: #0f172a !important; transform: translateX(2px); }
+  .teacher-nav-item.teacher-nav-active { background: #eef4ff !important; color: #0052ff !important; box-shadow: inset 3px 0 0 #0052ff; border-left-color: transparent !important; }
+  .teacher-nav-item.teacher-nav-active > span:first-child { background: linear-gradient(135deg,#0052ff,#4d7cff) !important; }
+  .teacher-sidebar-profile { background: rgba(255,255,255,.98) !important; border-color: var(--td-border) !important; }
+  .teacher-main { background: var(--td-bg); padding: 28px 34px 40px !important; }
+  .teacher-back-link { color: #64748b !important; font-size: 12px !important; margin-bottom: 16px !important; }
+  .teacher-back-link:hover { color: #0052ff !important; }
+  .teacher-header {
+    padding: 24px 26px !important;
+    margin-bottom: 24px !important;
+    background: #ffffff;
+    border: 1px solid #dce5f5;
+    border-radius: 20px;
+    box-shadow: 0 1px 3px rgba(15,23,42,.04), 0 12px 28px rgba(15,23,42,.035);
+  }
+  .teacher-heading { font-family: Georgia, 'Times New Roman', serif !important; font-size: clamp(26px,2.2vw,32px) !important; letter-spacing: -.75px !important; color: #0f172a !important; }
+  .teacher-meta { background: #fff !important; color: #64748b !important; border-color: #e2e8f0 !important; padding: 5px 10px !important; }
+  .teacher-meta.teacher-center { background: #fffaf0 !important; color: #9a6700 !important; border-color: #fde7b0 !important; }
+  .teacher-meta.teacher-class { background: #f5f8ff !important; color: #3155ac !important; border-color: #d9e5ff !important; }
+  .teacher-header-action { border-color: #d9e5ff !important; color: #1647b5 !important; padding: 9px 13px !important; border-radius: 10px !important; }
+  .teacher-profile-trigger { background: #fff !important; border-color: #e2e8f0 !important; box-shadow: 0 1px 3px rgba(15,23,42,.06) !important; border-radius: 12px !important; }
+  .teacher-profile-trigger:hover { background: #f8fafc !important; }
+  .teacher-overview { animation: td-enter .38s ease both !important; }
+  .teacher-stat-card { position: relative; overflow: hidden; isolation: isolate; }
+  .teacher-stat-card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--stat-accent); }
+  .teacher-stat-card:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(15,23,42,.09) !important; border-color: color-mix(in srgb, var(--stat-accent) 30%, #e2e8f0) !important; }
+  .teacher-stat-icon { box-shadow: inset 0 0 0 1px rgba(255,255,255,.7); }
+  .teacher-schedule { background: #fff !important; border: 1px solid #dce5f5 !important; padding: 0 !important; box-shadow: var(--td-shadow) !important; }
+  .teacher-schedule > div { border-radius: 19px !important; padding: 24px !important; }
+  .teacher-schedule h2 { font-family: Georgia, 'Times New Roman', serif; font-size: 21px !important; }
+  .teacher-calendar-add { background: linear-gradient(135deg,#0052ff,#4d7cff) !important; box-shadow: 0 6px 16px rgba(0,82,255,.24) !important; border-radius: 10px !important; }
+  .teacher-calendar-event { border: 1px solid color-mix(in srgb, currentColor 16%, transparent) !important; border-radius: 11px !important; transition: transform .18s ease, box-shadow .18s ease !important; }
+  .teacher-calendar-event:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(15,23,42,.12) !important; z-index: 30 !important; }
+  .teacher-support-grid > div > div { border: 1px solid var(--td-border) !important; box-shadow: var(--td-shadow) !important; border-radius: 16px !important; }
+  .teacher-progress-track { height: 7px !important; border-radius: 99px !important; background: #eef2f7 !important; }
+  .teacher-progress-fill { background: linear-gradient(90deg,#0052ff,#4d7cff) !important; border-radius: inherit !important; transition: width .6s ease !important; }
+  .teacher-chat-button { background: linear-gradient(135deg,#0052ff,#4d7cff) !important; box-shadow: 0 10px 22px rgba(0,82,255,.26) !important; }
+  .teacher-chat-button:hover { transform: translateY(-2px) scale(1.03); }
+  .teacher-chat-panel { border-color: #dce5f5 !important; box-shadow: 0 20px 50px rgba(15,23,42,.16) !important; }
+  .teacher-chat-panel > div:first-child, .teacher-chat-panel button[style*="linear-gradient"] { background: linear-gradient(135deg,#0052ff,#4d7cff) !important; }
+  .teacher-main::-webkit-scrollbar, .teacher-sidebar nav::-webkit-scrollbar { width: 6px; }
+  .teacher-main::-webkit-scrollbar-track, .teacher-sidebar nav::-webkit-scrollbar-track { background: transparent; }
+  .teacher-main::-webkit-scrollbar-thumb, .teacher-sidebar nav::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+  .teacher-main::-webkit-scrollbar-thumb:hover, .teacher-sidebar nav::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+  .quick-action-pill { cursor: pointer; transition: transform .2s ease, box-shadow .2s ease; }
+  .quick-action-pill:hover { transform: translateY(-2px); box-shadow: 0 8px 16px -4px rgba(15,23,42,.1); }
+  @keyframes td-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @media (prefers-reduced-motion: reduce) { .teacher-dashboard *, .teacher-dashboard *::before, .teacher-dashboard *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+  @media (max-width: 860px) { .teacher-main { padding: 22px 20px 34px !important; } .teacher-sidebar { width: 204px !important; } .teacher-sidebar-profile { width: 204px !important; } .teacher-support-grid { grid-template-columns: 1fr !important; } }
+  @media (max-width: 640px) { .teacher-dashboard { height: auto !important; min-height: 100vh; } .teacher-sidebar { width: 76px !important; } .teacher-sidebar-logo { padding: 18px 6px !important; } .teacher-sidebar nav { padding: 12px 8px !important; } .teacher-nav-item { justify-content: center; padding: 8px !important; } .teacher-nav-item > span:nth-child(2), .teacher-sidebar-logo > div { display: none !important; } .teacher-sidebar-profile { width: 76px !important; padding: 12px !important; } .teacher-sidebar-profile > div:not(:first-of-type), .teacher-sidebar-profile button { display: none !important; } .teacher-main { padding: 18px 14px 30px !important; } .teacher-header { padding: 20px !important; align-items: flex-start !important; flex-direction: column; } .teacher-header-actions { align-self: stretch; justify-content: space-between; } .teacher-heading { font-size: 27px !important; } }
+`;
+
