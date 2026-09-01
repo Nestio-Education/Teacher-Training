@@ -1039,17 +1039,15 @@ const otpFilled = otpInput.join("").length === 6;
       {/* Page header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: "0 0 4px", letterSpacing: "-0.3px" }}>Daily Attendance</h1>
-          <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>Manage daily register and track attendance</p>
+          <h1 style={S.pageTitle}>Children Attendance</h1>
+          <p style={S.pageSub}>Manage rosters and record daily attendance registers.</p>
         </div>
+        {/* Prajwal start — Add New Assessment button */}
         <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={() => setShowAssessmentModal(true)} style={{ padding: "8px 16px", borderRadius: 12, border: "1px solid #cbd5e1", background: "white", color: "#334155", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-            + Add New Assessment
-          </button>
-          <button onClick={() => setShowAddModal(true)} style={{ padding: "8px 16px", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#059669,#10b981)", color: "white", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 2px 8px rgba(16,185,129,0.25)" }}>
-            + Enroll Child
-          </button>
+          <button onClick={() => setShowAssessmentModal(true)} style={S.primaryBtn}>+ Add New Assessment</button>
+          <button onClick={() => setShowAddModal(true)} style={S.primaryBtn}>+ Enroll Child</button>
         </div>
+        {/* Prajwal end */}
       </div>
 
       {/* Toast banners */}
