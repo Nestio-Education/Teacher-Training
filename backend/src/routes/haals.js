@@ -153,57 +153,75 @@ function mapRawRowToSchema(row) {
   };
 }
 
-async function findAndAssignIds(parsedData) {
-  let facilitatorId = null;
-  let childId = null;
+// ── Optimized Cached ID Resolver & Bulk Ingestion ──
+async function resolveIdsForBatch(parsedRows) {
+  const facilitatorCache = new Map();
+  const childCache = new Map();
 
-  if (parsedData.facilitatorNameRaw) {
-    const rawName = parsedData.facilitatorNameRaw.trim();
-    const facilitator = await User.findOne({
-      name: { $regex: new RegExp(`^${escapeRegex(rawName)}$`, "i") },
-      role: { $in: ["fellow", "teacher"] }
-    });
-    if (facilitator) {
-      facilitatorId = facilitator._id;
+  for (const item of parsedRows) {
+    let facilitatorId = null;
+    let childId = null;
+
+    // 1. Resolve Facilitator with cache
+    if (item.facilitatorNameRaw) {
+      const rawName = item.facilitatorNameRaw.trim();
+      const normFacName = rawName.toLowerCase();
+      if (!facilitatorCache.has(normFacName)) {
+        const facilitator = await User.findOne({
+          name: { $regex: new RegExp(`^${escapeRegex(rawName)}$`, "i") },
+          role: { $in: ["fellow", "teacher"] }
+        }).lean();
+        facilitatorCache.set(normFacName, facilitator || null);
+      }
+      const cachedFac = facilitatorCache.get(normFacName);
+      if (cachedFac) {
+        facilitatorId = cachedFac._id;
+      }
     }
+
+    // 2. Resolve Child with cache
+    if (item.childName) {
+      const rawChildName = item.childName.trim();
+      const normChildName = rawChildName.toLowerCase();
+      const childCacheKey = `${normChildName}_${facilitatorId || "nofac"}`;
+
+      if (!childCache.has(childCacheKey)) {
+        let foundChild = null;
+
+        if (facilitatorId) {
+          const cachedFac = facilitatorCache.get(item.facilitatorNameRaw.trim().toLowerCase());
+          const centerId = cachedFac?.teacherProfile?.center;
+          const classIds = cachedFac?.teacherProfile?.classes || [];
+
+          if (classIds && classIds.length > 0) {
+            foundChild = await Child.findOne({
+              fullName: { $regex: new RegExp(`^${escapeRegex(rawChildName)}$`, "i") },
+              class: { $in: classIds }
+            }).lean();
+          }
+          if (!foundChild && centerId) {
+            foundChild = await Child.findOne({
+              fullName: { $regex: new RegExp(`^${escapeRegex(rawChildName)}$`, "i") },
+              center: centerId
+            }).lean();
+          }
+        }
+
+        if (!foundChild) {
+          foundChild = await Child.findOne({
+            fullName: { $regex: new RegExp(`^${escapeRegex(rawChildName)}$`, "i") }
+          }).lean();
+        }
+
+        childCache.set(childCacheKey, foundChild ? foundChild._id : null);
+      }
+
+      childId = childCache.get(childCacheKey);
+    }
+
+    item.facilitatorId = facilitatorId;
+    item.childId = childId;
   }
-
-  if (parsedData.childName) {
-    const rawChildName = parsedData.childName.trim();
-    if (facilitatorId) {
-      const facilitator = await User.findById(facilitatorId).lean();
-      const centerId = facilitator.teacherProfile?.center;
-      const classIds = facilitator.teacherProfile?.classes || [];
-      
-      let child = null;
-      if (classIds.length > 0) {
-        child = await Child.findOne({
-          fullName: { $regex: new RegExp(`^${escapeRegex(rawChildName)}$`, "i") },
-          class: { $in: classIds }
-        });
-      }
-      if (!child && centerId) {
-        child = await Child.findOne({
-          fullName: { $regex: new RegExp(`^${escapeRegex(rawChildName)}$`, "i") },
-          center: centerId
-        });
-      }
-      if (child) {
-        childId = child._id;
-      }
-    }
-
-    if (!childId) {
-      const child = await Child.findOne({
-        fullName: { $regex: new RegExp(`^${escapeRegex(rawChildName)}$`, "i") }
-      });
-      if (child) {
-        childId = child._id;
-      }
-    }
-  }
-
-  return { facilitatorId, childId };
 }
 
 // ── 1. Webhook Sync / Backfill Endpoint ──
@@ -223,31 +241,34 @@ router.post("/visits", async (req, res, next) => {
     }
 
     const rows = Array.isArray(payload) ? payload : [payload];
-    const results = [];
-
-    for (const row of rows) {
-      const parsedData = mapRawRowToSchema(row);
-      const { facilitatorId, childId } = await findAndAssignIds(parsedData);
-      
-      const query = {
-        visitDate: parsedData.visitDate,
-        childName: parsedData.childName,
-        facilitatorNameRaw: parsedData.facilitatorNameRaw
-      };
-
-      const updatedDoc = await VisitObservation.findOneAndUpdate(
-        query,
-        { ...parsedData, facilitatorId, childId },
-        { upsert: true, new: true }
-      );
-      results.push(updatedDoc);
+    if (rows.length === 0) {
+      return res.json({ success: true, processedCount: 0, syncedCount: 0 });
     }
+
+    const parsedRows = rows.map(mapRawRowToSchema);
+    await resolveIdsForBatch(parsedRows);
+
+    const bulkOps = parsedRows.map((doc) => ({
+      updateOne: {
+        filter: {
+          visitDate: doc.visitDate,
+          childName: doc.childName,
+          facilitatorNameRaw: doc.facilitatorNameRaw
+        },
+        update: { $set: doc },
+        upsert: true
+      }
+    }));
+
+    const bulkRes = await VisitObservation.bulkWrite(bulkOps, { ordered: false });
 
     res.json({
       success: true,
       processedCount: rows.length,
-      syncedCount: results.length,
-      sample: results.slice(0, 5)
+      syncedCount: (bulkRes.upsertedCount || 0) + (bulkRes.modifiedCount || 0) + (bulkRes.matchedCount || 0),
+      upsertedCount: bulkRes.upsertedCount || 0,
+      modifiedCount: bulkRes.modifiedCount || 0,
+      matchedCount: bulkRes.matchedCount || 0
     });
   } catch (err) {
     next(err);

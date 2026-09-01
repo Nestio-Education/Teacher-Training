@@ -32,7 +32,7 @@ async function runTest() {
 
   console.log("Sending simulated form response row matching seeded entities to webhook...");
   try {
-    const response = await fetch("http://localhost:5001/api/haals/visits", {
+    const response = await fetch("http://localhost:5000/api/haals/visits", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
