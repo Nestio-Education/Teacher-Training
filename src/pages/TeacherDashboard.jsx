@@ -205,40 +205,33 @@ function UnderConstructionTab({ label = "This page", icon = "🚧" }) {
   );
 }
 
-/* ── Colorful KPI Stat Card (Figma Nestio Style) ── */
+/* ── Colorful KPI Stat Card (Admin-dashboard style) ── */
 function TeacherStatCard({ icon, label, val, accent = "#3b82f6", subtitle, subtitleColor }) {
   return (
     <div style={{
       background: "white",
       borderRadius: 16,
       border: "1px solid #f1f5f9",
-      padding: "16px 18px",
-      boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
-      display: "flex",
-      flexDirection: "column",
-      justifyContent: "space-between",
-      minHeight: 100,
+      borderTop: `4px solid ${accent}`,
+      padding: "18px 18px 16px",
+      boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
       transition: "transform 0.15s ease, box-shadow 0.15s ease"
     }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>{label}</span>
-        <div style={{
-          width: 34, height: 34, borderRadius: "50%",
-          background: `${accent}1F`,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 16, color: accent
-        }}>
-          {icon}
+      <div style={{
+        width: 40, height: 40, borderRadius: 12,
+        background: `${accent}1A`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 20, marginBottom: 12
+      }}>
+        {icon}
+      </div>
+      <div style={{ fontSize: 24, fontWeight: 900, color: "#0f172a", lineHeight: 1.1 }}>{val}</div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginTop: 2 }}>{label}</div>
+      {subtitle && (
+        <div style={{ fontSize: 11, fontWeight: 700, color: subtitleColor || accent, marginTop: 6 }}>
+          {subtitle}
         </div>
-      </div>
-      <div style={{ marginTop: 6 }}>
-        <div style={{ fontSize: 22, fontWeight: 800, color: "#1e293b", lineHeight: 1.1 }}>{val}</div>
-        {subtitle && (
-          <div style={{ fontSize: 11, fontWeight: 600, color: subtitleColor || "#94a3b8", marginTop: 4 }}>
-            {subtitle}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }
@@ -708,18 +701,17 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
 
   return (
     <div style={{
-      background: "white",
-      borderRadius: 20,
-      border: "1px solid #f1f5f9",
-      padding: 22,
+      background: "linear-gradient(160deg,#0f172a 0%,#1e293b 55%,#1e3a8a 100%)",
+      borderRadius: 24,
+      padding: 2,
       marginBottom: 24,
-      boxShadow: "0 2px 12px rgba(0,0,0,0.03)"
+      boxShadow: "0 12px 40px rgba(30,58,138,0.25)"
     }}>
-      <div>
+      <div style={{ background: "white", borderRadius: 22, padding: 24 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
           <div>
-            <h2 style={{ fontSize: 18, fontWeight: 800, color: "#0f172a", margin: 0, letterSpacing: "-0.3px", display: "flex", alignItems: "center", gap: 8 }}>
-              Weekly Course Schedule
+            <h2 style={{ fontSize: 20, fontWeight: 900, color: "#0f172a", margin: 0, letterSpacing: "-0.5px", display: "flex", alignItems: "center", gap: 8 }}>
+              📅 Weekly Course Schedule & Task Planner
             </h2>
             <p style={{ fontSize: 12, color: "#64748b", margin: "2px 0 0" }}>Manage timetable sessions, track upcoming deadlines, and mark tasks as complete</p>
           </div>
@@ -1491,30 +1483,32 @@ function MyAttendanceSummaryCard({ attendance = 0, summary = {}, attendanceMap =
 }
 
 /* ── OverviewTab ── */
-function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lessons = [], activities = [], summary = {}, chatInput = "", setChatInput, handleSendChatMessage }) {
+function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lessons = [], activities = [], summary = {} }) {
   const attendanceMap = summary.attendanceMap || {};
-  const today = new Date();
-  const todayDate = today.getDate();
-  const currentMonth = today.getMonth();
-  const currentYear = today.getFullYear();
+const today = new Date();
+const todayDate = today.getDate();
+const currentMonth = today.getMonth();
+const currentYear = today.getFullYear();
 
-  const isWeekend = (day) => {
-    const d = new Date(currentYear, currentMonth, day).getDay();
-    return d === 0 || d === 6;
-  };
-  const getDayKey = (day) =>
-    `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+const isWeekend = (day) => {
+  const d = new Date(currentYear, currentMonth, day).getDay();
+  return d === 0 || d === 6;
+};
+const getDayKey = (day) =>
+  `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
-  const totalWorkdays = Array.from({ length: todayDate }, (_, i) => i + 1).filter(d => !isWeekend(d)).length;
-  const presentWorkdays = Array.from({ length: todayDate }, (_, i) => i + 1)
-    .filter(d => !isWeekend(d) && (attendanceMap[getDayKey(d)]?.checkedIn || attendanceMap[getDayKey(d)]?.status === "present"))
-    .length;
+const totalWorkdays = Array.from({ length: todayDate }, (_, i) => i + 1).filter(d => !isWeekend(d)).length;
+const presentWorkdays = Array.from({ length: todayDate }, (_, i) => i + 1)
+  .filter(d => !isWeekend(d) && (attendanceMap[getDayKey(d)]?.checkedIn || attendanceMap[getDayKey(d)]?.status === "present"))
+  .length;
 
-  const attendance = totalWorkdays > 0
-    ? Math.round((presentWorkdays / totalWorkdays) * 100)
-    : (summary.attendanceRate !== undefined ? summary.attendanceRate : 0);
+const attendance = totalWorkdays > 0
+  ? Math.round((presentWorkdays / totalWorkdays) * 100)
+  : (summary.attendanceRate !== undefined ? summary.attendanceRate : 0);
   const attColor = attendance >= 85 ? "#10b981" : attendance >= 70 ? "#f59e0b" : "#ef4444";
+  const photoUrl = getTeacherPhotoUrl(user);
 
+  // Start: Dnyaneshwari Thorat
   const isVisibleCourse = (item) => {
     const title = item?.course?.title || item?.title || "";
     return !title.toLowerCase().includes("ai testing");
@@ -1527,22 +1521,34 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
 
   const visibleAssignments = assignments.filter(isVisibleCourse);
   const activeAssignments = visibleAssignments.filter((item) => !isFinishedCourse(item));
+  const featuredAssignments = visibleAssignments.slice(0, 5);
   const featuredCourseProgress = visibleAssignments.slice(0, 3);
+  // End: Dnyaneshwari Thorat
 
   const certificatesCount = courses.filter(c => (c.status === "completed" || c.progressPercent === 100) && c.score !== null && c.score !== undefined).length;
   const pendingTasksCount = activeAssignments.filter(a => a.status === "assigned" || a.status === "revision").length;
   const gradedAssignments = visibleAssignments.filter(a => a.score !== null && a.score !== undefined);
   const averageScore = gradedAssignments.length ? Math.round(gradedAssignments.reduce((sum, a) => sum + Number(a.score || 0), 0) / gradedAssignments.length) : 0;
+  const centerName = user.teacherProfile?.center
+    ? [user.teacherProfile.center.name, user.teacherProfile.center.city].filter(Boolean).join(", ")
+    : (user.workingCenter || "Center not assigned");
+  const classNames = (user.teacherProfile?.classes || []).map(c => c?.name).filter(Boolean);
+  const className = classNames.length > 0 ? classNames.join(", ") : "No class assigned";
   const studentsCount = summary.totalChildren || user.students || 0;
+
+  // Get full class details for the assigned classes (use only classes array, ignore old class field)
+  const allAssignedClasses = user.teacherProfile?.classes || [];
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
+
+
       {/* KPI Cards Section */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 16, marginBottom: 24 }}>
         <TeacherStatCard icon="👥" label="Total Students" val={studentsCount} accent="#3b82f6" subtitle="Active" />
         <TeacherStatCard icon="📊" label="Attendance" val={`${attendance}%`} accent={attColor} subtitle={attendance >= 85 ? "Great ✓" : attendance >= 70 ? "Keep it up" : "Needs attention"} />
-        <TeacherStatCard icon="⭐" label="Avg Grade" val={gradedAssignments.length ? `${averageScore}%` : "A-"} accent="#f59e0b" subtitle={gradedAssignments.length ? `${gradedAssignments.length} graded` : "Great work"} />
-        <TeacherStatCard icon="📜" label="Certificates" val={certificatesCount} accent="#8b5cf6" subtitle="Earned" />
+        <TeacherStatCard icon="🏆" label="Avg Grade" val={gradedAssignments.length ? `${averageScore}%` : "N/A"} accent="#8b5cf6" subtitle={gradedAssignments.length ? `${gradedAssignments.length} graded` : "No grades yet"} />
+        <TeacherStatCard icon="📜" label="Certificates" val={certificatesCount} accent="#06b6d4" subtitle="Earned" />
         <TeacherStatCard icon="📋" label="Pending Tasks" val={pendingTasksCount} accent="#ef4444" subtitle={pendingTasksCount === 0 ? "All clear ✓" : "Awaiting submission"} />
       </div>
 
@@ -1555,117 +1561,36 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
         setActiveTab={setActiveTab}
       />
 
-      {/* ── 3-Column Bottom Overview Grid matching Figma ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20, marginBottom: 24 }}>
-        {/* Column 1: Upcoming & Recent */}
-        <div style={{ background: "white", borderRadius: 20, border: "1px solid #f1f5f9", padding: 20, boxShadow: "0 2px 10px rgba(0,0,0,0.03)", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h3 style={{ fontSize: 15, fontWeight: 800, color: "#0f172a", margin: 0 }}>Upcoming & Recent</h3>
-              <button onClick={() => setActiveTab("schedule")} style={{ fontSize: 12, fontWeight: 700, color: "#3b82f6", background: "none", border: "none", cursor: "pointer", padding: 0 }}>View all →</button>
-            </div>
 
-            {/* Event Card 1: Warm Amber / Peach */}
-            <div style={{ background: "linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%)", borderRadius: 14, padding: 14, marginBottom: 12, border: "1px solid #fdba74" }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: "#9a3412", marginBottom: 4 }}>Tech Innovations Summit</div>
-              <div style={{ fontSize: 11, color: "#c2410c", fontWeight: 600, marginBottom: 10 }}>Cutting-edge AI trends in education</div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 11, fontWeight: 700, color: "#9a3412" }}>
-                <span>⏰ 14:00 - 15:00</span>
-                <span>📅 Dec 5</span>
-              </div>
-            </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+        <MyAttendanceSummaryCard attendance={attendance} summary={summary} attendanceMap={summary.attendanceMap || {}} setActiveTab={setActiveTab} />
 
-            {/* Event Card 2: Light Lavender */}
-            <div style={{ background: "#f3e8ff", borderRadius: 14, padding: 14, border: "1px solid #e9d5ff" }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: "#6b21a8", marginBottom: 4 }}>Software Dev Meetup</div>
-              <div style={{ fontSize: 11, color: "#7e22ce", fontWeight: 600 }}>⏰ 15:30</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Column 2: My Courses */}
-        <div style={{ background: "white", borderRadius: 20, border: "1px solid #f1f5f9", padding: 20, boxShadow: "0 2px 10px rgba(0,0,0,0.03)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <h3 style={{ fontSize: 15, fontWeight: 800, color: "#0f172a", margin: 0 }}>My Courses</h3>
-            <button onClick={() => setActiveTab("courses")} style={{ fontSize: 12, fontWeight: 700, color: "#3b82f6", background: "none", border: "none", cursor: "pointer", padding: 0 }}>View all →</button>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {/* Course Card 1: Green */}
-            <div style={{ background: "#f8fafc", borderRadius: 12, border: "1px solid #e2e8f0", padding: 12 }}>
-              <div style={{ width: 28, height: 28, borderRadius: 8, background: "#dcfce7", color: "#166534", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, marginBottom: 8 }}>🧪</div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", lineHeight: 1.2 }}>Advanced Physics</div>
-              <div style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>Grade 11</div>
-              <div style={{ display: "inline-block", background: "#e2e8f0", color: "#475569", borderRadius: 10, fontSize: 9, fontWeight: 700, padding: "2px 6px", marginTop: 8 }}>8/12 tasks</div>
-            </div>
-
-            {/* Course Card 2: Orange */}
-            <div style={{ background: "#f8fafc", borderRadius: 12, border: "1px solid #e2e8f0", padding: 12 }}>
-              <div style={{ width: 28, height: 28, borderRadius: 8, background: "#ffedd5", color: "#9a3412", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, marginBottom: 8 }}>⌛</div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", lineHeight: 1.2 }}>Calculus Basics</div>
-              <div style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>Grade 12</div>
-              <div style={{ display: "inline-block", background: "#e2e8f0", color: "#475569", borderRadius: 10, fontSize: 9, fontWeight: 700, padding: "2px 6px", marginTop: 8 }}>4/10 tasks</div>
-            </div>
-
-            {/* Course Card 3: Purple */}
-            <div style={{ background: "#f8fafc", borderRadius: 12, border: "1px solid #e2e8f0", padding: 12 }}>
-              <div style={{ width: 28, height: 28, borderRadius: 8, background: "#f3e8ff", color: "#6b21a8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, marginBottom: 8 }}>🧬</div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b", lineHeight: 1.2 }}>Intro to Biology</div>
-              <div style={{ fontSize: 10, color: "#64748b", marginTop: 2 }}>Grade 10</div>
-              <div style={{ display: "inline-block", background: "#e2e8f0", color: "#475569", borderRadius: 10, fontSize: 9, fontWeight: 700, padding: "2px 6px", marginTop: 8 }}>10/10 tasks</div>
-            </div>
-
-            {/* Course Card 4: Add Course Button */}
-            <button onClick={() => setActiveTab("courses")} style={{ background: "#fafafa", borderRadius: 12, border: "1.5px dashed #cbd5e1", padding: 12, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#64748b" }}>
-              <div style={{ width: 24, height: 24, borderRadius: "50%", border: "1px solid #cbd5e1", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, marginBottom: 4 }}>+</div>
-              <div style={{ fontSize: 11, fontWeight: 700 }}>Add Course</div>
-            </button>
-          </div>
-        </div>
-
-        {/* Column 3: AI Assistant Interactive Card */}
-        <div style={{ background: "white", borderRadius: 20, border: "1px solid #f1f5f9", padding: 20, boxShadow: "0 2px 10px rgba(0,0,0,0.03)", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-          <div style={{ textAlign: "center" }}>
-            {/* Soft Purple 3D Sphere Graphic */}
-            <div style={{ width: 56, height: 56, borderRadius: "50%", background: "radial-gradient(circle at 30% 30%, #a855f7, #6366f1 70%, #4338ca)", margin: "0 auto 12px", boxShadow: "0 8px 20px rgba(99,102,241,0.25)" }} />
-            <h3 style={{ fontSize: 14, fontWeight: 800, color: "#0f172a", margin: "0 0 4px" }}>
-              Welcome, {user.name?.split(" ")[0] || "Teacher"}
-            </h3>
-            <p style={{ fontSize: 11, color: "#64748b", margin: "0 0 14px" }}>What can I help plan today?</p>
-
-            {/* Action Chips */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
-              <button onClick={() => setActiveTab("planner")} style={{ padding: "8px 12px", borderRadius: 20, border: "1px solid #e2e8f0", background: "#f8fafc", fontSize: 11, fontWeight: 700, color: "#334155", cursor: "pointer", textAlign: "center", transition: "all 0.15s" }}>
-                🪄 Draft a lesson plan
-              </button>
-              <button onClick={() => setActiveTab("planner")} style={{ padding: "8px 12px", borderRadius: 20, border: "1px solid #e2e8f0", background: "#f8fafc", fontSize: 11, fontWeight: 700, color: "#334155", cursor: "pointer", textAlign: "center", transition: "all 0.15s" }}>
-                💡 Suggest activities
-              </button>
-              <button onClick={() => setActiveTab("schedule")} style={{ padding: "8px 12px", borderRadius: 20, border: "1px solid #e2e8f0", background: "#f8fafc", fontSize: 11, fontWeight: 700, color: "#334155", cursor: "pointer", textAlign: "center", transition: "all 0.15s" }}>
-                📅 Check my schedule
-              </button>
-            </div>
-          </div>
-
-          {/* Interactive Input Box */}
-          <div style={{ display: "flex", alignItems: "center", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 24, padding: "4px 6px 4px 14px" }}>
-            <input
-              type="text"
-              placeholder="Ask me anything..."
-              value={chatInput}
-              onChange={(e) => setChatInput && setChatInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSendChatMessage && handleSendChatMessage()}
-              style={{ flex: 1, border: "none", background: "transparent", outline: "none", fontSize: 12, fontWeight: 600, color: "#1e293b" }}
-            />
-            <button
-              onClick={() => handleSendChatMessage && handleSendChatMessage()}
-              style={{ width: 28, height: 28, borderRadius: "50%", background: "#6366f1", border: "none", color: "white", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 12 }}
-            >
-              ➔
-            </button>
-          </div>
-        </div>
+        <SectionCard title="Course Progress">
+          {courses.length === 0 ? (
+            <div style={{ padding: 20, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>No assigned courses yet.</div>
+          ) : (
+            // Start: Dnyaneshwari Thorat
+            featuredCourseProgress.map((c, i) => {
+              // End: Dnyaneshwari Thorat
+              const progress = c.progressPercent || 0;
+              return (
+                <div key={i} style={{ marginBottom: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{c.course?.title?.split(" ").slice(0, 3).join(" ") || "Course"}...</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: "#f59e0b" }}>{progress}%</span>
+                  </div>
+                  <div style={{ height: 6, background: "#f3f4f6", borderRadius: 4, overflow: "hidden", marginBottom: 2 }}>
+                    <div style={{ height: "100%", width: `${progress}%`, background: "linear-gradient(90deg,#f59e0b,#d97706)", borderRadius: 4 }} />
+                  </div>
+                  <div style={{ fontSize: 10, color: "#9ca3af" }}>{c.status || "Assigned"} · Due: {c.dueDate ? new Date(c.dueDate).toLocaleDateString() : "No deadline"}</div>
+                </div>
+              );
+            })
+          )}
+          <button onClick={() => setActiveTab("courses")} style={{ fontSize: 12, color: "#d97706", fontWeight: 700, background: "none", border: "none", cursor: "pointer", padding: 0, marginTop: 4 }}>View all courses →</button>
+        </SectionCard>
       </div>
+
     </div>
   );
 }
@@ -2004,37 +1929,12 @@ function CertificatesTab({ assignments = [], certificates: certs = [] }) {
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: "0 0 4px", letterSpacing: "-0.3px" }}>Your Certificates</h1>
-        <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>Track your professional development achievements & certificates</p>
-      </div>
-
-      {/* Hero Center Certificate Banner matching Figma */}
-      <div style={{ background: "white", borderRadius: 20, padding: "40px 24px", border: "1px solid #f1f5f9", boxShadow: "0 2px 10px rgba(0,0,0,0.03)", textAlign: "center", marginBottom: 24 }}>
-        <div style={{ width: 56, height: 56, borderRadius: "50%", background: "#dcfce7", color: "#15803d", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 26, marginBottom: 14 }}>
-          📜
-        </div>
-        <h2 style={{ fontSize: 18, fontWeight: 800, color: "#0f172a", margin: "0 0 8px" }}>
-          {displayCerts.length} certificate eligible course{displayCerts.length === 1 ? "" : "s"}
-        </h2>
-        <p style={{ fontSize: 12, color: "#64748b", maxWidth: 460, margin: "0 auto 20px", lineHeight: 1.6 }}>
-          You have completed courses eligible for certification. Download your official certificates to build your professional portfolio.
-        </p>
-        <button
-          onClick={() => {
-            window.scrollTo({ top: 400, behavior: "smooth" });
-          }}
-          style={{ padding: "10px 24px", borderRadius: 20, border: "none", background: "linear-gradient(135deg,#6366f1,#4f46e5)", color: "white", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 4px 12px rgba(99,102,241,0.25)" }}
-        >
-          Explore Courses
-        </button>
-      </div>
-
-      {/* Certificates Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
+      <h1 style={S.pageTitle}>Certificates</h1>
+      <p style={S.pageSub}>{displayCerts.length} certificate eligible course{displayCerts.length === 1 ? "" : "s"}</p>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(320px,1fr))", gap: 16 }}>
         {displayCerts.length === 0 ? (
           <div style={{ gridColumn: "1 / -1", padding: 40, textAlign: "center", background: "white", borderRadius: 16, border: "1px dashed #cbd5e1", color: "#94a3b8" }}>
-            Certificates will appear here after an assigned course is completed and reviewed.
+            Certificates will appear after an assigned course is completed and reviewed.
           </div>
         ) : displayCerts.map((item) => {
           const isRealCert = !!item.certificateNumber;
@@ -2042,20 +1942,21 @@ function CertificatesTab({ assignments = [], certificates: certs = [] }) {
           const courseTitle = item.course?.title || item.title || "Completed Course";
           const certId = isRealCert ? item.certificateNumber : `SPC-${String(item._id || "pending").slice(-8).toUpperCase()}`;
           return (
-            <div key={item._id} style={{ background: "white", borderRadius: 18, padding: "20px 22px", border: "1px solid #f1f5f9", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
-              <div style={{ fontSize: 14, fontWeight: 800, color: "#0f172a", marginBottom: 8, lineHeight: 1.4 }}>{courseTitle}</div>
-              <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-                {isRealCert && item.grade && <Badge children={`Grade: ${item.grade}`} color="#059669" bg="#dcfce7" />}
+            <div key={item._id} style={{ background: isRealCert ? "linear-gradient(135deg,#fffbeb,#fef3c7)" : "linear-gradient(135deg,#f0fdf4,#dcfce7)", borderRadius: 16, padding: "24px", border: isRealCert ? "2px solid #fbbf24" : "2px solid #86efac", boxShadow: isRealCert ? "0 4px 20px rgba(245,158,11,0.15)" : "0 4px 20px rgba(34,197,94,0.15)" }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: "#1c1917", marginBottom: 8, lineHeight: 1.4 }}>{courseTitle}</div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+                {isRealCert && item.grade && <Badge children={`Grade: ${item.grade}`} color="#059669" bg="#d1fae5" />}
                 {item.score !== null && item.score !== undefined && (() => {
                   const certTotal = item.assessmentTotal !== undefined && item.assessmentTotal !== null ? item.assessmentTotal : (item.assignment?.assessmentTotal !== undefined && item.assignment?.assessmentTotal !== null ? item.assignment.assessmentTotal : (item.score <= 10 ? 10 : 100));
-                  return <Badge children={`Score: ${item.score}/${certTotal}`} color="#059669" bg="#dcfce7" />;
+                  return <Badge children={`Score: ${item.score}/${certTotal}`} color="#059669" bg="#d1fae5" />;
                 })()}
                 <Badge children={issuedDate ? new Date(issuedDate).toLocaleDateString("en-IN") : "Date pending"} color="#d97706" bg="#fef3c7" />
                 {isRealCert && <Badge children={item.status === "issued" ? "Issued" : item.status} color="#7c3aed" bg="#ede9fe" />}
               </div>
-              <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 12 }}>Credential ID: {certId}</div>
+              <div style={{ fontSize: 11, color: "#6b7280" }}>Credential ID: {certId}</div>
+              {/* Start: Dnyaneshwari Thorat */}
               {isRealCert && (
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                   <button
                     onClick={async () => {
                       try {
@@ -2064,9 +1965,9 @@ function CertificatesTab({ assignments = [], certificates: certs = [] }) {
                         alert(err.message || "Failed to view certificate. Please try again.");
                       }
                     }}
-                    style={{ flex: 1, padding: "8px 0", borderRadius: 12, border: "1px solid #cbd5e1", background: "white", color: "#334155", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
+                    style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "1px solid #d97706", background: "white", color: "#d97706", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
                   >
-                    👁 View Certificate
+                    👁️ View Certificate
                   </button>
                   <button
                     onClick={async () => {
@@ -2076,12 +1977,13 @@ function CertificatesTab({ assignments = [], certificates: certs = [] }) {
                         alert(err.message || "Failed to download certificate. Please try again.");
                       }
                     }}
-                    style={{ flex: 1, padding: "8px 0", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#6366f1,#4f46e5)", color: "white", fontWeight: 800, fontSize: 12, cursor: "pointer", boxShadow: "0 2px 8px rgba(99,102,241,0.25)" }}
+                    style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "none", background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "white", fontWeight: 700, fontSize: 12, cursor: "pointer" }}
                   >
-                    ⬇ Download
+                    ⬇️ Download
                   </button>
                 </div>
               )}
+              {/* End: Dnyaneshwari Thorat */}
             </div>
           );
         })}
@@ -3007,15 +2909,13 @@ function ParentCapacityBuildingTab({ user, setToast }) {
 
   return (
     <div style={{ animation: "fadeIn 0.3s ease" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: "0 0 4px", letterSpacing: "-0.3px" }}>Parent Capacity Building</h1>
-          <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>Capacity building sessions for early childhood development</p>
-        </div>
+      <h1 style={S.pageTitle}>Parent Capacity Building</h1>
+      <p style={S.pageSub}>Sessions assigned to you by the admin</p>
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <select
-            style={{ border: "1px solid #cbd5e1", borderRadius: 12, padding: "8px 14px", background: "white", fontWeight: 700, fontSize: 12, color: "#1e293b", outline: "none", cursor: "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}
+            style={{ ...S.input, maxWidth: 340, border: "1.5px solid #e2e8f0", borderRadius: 10, padding: "10px 14px", background: "white", fontWeight: 600, fontSize: 13, color: "#1c1917", boxShadow: "0 1px 3px rgba(0,0,0,0.04)", cursor: "pointer", outline: "none" }}
             value={selectedModuleId}
             onChange={e => setSelectedModuleId(e.target.value)}
           >
@@ -3025,7 +2925,7 @@ function ParentCapacityBuildingTab({ user, setToast }) {
           </select>
 
           <select
-            style={{ border: "1px solid #cbd5e1", borderRadius: 12, padding: "8px 14px", background: "white", fontWeight: 700, fontSize: 12, color: "#1e293b", outline: "none", cursor: "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}
+            style={{ ...S.input, maxWidth: 160, border: "1.5px solid #e2e8f0", borderRadius: 10, padding: "10px 14px", background: "white", fontWeight: 600, fontSize: 13, color: "#1c1917", boxShadow: "0 1px 3px rgba(0,0,0,0.04)", cursor: "pointer", outline: "none" }}
             value={sessionLang}
             onChange={e => setSessionLang(e.target.value)}
           >
@@ -3033,104 +2933,101 @@ function ParentCapacityBuildingTab({ user, setToast }) {
             <option value="hi">हिंदी</option>
             <option value="mr">मराठी</option>
           </select>
-
-          {selectedModule && (
-            <button
-              onClick={() => setFormModalOpen(true)}
-              style={{
-                padding: "8px 16px", borderRadius: 12, border: "none",
-                background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "white",
-                fontSize: 12, fontWeight: 800, cursor: "pointer",
-                boxShadow: "0 2px 8px rgba(245,158,11,0.25)", whiteSpace: "nowrap"
-              }}
-            >
-              📝 Fill PTP Form
-            </button>
-          )}
         </div>
+
+        {/* Start: PTP Form Link feature — same button/functionality as admin side */}
+        {selectedModule && (
+          <button
+            onClick={() => setFormModalOpen(true)}
+            style={{
+              padding: "10px 18px", borderRadius: 10, border: "none",
+              background: "linear-gradient(135deg,#f59e0b,#d97706)", color: "white",
+              fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.08)", whiteSpace: "nowrap"
+            }}
+          >
+            📝 Fill PTP Form
+          </button>
+        )}
+        {/* End: PTP Form Link feature */}
       </div>
 
       {selectedModule && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {selectedModule.sessions.map(sess => {
-            const assignment = getAssignment(sess.sessionNumber);
-            const status = assignment?.status || "Pending";
-            const sc = statusColor(status);
-            return (
-              <div key={sess.sessionNumber} style={{ background: "white", border: "1px solid #f1f5f9", borderRadius: 20, padding: 22, boxShadow: "0 2px 10px rgba(0,0,0,0.03)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
-                  <div>
-                    <h3 style={{ fontSize: 16, fontWeight: 800, color: "#0f172a", margin: "0 0 4px" }}>Session {sess.sessionNumber}: {sess.title}</h3>
-                    <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>{sess.objective}</p>
+        <SectionCard title="">
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {selectedModule.sessions.map(sess => {
+              // Snehal change: pull real status for this session
+              const assignment = getAssignment(sess.sessionNumber);
+              const status = assignment?.status || "Pending";
+              const sc = statusColor(status);
+              return (
+                <div key={sess.sessionNumber} style={{ background: "white", border: "1px solid #f1f5f9", borderRadius: 14, padding: "16px 20px", borderLeft: "4px solid #3b82f6" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#1c1917" }}>Session {sess.sessionNumber}: {sess.title}</div>
+                      <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>{sess.objective}</div>
+                    </div>
+                    <Badge children={status} color={sc.c} bg={sc.bg} />
                   </div>
-                  <span style={{ padding: "4px 12px", borderRadius: 16, fontSize: 11, fontWeight: 700, color: sc.c, background: sc.bg }}>
-                    {status}
-                  </span>
-                </div>
 
-                {/* Table Matrix matching Figma */}
-                <div style={{ overflowX: "auto", marginBottom: 16 }}>
-                  <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, fontSize: 12, borderRadius: 12, overflow: "hidden", border: "1px solid #e2e8f0" }}>
+                  <table style={{ width: "100%", marginTop: 10, borderCollapse: "collapse", fontSize: 12 }}>
                     <thead>
-                      <tr style={{ background: "#f8fafc", textAlign: "left" }}>
-                        <th style={{ padding: "10px 14px", fontWeight: 700, color: "#475569", borderBottom: "1px solid #e2e8f0" }}>Time</th>
-                        <th style={{ padding: "10px 14px", fontWeight: 700, color: "#475569", borderBottom: "1px solid #e2e8f0" }}>Activity / Topic</th>
-                        <th style={{ padding: "10px 14px", fontWeight: 700, color: "#475569", borderBottom: "1px solid #e2e8f0" }}>Key Guidance Note</th>
+                      <tr style={{ background: "#fef3c7", textAlign: "left" }}>
+                        <th style={{ padding: "6px 8px" }}>Time</th>
+                        <th style={{ padding: "6px 8px" }}>Activity</th>
+                        <th style={{ padding: "6px 8px" }}>Key Focus</th>
                       </tr>
                     </thead>
                     <tbody>
                       {sess.activities.map((a, i) => (
-                        <tr key={i} style={{ background: i % 2 === 0 ? "white" : "#fafafa" }}>
-                          <td style={{ padding: "10px 14px", fontWeight: 700, color: "#334155", borderBottom: "1px solid #f1f5f9" }}>{a.time}</td>
-                          <td style={{ padding: "10px 14px", fontWeight: 600, color: "#0f172a", borderBottom: "1px solid #f1f5f9" }}>{a.activity}</td>
-                          <td style={{ padding: "10px 14px", color: "#64748b", borderBottom: "1px solid #f1f5f9" }}>{a.keyFocus}</td>
+                        <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                          <td style={{ padding: "6px 8px" }}>{a.time}</td>
+                          <td style={{ padding: "6px 8px" }}>{a.activity}</td>
+                          <td style={{ padding: "6px 8px" }}>{a.keyFocus}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                </div>
-
-                {/* Key Takeaways & Resources Row */}
-                <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 16 }}>
-                  {sess.content?.length > 0 && (
-                    <div style={{ background: "#f8fafc", borderRadius: 14, padding: 14, border: "1px solid #e2e8f0" }}>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: "#0f172a", marginBottom: 6 }}>💡 Key Takeaways for Facilitators</div>
+                  {sess.homePractice && (
+                    <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 8 }}>Home Practice: {sess.homePractice}</div>
+                  )}
+                {sess.content?.length > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", marginBottom: 6 }}>Content</div>
                       {sess.content.map((block, ci) => (
-                        <div key={ci} style={{ fontSize: 11.5, color: "#475569", lineHeight: 1.5, marginBottom: 4 }}>
-                          {block.heading && <strong style={{ color: "#1e293b" }}>{block.heading}: </strong>}
-                          {block.body}
+                        <div key={ci} style={{ marginBottom: 8 }}>
+                          {block.heading && <div style={{ fontSize: 12, fontWeight: 700, color: "#1c1917" }}>{block.heading}</div>}
+                          <div style={{ fontSize: 12, color: "#374151", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{block.body}</div>
                         </div>
                       ))}
                     </div>
                   )}
 
-                  <div style={{ background: "#eff6ff", borderRadius: 14, padding: 14, border: "1px solid #bfdbfe", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: "#1e40af", marginBottom: 6 }}>📂 Session Resources</div>
-                      <div style={{ fontSize: 11, color: "#2563eb", fontWeight: 600 }}>• Parent Activity Guide (PDF)</div>
-                      <div style={{ fontSize: 11, color: "#2563eb", fontWeight: 600, marginTop: 4 }}>• Feedback Questionnaire</div>
+                  {sess.reflection && (
+                    <div style={{ marginTop: 8 }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "#1c1917", marginBottom: 6 }}>Reflection</div>
+                      <div style={{ fontSize: 12, color: "#374151", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{sess.reflection}</div>
                     </div>
+                  )}
+                  {/* Snehal change: Mark as Completed / Start Session button */}
+                  <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+                    {status === "Completed" ? (
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#059669" }}>✓ Session Completed</span>
+                    ) : (
+                      <button
+                        onClick={() => openFeedback(sess)}
+                        disabled={assignmentsLoading}
+                        style={{ ...S.primaryBtn, padding: "8px 16px", fontSize: 12 }}
+                      >
+                        Mark as Completed
+                      </button>
+                    )}
                   </div>
                 </div>
-
-                {/* Action button */}
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  {status === "Completed" ? (
-                    <span style={{ fontSize: 12, fontWeight: 800, color: "#15803d", background: "#dcfce7", padding: "6px 14px", borderRadius: 20 }}>✓ Session Completed</span>
-                  ) : (
-                    <button
-                      onClick={() => openFeedback(sess)}
-                      disabled={assignmentsLoading}
-                      style={{ padding: "10px 20px", borderRadius: 20, border: "none", background: "linear-gradient(135deg,#6366f1,#4f46e5)", color: "white", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 4px 12px rgba(99,102,241,0.25)" }}
-                    >
-                      Mark Session Complete
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </SectionCard>
       )}
 
       {feedbackOpen && selectedSession && (
@@ -3580,7 +3477,39 @@ export default function TeacherDashboard({ user, onLogout }) {
     }
 
     switch (activeTab) {
-      case "overview": return <OverviewTab user={enrichedUser} setActiveTab={handleTabSwitch} courses={courses} assignments={courses} lessons={lessons} activities={activities} summary={summary} chatInput={chatInput} setChatInput={setChatInput} handleSendChatMessage={handleSendChatMessage} />;
+      case "overview":
+        return (
+          <div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 18, borderBottom: "1px solid #e2e8f0", paddingBottom: 2 }}>
+              {[
+                { key: "dashboard", label: "📊 Dashboard" },
+                { key: "pdca", label: "📈 PDCA Cycle" }
+              ].map(sub => (
+                <button
+                  key={sub.key}
+                  onClick={() => setOverviewSubTab(sub.key)}
+                  style={{
+                    padding: "9px 18px",
+                    border: "none",
+                    borderBottom: overviewSubTab === sub.key ? "2.5px solid #7c3aed" : "2.5px solid transparent",
+                    background: "transparent",
+                    color: overviewSubTab === sub.key ? "#7c3aed" : "#64748b",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: "pointer"
+                  }}
+                >
+                  {sub.label}
+                </button>
+              ))}
+            </div>
+            {overviewSubTab === "dashboard" ? (
+              <OverviewTab user={enrichedUser} setActiveTab={handleTabSwitch} courses={courses} assignments={courses} lessons={lessons} activities={activities} summary={summary} />
+            ) : (
+              <FellowGrowthCycleTab user={enrichedUser} setToast={setToast} />
+            )}
+          </div>
+        );
       case "children_att": return <AttendanceManager user={enrichedUser} onRosterChange={refreshCoreData} />;
       case "geotag": return <GeotagAttendance user={enrichedUser} />;
       case "training": return <TrainingAndClassroomManager user={enrichedUser} />;
@@ -3622,43 +3551,38 @@ export default function TeacherDashboard({ user, onLogout }) {
       <style>{globalCSS}</style>
       <Toast msg={toast.msg} type={toast.type} onClose={() => setToast({ msg: "", type: "" })} />
 
-      {/* ── Nestio Standardized Sidebar ── */}
-      <div style={{ width: 230, background: "white", borderRight: "1px solid #f1f5f9", display: "flex", flexDirection: "column", flexShrink: 0, boxShadow: "2px 0 12px rgba(0,0,0,0.03)", position: "relative", height: "100vh" }}>
-        {/* Brand Header */}
-        <div style={{ padding: "20px 18px 14px", display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 38, height: 38, borderRadius: 12, background: "linear-gradient(135deg,#6366f1,#4f46e5)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 900, boxShadow: "0 4px 12px rgba(99,102,241,0.3)" }}>
-            N
-          </div>
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 800, color: "#0f172a", letterSpacing: "-0.2px" }}>Nestio</div>
-            <div style={{ fontSize: 10, fontWeight: 600, color: "#64748b" }}>{t(currentUser?.role === "fellow" ? "Fellow Portal" : "Teacher Portal")}</div>
+      <div style={{ width: 240, background: "white", borderRight: "1px solid #f1f5f9", display: "flex", flexDirection: "column", flexShrink: 0, boxShadow: "2px 0 12px rgba(0,0,0,0.04)", position: "relative", height: "100vh" }}>
+        <div style={{ padding: "20px 16px 12px" }}>
+          <Logo size={120} />
+          <div style={{ textAlign: "center", padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "#dbeafe", color: "#1e40af", border: "1px solid #bfdbfe", margin: "6px auto 0", display: "inline-block", width: "fit-content" }}>
+            🎓 {t(currentUser?.role === "fellow" ? "Fellow Panel" : "Teacher Panel")}
           </div>
         </div>
-
-        {/* Navigation Items */}
-        <nav style={{ padding: "8px 12px", flex: 1, overflowY: "auto", marginBottom: 70 }}>
+        <nav style={{ padding: "4px 10px", flex: 1, overflowY: "auto", marginBottom: 80 }}>
           {navItems.map(item => {
             const isActive = activeTab === item.key;
+            const accent = item.color || "#3b82f6";
             return (
               <button
                 key={item.key}
                 onClick={() => setActiveTab(item.key)}
                 style={{
-                  width: "100%", display: "flex", alignItems: "center", gap: 12,
-                  padding: "10px 14px", border: "none",
-                  borderRadius: 12,
-                  background: isActive ? "#e0e7ff" : "transparent",
-                  color: isActive ? "#4338ca" : "#64748b",
-                  fontSize: 12.5, fontWeight: isActive ? 800 : 600, cursor: "pointer",
-                  fontFamily: "inherit", textAlign: "left", marginBottom: 3, transition: "all 0.15s ease"
+                  width: "100%", display: "flex", alignItems: "center", gap: 10,
+                  padding: "8px 10px", border: "none",
+                  borderLeft: isActive ? `3px solid ${accent}` : "3px solid transparent",
+                  borderRadius: 10,
+                  background: isActive ? `${accent}14` : "transparent",
+                  color: isActive ? accent : "#6b7280",
+                  fontSize: 12, fontWeight: isActive ? 800 : 600, cursor: "pointer",
+                  fontFamily: "inherit", textAlign: "left", marginBottom: 2, transition: "all 0.18s"
                 }}
-                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "#f8fafc"; }}
-                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
               >
                 <span style={{
-                  width: 22, height: 22, flexShrink: 0,
+                  width: 26, height: 26, borderRadius: 8, flexShrink: 0,
+                  background: isActive ? accent : `${accent}1A`,
+                  color: isActive ? "white" : accent,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 14, color: isActive ? "#4338ca" : "#64748b"
+                  fontSize: 13, transition: "all 0.18s"
                 }}>
                   {item.icon}
                 </span>
@@ -3668,29 +3592,20 @@ export default function TeacherDashboard({ user, onLogout }) {
             );
           })}
         </nav>
-
-        {/* Footer: Globe / Avatar / Sign Out */}
         <div style={{
-          position: "fixed", bottom: 0, left: 0, width: 230,
-          padding: "12px 14px", borderTop: "1px solid #f1f5f9",
+          position: "fixed", bottom: 0, left: 0, width: 240,
+          padding: "12px 16px", borderTop: "1px solid #f1f5f9",
           display: "flex", alignItems: "center", gap: 10, background: "white", zIndex: 50
         }}>
-          <button
-            onClick={() => setActiveTab("feedback")}
-            title="Language / Settings"
-            style={{ width: 32, height: 32, borderRadius: "50%", border: "1px solid #e2e8f0", background: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 14, color: "#64748b" }}
-          >
-            🌐
-          </button>
-          <SidebarAvatar teacher={currentUser} size={32} />
+          <SidebarAvatar teacher={currentUser} size={34} />
           <div style={{ flex: 1, overflow: "hidden" }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: "#1c1917" }}>{currentUser.name?.split(" ")[0]}</div>
-            <div style={{ fontSize: 10, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser.subject || "Teacher"}</div>
+            <div style={{ fontSize: 10, color: "#9ca3af", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser.subject}</div>
           </div>
           <button onClick={onLogout} title={t("Sign Out")}
             style={{
               background: "transparent", border: "none", cursor: "pointer",
-              fontSize: 18, color: "#ef4444", padding: "6px",
+              fontSize: 22, color: "#ef4444", padding: "8px",
               borderRadius: "8px", transition: "all 0.2s ease",
               display: "flex", alignItems: "center", justifyContent: "center"
             }}
@@ -3700,76 +3615,87 @@ export default function TeacherDashboard({ user, onLogout }) {
         </div>
       </div>
 
-      {/* ── Main View Header & Body ── */}
-      <div style={{ flex: 1, width: "0px", minWidth: "0px", padding: "24px 28px", overflowY: "auto", maxHeight: "100vh" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginBottom: 20, position: "relative" }}>
+      <div style={{ flex: 1, width: "0px", minWidth: "0px", padding: "28px 32px", overflowY: "auto", maxHeight: "100vh" }}>
+        <a href="/landing-pages/Teacher-Training-Program/" style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 700, color: "#d97706", textDecoration: "none", marginBottom: 12 }}>
+            <span>&larr;</span> Back to website
+          </a>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginBottom: 20, position: "relative" }}>
           <div>
-            <h1 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: 0, letterSpacing: "-0.3px" }}>
-              Hi, {currentUser.name?.split(" ")[0] || (currentUser.role === "fellow" ? "Fellow" : "Teacher")} 👋
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: "#1c1917", margin: 0, letterSpacing: "-0.3px" }}>
+              Hi, {currentUser.name?.split(" ")[0] || (currentUser.role === "fellow" ? "Fellow" : "Teacher")}! 👋
             </h1>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 11, color: "#64748b", fontWeight: 600, background: "#f1f5f9", padding: "4px 10px", borderRadius: 16 }}>
-                📅 {new Date().toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}
+              <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 500, background: "#f8fafc", padding: "3px 10px", borderRadius: 12, border: "1px solid #e2e8f0" }}>
+                📅 {new Date().toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
               </span>
-              <span style={{ fontSize: 11, color: "#15803d", fontWeight: 700, background: "#dcfce7", padding: "4px 12px", borderRadius: 16, display: "inline-flex", alignItems: "center", gap: 4 }}>
-                👨‍🏫 Mentor: {user.assignedMentor?.name || "Murtuza ali"}
+              <span style={{ fontSize: 11, color: "#92400e", fontWeight: 600, background: "#fef3c7", padding: "3px 10px", borderRadius: 12, border: "1px solid #fde68a", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                📍 {topCenterName}
               </span>
-              <span style={{ fontSize: 11, color: "#7e22ce", fontWeight: 700, background: "#f3e8ff", padding: "4px 12px", borderRadius: 16, display: "inline-flex", alignItems: "center", gap: 4 }}>
-                🏫 Class: {topClassName !== "No class assigned" ? topClassName : "Class 10A"}
+              <span style={{ fontSize: 11, color: "#1e40af", fontWeight: 600, background: "#dbeafe", padding: "3px 10px", borderRadius: 12, border: "1px solid #bfdbfe", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                📚 {topClassName}
               </span>
+
+              <span
+  style={{
+    fontSize: 11,
+    color: "#1e40af",
+    fontWeight: 600,
+    background: "#dbeafe",
+    padding: "3px 10px",
+    borderRadius: 12,
+    border: "1px solid #bfdbfe",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+  }}
+>
+  Mentor: {user.assignedMentor?.name || "Not Assigned"}
+</span>
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button
               onClick={() => setShowGuide(true)}
               title={t("User Guide")}
               style={{
                 display: "flex", alignItems: "center", gap: 6,
                 padding: "6px 14px", borderRadius: 20,
-                border: "1px solid #e2e8f0", background: "white",
-                color: "#334155", fontSize: 12, fontWeight: 600,
+                border: "1px solid #bfdbfe", background: "white",
+                color: "#1e40af", fontSize: 12, fontWeight: 600,
                 cursor: "pointer", fontFamily: "inherit",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
+                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                transition: "all 0.18s",
               }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#eff6ff"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "white"; }}
             >
-              📖 {t("User Guide")}
+              <span style={{ fontSize: 14, lineHeight: 1 }}>📖</span>
+              {t("User Guide")}
             </button>
 
-            {/* Notification Bell Icon */}
-            <button
-              onClick={() => setActiveTab("notifications")}
+            <div
+              onClick={() => setMenuOpen(!menuOpen)}
               style={{
-                position: "relative", width: 36, height: 36, borderRadius: "50%",
-                background: "white", border: "1px solid #e2e8f0", display: "flex",
-                alignItems: "center", justifyContent: "center", cursor: "pointer",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.04)"
+                display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
+                padding: "6px 12px", borderRadius: 20, background: "#fef3c7",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.1)", border: "1px solid #fbbf24",
+                transition: "all 0.2s ease", position: "relative"
               }}
+              onMouseEnter={(e) => e.currentTarget.style.background = "#fde68a"}
+              onMouseLeave={(e) => e.currentTarget.style.background = "#fef3c7"}
             >
-              🔔
               {unreadCount > 0 && (
                 <span style={{
-                  position: "absolute", top: -2, right: -2, background: "#ef4444", color: "white",
-                  borderRadius: "50%", width: 16, height: 16, display: "flex", alignItems: "center",
-                  justifyContent: "center", fontSize: 9, fontWeight: "bold"
+                  position: "absolute", top: -4, right: -4, background: "#ef4444", color: "white",
+                  borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center",
+                  justifyContent: "center", fontSize: 10, fontWeight: "bold", border: "2px solid white"
                 }}>
                   {unreadCount}
                 </span>
               )}
-            </button>
-
-            {/* Profile Dropdown Trigger */}
-            <div
-              onClick={() => setMenuOpen(!menuOpen)}
-              style={{
-                display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
-                padding: "4px 12px 4px 6px", borderRadius: 24, background: "white",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.04)", border: "1px solid #e2e8f0",
-                position: "relative"
-              }}
-            >
-              <SidebarAvatar teacher={currentUser} size={28} />
-              <span style={{ fontSize: 12, fontWeight: 700, color: "#1e293b" }}>{currentUser.name?.split(" ")[0]}</span>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#92400e" }}>{currentUser.name?.split(" ")[0] || (currentUser.role === "fellow" ? "Fellow" : "Teacher")}</div>
+              <div style={{ fontSize: 18, fontWeight: 700, paddingBottom: 6, color: "#92400e" }}>⋮</div>
             </div>
 
             {menuOpen && (

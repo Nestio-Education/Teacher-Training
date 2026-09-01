@@ -1729,241 +1729,137 @@ export default function TrainingAndClassroomManager({ user }) {
       )}
 
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#0f172a", margin: "0 0 4px", letterSpacing: "-0.3px" }}>Training & Classroom Portal</h1>
-          <p style={{ fontSize: 13, color: "#64748b", margin: 0 }}>Manage your professional development and classroom activities</p>
+          <h1 style={S.pageTitle}>Training & Classroom Portal</h1>
+          <p style={S.pageSub}>Access assigned courses, monitor training pathways, upload activities, and submit teaching notes.</p>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={() => setShowCreateModal(true)} style={{ padding: "9px 16px", borderRadius: 20, background: "white", color: "#3b82f6", border: "1px solid #cbd5e1", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setShowCreateModal(true)} style={{ ...S.primaryBtn, padding: "10px 16px", background: "white", color: "#3b82f6", border: "1.5px solid #3b82f6" }}>
             ✏️ Add Activity
           </button>
-          <button onClick={() => setShowActivityModal(true)} style={{ padding: "9px 16px", borderRadius: 20, background: "linear-gradient(135deg,#6366f1,#4f46e5)", color: "white", border: "none", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 4px 12px rgba(99,102,241,0.25)" }}>
+          <button onClick={() => setShowActivityModal(true)} style={{ ...S.primaryBtn, padding: "10px 16px" }}>
             📤 Bulk Upload
           </button>
         </div>
       </div>
 
-      {/* 3 KPI Summary Cards matching Figma */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 24 }}>
-        <div style={{ background: "white", borderRadius: 16, border: "1px solid #f1f5f9", padding: "16px 20px", display: "flex", alignItems: "center", gap: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
-          <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#dbeafe", color: "#1d4ed8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>📋</div>
-          <div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "#0f172a", lineHeight: 1.1 }}>{allItems.length}</div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", marginTop: 2 }}>Hours Training</div>
-          </div>
-        </div>
-
-        <div style={{ background: "white", borderRadius: 16, border: "1px solid #f1f5f9", padding: "16px 20px", display: "flex", alignItems: "center", gap: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
-          <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#ffedd5", color: "#c2410c", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>⏳</div>
-          <div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "#0f172a", lineHeight: 1.1 }}>{pendingCount}</div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", marginTop: 2 }}>Pending Modules</div>
-          </div>
-        </div>
-
-        <div style={{ background: "white", borderRadius: 16, border: "1px solid #f1f5f9", padding: "16px 20px", display: "flex", alignItems: "center", gap: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
-          <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#dcfce7", color: "#15803d", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>📜</div>
-          <div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "#0f172a", lineHeight: 1.1 }}>{completedCount}</div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", marginTop: 2 }}>Certificates Earned</div>
-          </div>
-        </div>
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 16, marginBottom: 20 }}>
+        <StatCard icon="📋" label="Total Cards" val={allItems.length} color="#3b82f6" bg="#dbeafe" />
+        <StatCard icon="⏳" label="Pending" val={pendingCount} color="#f59e0b" bg="#fef3c7" />
+        <StatCard icon="✅" label="Completed" val={completedCount} color="#10b981" bg="#d1fae5" />
       </div>
 
-      {/* Filters + Search */}
-      <div style={{ background: "white", borderRadius: 16, padding: "14px 18px", border: "1px solid #f1f5f9", marginBottom: 20, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
-        <div style={{ flex: 1, minWidth: 220 }}>
-          <SearchBar value={search} onChange={setSearch} placeholder="Search training, workshops, submissions..." />
-        </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          {filterBtn("all", "All")}
-          {filterBtn("pending", "In Progress")}
-          {filterBtn("completed", "Completed")}
-          {filterBtn("submissions", "Submissions")}
-        </div>
-      </div>
-
-      {/* Activity Submissions View matching Figma Activity Submissions (Aura) */}
-      {filter === "submissions" ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ marginBottom: 4 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 800, color: "#0f172a", margin: "0 0 4px" }}>Activity Submissions</h2>
-            <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>Review student submissions for assigned classroom activities</p>
-          </div>
-
-          {[
-            { id: 1, student: "Riku Sharma", avatar: "👨‍🎓", activity: "Storyteller Workshop", time: "2 hours ago", status: "Submitted", isDone: false },
-            { id: 2, student: "Maya Lin", avatar: "👩‍🎓", activity: "Creative Writing Worksheet", time: "Yesterday", status: "Graded", isDone: true },
-            { id: 3, student: "Julien Davis", avatar: "🧑‍🎓", activity: "History Essay Draft", time: "3 days ago", status: "Submitted", isDone: false },
-            ...(submissions || []).map((sub, i) => ({
-              id: `real-${i}`,
-              student: sub.childName || sub.studentName || "Student",
-              avatar: "👶",
-              activity: sub.activityName || sub.title || "Classroom Activity",
-              time: sub.createdAt ? new Date(sub.createdAt).toLocaleDateString() : "Recently",
-              status: sub.status === "approved" || sub.status === "reviewed" ? "Graded" : "Submitted",
-              isDone: sub.status === "approved" || sub.status === "reviewed"
-            }))
-          ].map((sub) => (
-            <div
-              key={sub.id}
-              style={{
-                background: "white",
-                borderRadius: 16,
-                padding: "16px 20px",
-                border: "1px solid #f1f5f9",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between"
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{ width: 42, height: 42, borderRadius: "50%", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>
-                  {sub.avatar}
-                </div>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: "#0f172a" }}>{sub.student}</div>
-                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
-                    {sub.activity} · <span style={{ color: "#94a3b8" }}>{sub.time}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{
-                  padding: "4px 12px", borderRadius: 16, fontSize: 11, fontWeight: 700,
-                  background: sub.isDone ? "#dcfce7" : "#ffedd5",
-                  color: sub.isDone ? "#15803d" : "#c2410c"
-                }}>
-                  {sub.status}
-                </span>
-                <button
-                  onClick={() => {
-                    setToast({ msg: `Reviewing submission for ${sub.student}...`, type: "info" });
-                  }}
-                  style={{
-                    padding: "8px 16px", borderRadius: 14, border: "none",
-                    background: sub.isDone ? "white" : "linear-gradient(135deg,#6366f1,#4f46e5)",
-                    color: sub.isDone ? "#4f46e5" : "white",
-                    border: sub.isDone ? "1px solid #cbd5e1" : "none",
-                    fontSize: 12, fontWeight: 800, cursor: "pointer",
-                    boxShadow: sub.isDone ? "none" : "0 2px 8px rgba(99,102,241,0.25)"
-                  }}
-                >
-                  {sub.isDone ? "View Feedback" : "Review"}
-                </button>
-              </div>
+          {/* Filters + Search */}
+          <div style={{ background: "white", borderRadius: 14, padding: "14px 18px", border: "1px solid #f1f5f9", marginBottom: 16, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <SearchBar value={search} onChange={setSearch} placeholder="Search lessons & activities..." />
             </div>
-          ))}
-        </div>
-      ) : (
-        /* Cards Grid */
-        filtered.length === 0 ? (
-          <div style={{ padding: 48, textAlign: "center", background: "white", borderRadius: 20, border: "1px dashed #cbd5e1", color: "#94a3b8" }}>
-            {allItems.length === 0
-              ? "No lesson plans or activities yet. Click 'Add Activity' or 'Bulk Upload' to add items."
-              : "No items match your current filter."
-            }
+            {filterBtn("all", "All")}
+            {filterBtn("pending", "Pending")}
+            {filterBtn("completed", "Completed")}
           </div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 20 }}>
-            {filtered.map((item) => {
-              const isDone = item.status === "completed" || item.status === "reviewed" || item.status === "approved";
-              return (
-                <div
-                  key={item.id}
-                  style={{
-                    background: "white",
-                    borderRadius: 18,
-                    padding: 20,
-                    border: "1px solid #f1f5f9",
-                    boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "space-between"
-                  }}
-                >
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: "#0f172a", flex: 1, paddingRight: 8 }}>{item.title}</div>
-                      <span style={{
-                        padding: "4px 10px", borderRadius: 16, fontSize: 10, fontWeight: 700,
-                        background: isDone ? "#dcfce7" : "#ffedd5",
-                        color: isDone ? "#15803d" : "#c2410c"
-                      }}>
-                        {isDone ? "Completed" : "In Progress"}
-                      </span>
+
+          {/* Cards */}
+          {filtered.length === 0 ? (
+            <div style={{ padding: 40, textAlign: "center", background: "white", borderRadius: 16, border: "1px dashed #cbd5e1", color: "#94a3b8" }}>
+              {allItems.length === 0
+                ? "No lesson plans or activities yet. Click 'Submit Activity' to upload an Excel file."
+                : "No items match your current filter."
+              }
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(320px,1fr))", gap: 16 }}>
+              {filtered.map((item) => {
+                const isDone = item.status === "completed" || item.status === "reviewed" || item.status === "approved";
+                return (
+                  <div
+                    key={item.id}
+                    style={{
+                      background: "white",
+                      borderRadius: 16,
+                      padding: "18px 20px",
+                      border: "1px solid #f1f5f9",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                      borderLeft: `4px solid ${isDone ? "#10b981" : "#f59e0b"}`,
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: "#1c1917", flex: 1 }}>{item.title}</div>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        {item.dayNumber && (
+                          <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 9, fontWeight: 700, background: "#fef3c7", color: "#92400e" }}>
+                            Day {item.dayNumber}
+                          </span>
+                        )}
+                        {item.type === "activity" && (
+                          <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 9, fontWeight: 700, background: "#dbeafe", color: "#1d4ed8" }}>
+                            {item.level || "Activity"}
+                          </span>
+                        )}
+                        <StatusBadge status={isDone ? "completed" : "pending"} />
+                      </div>
                     </div>
-
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-                    {item.dayNumber && (
-                      <span style={{ padding: "2px 8px", borderRadius: 12, fontSize: 10, fontWeight: 700, background: "#fef3c7", color: "#92400e" }}>
-                        Day {item.dayNumber}
-                      </span>
+                    <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
+                      📅 {formatDate(item.date)}
+                      {item.className && <span> · 🎒 {item.className}</span>}
+                      {item.duration && <span> · ⏱️ {item.duration}</span>}
+                    </div>
+                    {(item.milestone || item.developmentalDomain) && (
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+                        {item.milestone && (
+                          <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 600, background: "#faf5ff", color: "#7c3aed", border: "1px solid #e9d5ff" }}>
+                            🏅 {item.milestone}
+                          </span>
+                        )}
+                        {item.developmentalDomain && (
+                          <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 600, background: "#f0fdf4", color: "#166534", border: "1px solid #bbf7d0" }}>
+                            🧠 {item.developmentalDomain}
+                          </span>
+                        )}
+                      </div>
                     )}
-                    {item.milestone && (
-                      <span style={{ padding: "2px 8px", borderRadius: 12, fontSize: 10, fontWeight: 600, background: "#f3e8ff", color: "#6b21a8" }}>
-                        🏅 {item.milestone}
-                      </span>
-                    )}
-                    {item.developmentalDomain && (
-                      <span style={{ padding: "2px 8px", borderRadius: 12, fontSize: 10, fontWeight: 600, background: "#f0fdf4", color: "#166534" }}>
-                        🧠 {item.developmentalDomain}
-                      </span>
-                    )}
-                  </div>
-
-                  <p style={{ fontSize: 12, color: "#64748b", lineHeight: 1.5, marginBottom: 16, margin: "0 0 16px" }}>
-                    {(item.description || "No description provided.").slice(0, 120)}
-                    {(item.description || "").length > 120 ? "..." : ""}
-                  </p>
-                </div>
-
-                <div>
-                  <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 12, display: "flex", gap: 12 }}>
-                    <span>📅 {formatDate(item.date)}</span>
-                    {item.duration && <span>⏱️ {item.duration}</span>}
-                  </div>
-
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      onClick={() => {
-                        if (item.type === "activity") setDetailActivity(item.raw);
-                        else setDetailAssignment(item.raw);
-                      }}
-                      style={{ flex: 1, padding: "8px 12px", borderRadius: 12, border: "1px solid #cbd5e1", background: "white", color: "#334155", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
-                    >
-                      View Details
-                    </button>
-                    {!isDone && (
+                    <p style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.5, marginBottom: 14, margin: 0, marginTop: 6 }}>
+                      {(item.description || "No description provided.").slice(0, 120)}
+                      {(item.description || "").length > 120 ? "..." : ""}
+                    </p>
+                    <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
                       <button
                         onClick={() => {
-                          if (item.type === "activity") setCompleteActivity(item.raw);
-                          else setCompleteLessonAssignment(item.raw);
+                          if (item.type === "activity") setDetailActivity(item.raw);
+                          else setDetailAssignment(item.raw);
                         }}
-                        style={{ flex: 1, padding: "8px 12px", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#6366f1,#4f46e5)", color: "white", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 2px 8px rgba(99,102,241,0.25)" }}
+                        style={{ ...S.tblBtn, flex: 1 }}
                       >
-                        Start Module
+                        👁 View Details
                       </button>
-                    )}
-                    {item.type === "activity" && (
-                      <button
-                        onClick={() => handleDeleteActivity(item.raw)}
-                        style={{ padding: "8px 10px", borderRadius: 12, border: "1px solid #fca5a5", background: "#fef2f2", color: "#ef4444", fontSize: 12, cursor: "pointer" }}
-                        title="Delete activity"
-                      >
-                        🗑
-                      </button>
-                    )}
+                      {!isDone && (
+                        <button
+                          onClick={() => {
+                            if (item.type === "activity") setCompleteActivity(item.raw);
+                            else setCompleteLessonAssignment(item.raw);
+                          }}
+                          style={{ ...S.primaryBtn, flex: 1, padding: "8px 12px", fontSize: 12 }}
+                        >
+                          ✅ Mark Complete
+                        </button>
+                      )}
+                      {item.type === "activity" && (
+                        <button
+                          onClick={() => handleDeleteActivity(item.raw)}
+                          style={{ ...S.tblBtn, color: "#ef4444", borderColor: "#fca5a5", padding: "8px 10px", fontSize: 12, flex: "none" }}
+                          title="Delete activity"
+                        >
+                          🗑
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ))}
+                );
+              })}
+            </div>
+          )}
     </div>
   );
 }

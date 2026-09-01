@@ -121,32 +121,17 @@ export default function TeacherCourseNotes({ assignments = [], onMarkDone, onGoT
       return !title.toLowerCase().includes("ai testing");
     });
 
-    const cardAccents = ["#f59e0b", "#eab308", "#10b981", "#6366f1"];
-
     return (
       <div style={{ animation: "fadeIn 0.3s ease" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
-          <div>
-            <h1 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: "0 0 4px", letterSpacing: "-0.3px" }}>My Courses</h1>
-            <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>Continue your professional development courses</p>
-          </div>
-          <button
-            onClick={() => {
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-            style={{ padding: "8px 16px", borderRadius: 12, border: "none", background: "linear-gradient(135deg,#059669,#10b981)", color: "white", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 2px 8px rgba(16,185,129,0.25)" }}
-          >
-            + Browse Training
-          </button>
-        </div>
-
-        {displayAssignments.length === 0 ? (
-          <div style={{ padding: 48, textAlign: "center", background: "white", borderRadius: 20, border: "1px dashed #cbd5e1", color: "#94a3b8" }}>
-            No courses assigned yet. Your admin will assign courses from the Course Library.
-          </div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 20 }}>
-            {displayAssignments.map((c, idx) => {
+        <h1 style={S.pageTitle}>My Courses</h1>
+        <p style={S.pageSub}>Read each course's topic-wise notes to complete it — no videos, just focused study material.</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {displayAssignments.length === 0 ? (
+            <div style={{ padding: 40, textAlign: "center", background: "white", borderRadius: 16, border: "1px dashed #cbd5e1", color: "#94a3b8" }}>
+              No courses assigned yet. Your admin will assign courses from the Course Library.
+            </div>
+          ) : (
+            displayAssignments.map((c) => {
               const courseId = getCourseId(c);
               const entry = notesByCourseId[courseId];
               const allTopics = entry?.topics || [];
@@ -156,71 +141,69 @@ export default function TeacherCourseNotes({ assignments = [], onMarkDone, onGoT
                 ? 100
                 : allTopics.length ? Math.round((done / allTopics.length) * 100) : (c.progressPercent || 0);
               const isLocked = c.locked === true;
-              const accent = cardAccents[idx % cardAccents.length];
-
               return (
-                <div
-                  key={c._id}
-                  style={{
-                    background: "white",
-                    borderRadius: 20,
-                    padding: 22,
-                    border: "1px solid #f1f5f9",
-                    boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
-                    borderTop: `4px solid ${isLocked ? "#cbd5e1" : accent}`,
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "space-between"
-                  }}
-                >
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                      <span style={{ padding: "4px 10px", borderRadius: 12, fontSize: 10, fontWeight: 700, background: isLocked ? "#f1f5f9" : "#ffedd5", color: isLocked ? "#64748b" : "#c2410c" }}>
-                        {isLocked ? "Locked" : progress === 100 ? "Completed" : "In Progress"}
-                      </span>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: accent }}>{progress}%</span>
+                <div key={c._id} style={{ background: "white", borderRadius: 16, padding: "22px 24px", border: "1px solid #f1f5f9", boxShadow: "0 2px 8px rgba(0,0,0,0.04)", borderLeft: isLocked ? "4px solid #94a3b8" : "4px solid #f59e0b" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
+                    <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                      <div style={{ fontSize: 36 }}>{isLocked ? "🔒" : "📖"}</div>
+                      <div>
+                        <h3 style={{ fontSize: 16, fontWeight: 800, color: isLocked ? "#64748b" : "#1c1917", margin: "0 0 6px" }}>{c.course?.title}</h3>
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                          {isLocked ? (
+                            <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, color: "#ef4444", background: "#fee2e2" }}>🔒 Locked</span>
+                          ) : (
+                            <StatusBadge status={c.status} />
+                          )}
+                          <span style={{ fontSize: 11, color: "#9ca3af" }}>📅 Due: {c.dueDate ? new Date(c.dueDate).toLocaleDateString() : "No due date"}</span>
+                          <span style={{ fontSize: 11, color: "#6b7280" }}>
+                            📖 {notesLoading ? "Loading…" : `${done}/${allTopics.length} topics read`}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-
-                    <h3 style={{ fontSize: 15, fontWeight: 800, color: "#0f172a", margin: "0 0 6px" }}>{c.course?.title}</h3>
-                    <p style={{ fontSize: 12, color: "#64748b", lineHeight: 1.5, margin: "0 0 14px" }}>
-                      {(c.course?.description || "Comprehensive professional training module designed for early childhood educators.").slice(0, 90)}...
-                    </p>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div style={{ fontSize: 28, fontWeight: 900, color: isLocked ? "#94a3b8" : "#f59e0b" }}>{progress}%</div>
+                      <div style={{ fontSize: 11, color: "#9ca3af" }}>Complete</div>
+                    </div>
                   </div>
-
-                  <div>
-                    <div style={{ height: 6, background: "#f1f5f9", borderRadius: 3, overflow: "hidden", marginBottom: 14 }}>
-                      <div style={{ height: "100%", width: `${progress}%`, background: isLocked ? "#cbd5e1" : accent, borderRadius: 3, transition: "width 0.8s ease" }} />
-                    </div>
-
-                    <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 14, display: "flex", justifyContent: "space-between" }}>
-                      <span>⏱ 4 Hours · {notesLoading ? "Loading..." : `${allTopics.length} Topics`}</span>
-                      <span>{done}/{allTopics.length} Read</span>
-                    </div>
-
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <div style={{ height: 8, background: "#f3f4f6", borderRadius: 4, overflow: "hidden", marginBottom: 12 }}>
+                    <div style={{ height: "100%", width: `${progress}%`, background: isLocked ? "#cbd5e1" : "linear-gradient(90deg,#f59e0b,#d97706)", borderRadius: 4, transition: "width 0.8s ease" }} />
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 12, color: "#6b7280" }}>📚 {allTopics.length} topics total</span>
+                    <div style={{ display: "flex", gap: 8 }}>
                       {progress === 100 && allTopics.length > 0 && onGoToAssessment && !isLocked && (
-                        <button onClick={() => onGoToAssessment(c)} style={{ flex: 1, padding: "8px 12px", borderRadius: 12, border: "1px solid #10b981", background: "#f0fdf4", color: "#15803d", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
-                          📝 Assessment
-                        </button>
+                        <button onClick={() => onGoToAssessment(c)} style={{ ...S.exportBtn, borderColor: "#10b981", color: "#059669" }}>📝 Take Assessment</button>
                       )}
+                      {/* Start: Dnyaneshwari Thorat */}
                       {onRestartCourse && !isLocked && (progress > 0 || isCompletedAssignment(c)) && (
-                        <button onClick={() => onRestartCourse(c)} style={{ padding: "8px 10px", borderRadius: 12, border: "1px solid #fca5a5", background: "#fef2f2", color: "#ef4444", fontSize: 11, cursor: "pointer" }} title="Restart Course">
-                          🔄
+                        <button
+                          onClick={() => onRestartCourse(c)}
+                          style={{ ...S.exportBtn, borderColor: "#dc2626", color: "#dc2626" }}
+                        >
+                          🔄 Restart Course
                         </button>
                       )}
                       {onRemoveCourse && !isLocked && (
-                        <button onClick={() => onRemoveCourse(c)} style={{ padding: "8px 10px", borderRadius: 12, border: "1px solid #fca5a5", background: "#fef2f2", color: "#ef4444", fontSize: 11, cursor: "pointer" }} title="Remove Course">
-                          🗑
+                        <button
+                          onClick={() => onRemoveCourse(c)}
+                          style={{ ...S.exportBtn, borderColor: "#ef4444", color: "#ef4444" }}
+                        >
+                          🗑️ Remove Course
                         </button>
                       )}
+                      {/* End: Dnyaneshwari Thorat */}
                       {isLocked ? (
-                        <button disabled style={{ flex: 1, padding: "8px 12px", borderRadius: 12, border: "none", background: "#f1f5f9", color: "#94a3b8", fontSize: 12, fontWeight: 700, cursor: "not-allowed" }}>
-                          🔒 Locked
+                        <button
+                          disabled
+                          style={{ ...S.primaryBtn, padding: "8px 20px", fontSize: 12, background: "#cbd5e1", color: "#64748b", cursor: "not-allowed", border: "1px solid #cbd5e1" }}
+                        >
+                          🔒 Locked Course
                         </button>
                       ) : (
                         <button
                           onClick={() => { setActiveAssignmentId(c._id); setActiveTopicIdx(0); }}
-                          style={{ flex: 1, padding: "8px 12px", borderRadius: 12, border: "none", background: progress === 100 ? "linear-gradient(135deg,#059669,#10b981)" : "linear-gradient(135deg,#6366f1,#4f46e5)", color: "white", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 2px 8px rgba(99,102,241,0.2)" }}
+                          style={{ ...S.primaryBtn, padding: "8px 20px", fontSize: 12 }}
                         >
                           {progress > 0 ? "Continue Reading →" : "Start Reading →"}
                         </button>
@@ -229,9 +212,9 @@ export default function TeacherCourseNotes({ assignments = [], onMarkDone, onGoT
                   </div>
                 </div>
               );
-            })}
-          </div>
-        )}
+            })
+          )}
+        </div>
       </div>
     );
   }
