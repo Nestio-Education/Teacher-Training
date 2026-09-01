@@ -2296,13 +2296,633 @@ export const SECTIONS_4_5_YEARS = [
   },
 ];
 
-
+export const SECTIONS_5_6_YEARS = [
+  {
+    "id": "physical",
+    "number": "1",
+    "title": "Domain 1: Physical Development",
+    "items": [
+      {
+        "id": "1.1",
+        "title": "Gross Motor Control",
+        "milestone": "Gross Motor Control (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child demonstrate refined gross motor skills like hopping, skipping, or balancing on one foot for 10 seconds?",
+        "activities": [
+          "Guided Practice – Practice hopping and skipping with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of gross motor control.",
+          "Independent Application – Provide opportunities for independent mastery of gross motor control."
+        ]
+      },
+      {
+        "id": "1.2",
+        "title": "Fine Motor Control",
+        "milestone": "Fine Motor Control (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child cut along complex shapes using scissors and hold a pencil with a tripod grip?",
+        "activities": [
+          "Guided Practice – Practice cutting along complex shapes with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of fine motor control.",
+          "Independent Application – Provide opportunities for independent mastery of fine motor control."
+        ]
+      },
+      {
+        "id": "1.3",
+        "title": "Coordination & Balance",
+        "milestone": "Coordination & Balance (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child catch a bouncing ball consistently and maintain balance while moving?",
+        "activities": [
+          "Guided Practice – Practice catching a bouncing ball with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of coordination & balance.",
+          "Independent Application – Provide opportunities for independent mastery of coordination & balance."
+        ]
+      },
+      {
+        "id": "1.4",
+        "title": "Bilateral Coordination",
+        "milestone": "Bilateral Coordination (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child coordinate both hands to button a shirt, tie laces, or use eating utensils?",
+        "activities": [
+          "Guided Practice – Practice coordinating both hands with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of bilateral coordination.",
+          "Independent Application – Provide opportunities for independent mastery of bilateral coordination."
+        ]
+      },
+      {
+        "id": "1.5",
+        "title": "Spatial Awareness",
+        "milestone": "Spatial Awareness (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child navigate obstacles during physical play without bumping into objects or peers?",
+        "activities": [
+          "Guided Practice – Practice navigating obstacles with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of spatial awareness.",
+          "Independent Application – Provide opportunities for independent mastery of spatial awareness."
+        ]
+      },
+      {
+        "id": "1.6",
+        "title": "Rhythm & Movement",
+        "milestone": "Rhythm & Movement (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child move in rhythm to music or follow synchronized physical exercise routines?",
+        "activities": [
+          "Guided Practice – Practice moving in rhythm to music with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of rhythm & movement.",
+          "Independent Application – Provide opportunities for independent mastery of rhythm & movement."
+        ]
+      },
+      {
+        "id": "1.7",
+        "title": "Strength & Endurance",
+        "milestone": "Strength & Endurance (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child participate in active outdoor play for 20-30 minutes without excessive fatigue?",
+        "activities": [
+          "Guided Practice – Practice active outdoor play with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of strength & endurance.",
+          "Independent Application – Provide opportunities for independent mastery of strength & endurance."
+        ]
+      },
+      {
+        "id": "1.8",
+        "title": "Postural Stability",
+        "milestone": "Postural Stability (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child maintain upright posture while sitting at a desk or on the floor for learning sessions?",
+        "activities": [
+          "Guided Practice – Practice maintaining upright posture with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of postural stability.",
+          "Independent Application – Provide opportunities for independent mastery of postural stability."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "cognitive",
+    "number": "2",
+    "title": "Domain 2: Cognitive Development",
+    "items": [
+      {
+        "id": "2.1",
+        "title": "Number Sense & Counting",
+        "milestone": "Number Sense & Counting (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child count up to 30 objects accurately and recognize numerals 1 through 20?",
+        "activities": [
+          "Guided Practice – Practice counting up to 30 with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of number sense.",
+          "Independent Application – Provide opportunities for independent mastery of number sense."
+        ]
+      },
+      {
+        "id": "2.2",
+        "title": "Pattern Recognition",
+        "milestone": "Pattern Recognition (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child identify, extend, and create complex repeating patterns (e.g. AABB, ABC)?",
+        "activities": [
+          "Guided Practice – Practice extending complex patterns with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of pattern recognition.",
+          "Independent Application – Provide opportunities for independent mastery of pattern recognition."
+        ]
+      },
+      {
+        "id": "2.3",
+        "title": "Problem Solving",
+        "milestone": "Problem Solving (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child solve simple logic puzzles or figure out solutions to multi-step challenges?",
+        "activities": [
+          "Guided Practice – Practice solving logic puzzles with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of problem solving.",
+          "Independent Application – Provide opportunities for independent mastery of problem solving."
+        ]
+      },
+      {
+        "id": "2.4",
+        "title": "Classification & Sorting",
+        "milestone": "Classification & Sorting (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child sort objects by multiple attributes simultaneously (e.g., color AND shape)?",
+        "activities": [
+          "Guided Practice – Practice sorting by multiple attributes with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of classification & sorting.",
+          "Independent Application – Provide opportunities for independent mastery of classification & sorting."
+        ]
+      },
+      {
+        "id": "2.5",
+        "title": "Memory & Recall",
+        "milestone": "Memory & Recall (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child recall 4-5 items from a list or remember details from a story read yesterday?",
+        "activities": [
+          "Guided Practice – Practice recalling story details with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of memory & recall.",
+          "Independent Application – Provide opportunities for independent mastery of memory & recall."
+        ]
+      },
+      {
+        "id": "2.6",
+        "title": "Sequencing",
+        "milestone": "Sequencing (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child arrange 4-5 story picture cards in chronological order?",
+        "activities": [
+          "Guided Practice – Practice arranging story cards with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of sequencing.",
+          "Independent Application – Provide opportunities for independent mastery of sequencing."
+        ]
+      },
+      {
+        "id": "2.7",
+        "title": "Measurement Concepts",
+        "milestone": "Measurement Concepts (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child compare lengths, weights, or capacities using non-standard units (e.g. blocks)?",
+        "activities": [
+          "Guided Practice – Practice comparing lengths using blocks with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of measurement concepts.",
+          "Independent Application – Provide opportunities for independent mastery of measurement concepts."
+        ]
+      },
+      {
+        "id": "2.8",
+        "title": "Cause & Effect",
+        "milestone": "Cause & Effect (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child make predictions in simple science activities (e.g., sink or float)?",
+        "activities": [
+          "Guided Practice – Practice making science predictions with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of cause & effect.",
+          "Independent Application – Provide opportunities for independent mastery of cause & effect."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "social",
+    "number": "3",
+    "title": "Domain 3: Social-Emotional Development",
+    "items": [
+      {
+        "id": "3.1",
+        "title": "Cooperative Play",
+        "milestone": "Cooperative Play (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child engage in organized group games with rules and share materials willingly?",
+        "activities": [
+          "Guided Practice – Practice group games with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of cooperative play.",
+          "Independent Application – Provide opportunities for independent mastery of cooperative play."
+        ]
+      },
+      {
+        "id": "3.2",
+        "title": "Empathy & Consideration",
+        "milestone": "Empathy & Consideration (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child offer comfort or assistance when seeing a classmate upset or hurt?",
+        "activities": [
+          "Guided Practice – Practice empathy discussions with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of empathy.",
+          "Independent Application – Provide opportunities for independent mastery of empathy."
+        ]
+      },
+      {
+        "id": "3.3",
+        "title": "Conflict Resolution",
+        "milestone": "Conflict Resolution (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child resolve peer disagreements verbally without physical outbursts?",
+        "activities": [
+          "Guided Practice – Practice verbal conflict resolution with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of conflict resolution.",
+          "Independent Application – Provide opportunities for independent mastery of conflict resolution."
+        ]
+      },
+      {
+        "id": "3.4",
+        "title": "Self-Regulation",
+        "milestone": "Self-Regulation (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child manage emotions during transitions or when losing a game?",
+        "activities": [
+          "Guided Practice – Practice emotional self-regulation with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of self-regulation.",
+          "Independent Application – Provide opportunities for independent mastery of self-regulation."
+        ]
+      },
+      {
+        "id": "3.5",
+        "title": "Independence & Initiative",
+        "milestone": "Independence & Initiative (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child choose activities independently and complete assigned responsibilities?",
+        "activities": [
+          "Guided Practice – Practice activity choices with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of independence.",
+          "Independent Application – Provide opportunities for independent mastery of independence."
+        ]
+      },
+      {
+        "id": "3.6",
+        "title": "Respecting Rules",
+        "milestone": "Respecting Rules (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child follow classroom guidelines and explain why rules are important?",
+        "activities": [
+          "Guided Practice – Practice explaining rules with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of respecting rules.",
+          "Independent Application – Provide opportunities for independent mastery of respecting rules."
+        ]
+      },
+      {
+        "id": "3.7",
+        "title": "Friendship Building",
+        "milestone": "Friendship Building (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child form stable friendships and express preference for specific playmates?",
+        "activities": [
+          "Guided Practice – Practice cooperative play with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of friendship building.",
+          "Independent Application – Provide opportunities for independent mastery of friendship building."
+        ]
+      },
+      {
+        "id": "3.8",
+        "title": "Responsibility",
+        "milestone": "Responsibility (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child take care of personal belongings and help clean shared classroom areas?",
+        "activities": [
+          "Guided Practice – Practice classroom cleanup with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of responsibility.",
+          "Independent Application – Provide opportunities for independent mastery of responsibility."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "language",
+    "number": "4",
+    "title": "Domain 4: Language Development",
+    "items": [
+      {
+        "id": "4.1",
+        "title": "Phonemic Awareness",
+        "milestone": "Phonemic Awareness (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child identify starting sounds of words and match rhyming word pairs?",
+        "activities": [
+          "Guided Practice – Practice rhyming games with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of phonemic awareness.",
+          "Independent Application – Provide opportunities for independent mastery of phonemic awareness."
+        ]
+      },
+      {
+        "id": "4.2",
+        "title": "Letter-Sound Knowledge",
+        "milestone": "Letter-Sound Knowledge (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child recognize uppercase and lowercase letters and know most letter sounds?",
+        "activities": [
+          "Guided Practice – Practice letter-sound matching with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of letter-sound knowledge.",
+          "Independent Application – Provide opportunities for independent mastery of letter-sound knowledge."
+        ]
+      },
+      {
+        "id": "4.3",
+        "title": "Expressive Vocabulary",
+        "milestone": "Expressive Vocabulary (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child speak in complete, descriptive sentences using past and future tenses correctly?",
+        "activities": [
+          "Guided Practice – Practice story retelling with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of expressive vocabulary.",
+          "Independent Application – Provide opportunities for independent mastery of expressive vocabulary."
+        ]
+      },
+      {
+        "id": "4.4",
+        "title": "Story Retelling",
+        "milestone": "Story Retelling (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child retell a story including main characters, setting, and beginning/middle/end?",
+        "activities": [
+          "Guided Practice – Practice retell mapping with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of story retelling.",
+          "Independent Application – Provide opportunities for independent mastery of story retelling."
+        ]
+      },
+      {
+        "id": "4.5",
+        "title": "Emergent Writing",
+        "milestone": "Emergent Writing (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child write their own name, simple 3-letter words (CVC words), or label drawings?",
+        "activities": [
+          "Guided Practice – Practice writing CVC words with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of emergent writing.",
+          "Independent Application – Provide opportunities for independent mastery of emergent writing."
+        ]
+      },
+      {
+        "id": "4.6",
+        "title": "Listening Comprehension",
+        "milestone": "Listening Comprehension (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child follow 3-step verbal instructions accurately without reminders?",
+        "activities": [
+          "Guided Practice – Practice 3-step directions with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of listening comprehension.",
+          "Independent Application – Provide opportunities for independent mastery of listening comprehension."
+        ]
+      },
+      {
+        "id": "4.7",
+        "title": "Question Asking",
+        "milestone": "Question Asking (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child ask targeted 'why', 'how', and 'what if' questions to seek information?",
+        "activities": [
+          "Guided Practice – Practice asking inquiry questions with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of question asking.",
+          "Independent Application – Provide opportunities for independent mastery of question asking."
+        ]
+      },
+      {
+        "id": "4.8",
+        "title": "Conversational Skills",
+        "milestone": "Conversational Skills (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child maintain turn-taking in conversation for 4 or more exchanges?",
+        "activities": [
+          "Guided Practice – Practice turn-taking conversation with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of conversational skills.",
+          "Independent Application – Provide opportunities for independent mastery of conversational skills."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "adaptive",
+    "number": "5",
+    "title": "Domain 5: Adaptive (Self-Help) Skills",
+    "items": [
+      {
+        "id": "5.1",
+        "title": "Personal Hygiene",
+        "milestone": "Personal Hygiene (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child wash and dry hands independently using soap after using the restroom?",
+        "activities": [
+          "Guided Practice – Practice thorough hand washing with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of personal hygiene.",
+          "Independent Application – Provide opportunities for independent mastery of personal hygiene."
+        ]
+      },
+      {
+        "id": "5.2",
+        "title": "Dressing Independence",
+        "milestone": "Dressing Independence (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child dress and undress independently, including zipping jackets or snapping buttons?",
+        "activities": [
+          "Guided Practice – Practice zipping and snapping with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of dressing independence.",
+          "Independent Application – Provide opportunities for independent mastery of dressing independence."
+        ]
+      },
+      {
+        "id": "5.3",
+        "title": "Self-Feeding",
+        "milestone": "Self-Feeding (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child use spoon and fork neatly, open lunchboxes, and pour water from a pitcher?",
+        "activities": [
+          "Guided Practice – Practice pouring water neatly with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of self-feeding.",
+          "Independent Application – Provide opportunities for independent mastery of self-feeding."
+        ]
+      },
+      {
+        "id": "5.4",
+        "title": "Classroom Organization",
+        "milestone": "Classroom Organization (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child put away activity materials in designated storage bins without prompt?",
+        "activities": [
+          "Guided Practice – Practice sorting supplies into storage bins with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of classroom organization.",
+          "Independent Application – Provide opportunities for independent mastery of classroom organization."
+        ]
+      },
+      {
+        "id": "5.5",
+        "title": "Safety Awareness",
+        "milestone": "Safety Awareness (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child follow safety rules near street traffic, playground equipment, and sharp objects?",
+        "activities": [
+          "Guided Practice – Practice playground safety rules with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of safety awareness.",
+          "Independent Application – Provide opportunities for independent mastery of safety awareness."
+        ]
+      },
+      {
+        "id": "5.6",
+        "title": "Time Awareness",
+        "milestone": "Time Awareness (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child understand daily schedule concepts like 'before', 'after', 'today', and 'tomorrow'?",
+        "activities": [
+          "Guided Practice – Practice daily schedule reviewing with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of time awareness.",
+          "Independent Application – Provide opportunities for independent mastery of time awareness."
+        ]
+      },
+      {
+        "id": "5.7",
+        "title": "Health Routines",
+        "milestone": "Health Routines (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child cover mouth when coughing/sneezing and use tissues properly?",
+        "activities": [
+          "Guided Practice – Practice tissue hygiene habits with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of health routines.",
+          "Independent Application – Provide opportunities for independent mastery of health routines."
+        ]
+      },
+      {
+        "id": "5.8",
+        "title": "Problem Reporting",
+        "milestone": "Problem Reporting (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child inform adults when feeling unwell, injured, or facing an unresolvable issue?",
+        "activities": [
+          "Guided Practice – Practice reporting problems to adults with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of problem reporting.",
+          "Independent Application – Provide opportunities for independent mastery of problem reporting."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "sensory",
+    "number": "6",
+    "title": "Domain 6: Sensory & Emotional Regulation",
+    "items": [
+      {
+        "id": "6.1",
+        "title": "Sensory Processing",
+        "milestone": "Sensory Processing (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child tolerate busy classroom sensory environments without becoming sensory overwhelmed?",
+        "activities": [
+          "Guided Practice – Practice sensory breaks with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of sensory processing.",
+          "Independent Application – Provide opportunities for independent mastery of sensory processing."
+        ]
+      },
+      {
+        "id": "6.2",
+        "title": "Focus & Attention Span",
+        "milestone": "Focus & Attention Span (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child stay focused on a teacher-led activity or desk task for 15-20 minutes?",
+        "activities": [
+          "Guided Practice – Practice sustained desk activities with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of focus & attention.",
+          "Independent Application – Provide opportunities for independent mastery of focus & attention."
+        ]
+      },
+      {
+        "id": "6.3",
+        "title": "Emotional Expression",
+        "milestone": "Emotional Expression (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child articulate their feelings ('I feel frustrated because...') rather than acting out?",
+        "activities": [
+          "Guided Practice – Practice feeling words with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of emotional expression.",
+          "Independent Application – Provide opportunities for independent mastery of emotional expression."
+        ]
+      },
+      {
+        "id": "6.4",
+        "title": "Adaptability to Change",
+        "milestone": "Adaptability to Change (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child adjust smoothly to unexpected changes in the daily routine or schedule?",
+        "activities": [
+          "Guided Practice – Practice routine variation with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of adaptability.",
+          "Independent Application – Provide opportunities for independent mastery of adaptability."
+        ]
+      },
+      {
+        "id": "6.5",
+        "title": "Frustration Tolerance",
+        "milestone": "Frustration Tolerance (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child persist with difficult tasks (e.g. puzzle, drawing) when encountering challenges?",
+        "activities": [
+          "Guided Practice – Practice growth mindset encouragement with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of frustration tolerance.",
+          "Independent Application – Provide opportunities for independent mastery of frustration tolerance."
+        ]
+      },
+      {
+        "id": "6.6",
+        "title": "Self-Calming Techniques",
+        "milestone": "Self-Calming Techniques (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child utilize deep breathing or quiet space techniques when feeling anxious?",
+        "activities": [
+          "Guided Practice – Practice deep breathing exercises with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of self-calming.",
+          "Independent Application – Provide opportunities for independent mastery of self-calming."
+        ]
+      },
+      {
+        "id": "6.7",
+        "title": "Body Regulation",
+        "milestone": "Body Regulation (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Can the child regulate body energy levels appropriate for quiet listening vs active play?",
+        "activities": [
+          "Guided Practice – Practice energy level regulation games with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of body regulation.",
+          "Independent Application – Provide opportunities for independent mastery of body regulation."
+        ]
+      },
+      {
+        "id": "6.8",
+        "title": "Confidence & Self-Esteem",
+        "milestone": "Confidence & Self-Esteem (Level 8, Age 5-6)",
+        "targetAge": "5–6 Years",
+        "text": "Does the child show confidence when attempting new skills or sharing work with the class?",
+        "activities": [
+          "Guided Practice – Practice show-and-tell sharing with initial teacher demonstration.",
+          "Peer Practice – Pair with a peer to encourage shared practice of confidence.",
+          "Independent Application – Provide opportunities for independent mastery of confidence."
+        ]
+      }
+    ]
+  }
+];
 
 export const AGE_GROUPS = {
   "1–2 Years": SECTIONS_1_2_YEARS,
   "2–3 Years": SECTIONS_2_3_YEARS,
   "3–4 Years": SECTIONS_3_4_YEARS,
   "4–5 Years": SECTIONS_4_5_YEARS,
+  "5–6 Years": SECTIONS_5_6_YEARS,
 };
 
 // Default SECTIONS export defaults to Age 2-3 Years for backwards compatibility
@@ -2346,4 +2966,69 @@ export function getAcademicYear(dateInput) {
   } else {
     return `${year - 1}-${year.toString().slice(-2)}`;
   }
+}
+
+export function normalizeAgeGroup(strVal) {
+  if (strVal === undefined || strVal === null || strVal === "") return null;
+  const s = String(strVal).trim().toLowerCase();
+
+  if (s.includes("1-2") || s.includes("1–2") || s.includes("toddler")) return "1–2 Years";
+  if (s.includes("2-3") || s.includes("2–3") || s.includes("playgroup")) return "2–3 Years";
+  if (s.includes("3-4") || s.includes("3–4") || s.includes("nursery")) return "3–4 Years";
+  if (s.includes("4-5") || s.includes("4–5") || s.includes("jr") || s.includes("junior")) return "4–5 Years";
+  if (s.includes("5-6") || s.includes("5–6") || s.includes("sr") || s.includes("senior")) return "5–6 Years";
+
+  const num = Number(s);
+  if (!isNaN(num)) {
+    if (num < 2.0) return "1–2 Years";
+    if (num < 3.0) return "2–3 Years";
+    if (num < 4.0) return "3–4 Years";
+    if (num < 5.0) return "4–5 Years";
+    return "5–6 Years";
+  }
+
+  return null;
+}
+
+export function getAgeGroupFromChild(child) {
+  if (!child) return "2–3 Years";
+
+  // 1. Explicit ageGroup property
+  if (child.ageGroup) {
+    const norm = normalizeAgeGroup(child.ageGroup);
+    if (norm) return norm;
+  }
+  if (child.class?.ageGroup) {
+    const norm = normalizeAgeGroup(child.class.ageGroup);
+    if (norm) return norm;
+  }
+
+  // 2. DOB calculation
+  const dobVal = child.dateOfBirth || child.dob;
+  if (dobVal) {
+    const dob = new Date(dobVal);
+    if (!isNaN(dob.getTime())) {
+      const ageInYears = (Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+      if (ageInYears < 2.0) return "1–2 Years";
+      if (ageInYears < 3.0) return "2–3 Years";
+      if (ageInYears < 4.0) return "3–4 Years";
+      if (ageInYears < 5.0) return "4–5 Years";
+      return "5–6 Years";
+    }
+  }
+
+  // 3. Numeric/string age property (e.g. 5, "5", "5-6")
+  if (child.age !== undefined && child.age !== null) {
+    const normAge = normalizeAgeGroup(child.age);
+    if (normAge) return normAge;
+  }
+
+  // 4. Class Name / Label Fallback (e.g. "sr (5-6)", "5-6", "Senior KG")
+  const classNameStr = child.className || child.class?.name || child.class;
+  if (classNameStr) {
+    const normClass = normalizeAgeGroup(classNameStr);
+    if (normClass) return normClass;
+  }
+
+  return "2–3 Years";
 }
