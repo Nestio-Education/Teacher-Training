@@ -1640,10 +1640,10 @@ export function submitWeeklyReport(cycleId, payload) {
 }
 
 // ── Mentor-assigned Custom Tasks (MentorTask) ──
-export function createMentorTask({ fellowId, month, title, description, date }) {
+export function createMentorTask({ fellowId, month, title, description, dueDate, dueTime }) {
   return request("/api/mentor-tasks", {
     method: "POST",
-    body: JSON.stringify({ fellowId, month, title, description, date }),
+    body: JSON.stringify({ fellowId, month, title, description, dueDate, dueTime }),
   });
 }
 
@@ -1673,6 +1673,14 @@ export function reviewMentorTask(taskId, status) {
     body: JSON.stringify({ status }),
   });
 }
+// ── PDCA Notification API ──
+// Sends an in-app notification to a specific user (mentor or fellow).
+// payload: { recipientId, type, title, body }
+// type examples: "task_assigned" | "module_completed" | "pdca_approved" | "evidence_submitted"
+export function sendPDCANotification(payload) {
+  return request("/api/mentor-tasks/pdca", {
+    method: "POST",
+    body: JSON.stringify(payload),
 
 // Start: Prajwal — add these to services/api.js, alongside your existing functions
 

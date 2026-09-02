@@ -20,6 +20,8 @@ import { generateOtp, storeOtp, verifyOtp, deleteOtp, OTP_TTL_MINUTES } from "./
 import { sendNotification, broadcastNotification, CHANNELS, TEMPLATES, sendSms, sendWhatsApp } from "./services/notificationService.js";
 // End: Dnyaneshwari Thorat
 import { syncCourseTranslations, syncLessonPlanTranslations } from "./services/translationSync.js";
+import { startTaskReminderCron } from "./cron/taskReminderCron.js";
+
 function localizeCourse(courseDoc, lang) {
   const c = courseDoc.toObject ? courseDoc.toObject() : courseDoc;
   if (!lang || lang === 'en') return c;
@@ -7254,6 +7256,7 @@ const io = initSocket(server);
 
 startDailyTaskAutomationCron();
 startReminderAutomationCron();
+startTaskReminderCron(io);
 
 // Enrich legacy activity submissions created before structured ECE metrics were added
 async function enrichLegacyActivitySubmissions() {

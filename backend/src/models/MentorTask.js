@@ -9,6 +9,12 @@ const mentorTaskSchema = new mongoose.Schema(
     date: { type: String, default: () => new Date().toISOString().slice(0, 10) }, // YYYY-MM-DD — which calendar day this task shows on for the fellow
     title: { type: String, required: true },
     description: { type: String, default: "" },
+    // Optional due date/time for the 2-hour-before reminder alert.
+    // Stored as plain strings ("YYYY-MM-DD" / "HH:MM") to match the <input type="date"/"time"> values as-is.
+    dueDate: { type: String, default: "" },
+    dueTime: { type: String, default: "" },
+    // Set once the 2-hour-before reminder has fired, so the cron never sends it twice.
+    reminderSentAt: { type: Date, default: null },
     status: { type: String, enum: ["pending", "submitted", "approved"], default: "pending" },
     // Fellow's evidence submission
     evidence: {

@@ -6,7 +6,7 @@ import {
   updateFellowPDCAChecklist,
   getFellowAssignedTasks,
   submitTaskEvidence,
-  getTeacherTasks,
+  sendPDCANotification,
 } from "../services/api";
 import UniversalActivityReportModal from "../components/UniversalActivityReportModal";
 import { MONTH_TITLES, SEMESTER_LABELS, semesterOf } from "../mentor/monthMeta";
@@ -270,6 +270,17 @@ export default function FellowGrowthCycleTab({ user, setToast }) {
         setEvidenceModal(null);
         setEvidenceForm({ text: "", formLink: "", photoBase64: "" });
         setToast?.({ msg: "Evidence submitted! Your mentor will review it. ✅", type: "success" });
+
+        // 🔔 Alert mentor that fellow submitted evidence for their assigned task
+        if (assignedMentor?._id) {
+          const taskTitle = mentorTasks.find((t) => t._id === taskId)?.title || "a task";
+          sendPDCANotification({
+            recipientId: assignedMentor._id,
+            type: "evidence_submitted",
+            title: "Fellow Submitted Task Evidence 📎",
+            body: `${user?.name || "Your fellow"} has submitted evidence for "${taskTitle}". Review it in the Growth Cycle → Add Task tab.`,
+          }).catch(() => {});
+        }
       }
     } catch (err) {
       setToast?.({ msg: err.message || "Failed to submit evidence.", type: "error" });
@@ -290,6 +301,17 @@ export default function FellowGrowthCycleTab({ user, setToast }) {
         // Refresh summary so top roadmap updates
         const roadmapRes = await getFellowPDCAProgress();
         if (roadmapRes.success) setMonthsSummary(roadmapRes.months || []);
+
+        // 🔔 Notify mentor if fellow has completed all deliverables for this month
+        const allMet = deliverables.length > 0 && deliverables.every((d) => d.status === "met");
+        if (allMet && assignedMentor?._id) {
+          sendPDCANotification({
+            recipientId: assignedMentor._id,
+            type: "module_completed",
+            title: "Fellow Completed a Module 🎉",
+            body: `${user?.name || "Your fellow"} has marked all deliverables as Met for Month ${selectedMonth}. You can now generate and approve their PDCA report.`,
+          }).catch(() => {});
+        }
       }
     } catch (err) {
       setToast?.({ msg: err.message || "Failed to save checklist.", type: "error" });
