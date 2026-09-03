@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
 import { updateClass, updateTeacherClassAssessment, uploadQuestionBank, updateQuestionBankSections } from "../services/api";
+import { parseClientDocx } from "../utils/docxClientParser";
 
 export const ECE_ASSESSMENT_TEMPLATES = [
   {
@@ -292,17 +293,27 @@ export default function EditClassAssessmentModal({
                   apiQuestions.push({
                     question: qText,
                     options: opts,
-                    correctAnswer: cAns
+                    correctAnswer: cAns,
+                    domain: sec.title || "General Assessment"
                   });
                 }
               });
             });
             extractedQuestions = apiQuestions;
-          } else {
-            throw new Error("Could not extract questions from Word/Excel document.");
           }
         } catch (err) {
-          throw new Error(err.message || "Failed to parse document on server.");
+          // Client-side fallback if server endpoint is 404 or fails
+          try {
+            const buffer = await file.arrayBuffer();
+            const clientParsed = await parseClientDocx(buffer);
+            if (clientParsed && clientParsed.length > 0) {
+              extractedQuestions = clientParsed;
+            } else {
+              throw err;
+            }
+          } catch (fallbackErr) {
+            throw new Error(err.message || "Failed to parse document.");
+          }
         }
       }
 
