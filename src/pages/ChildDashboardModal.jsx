@@ -301,6 +301,31 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
     // 2. Class label & Age group variations
     const classLabel = child.className || child.class?.name || (typeof child.class === "string" ? child.class : "");
     const ageLabel = ageGroup;
+
+    // Check localStorage cache for custom uploaded/edited question bank
+    const searchKeys = Array.from(new Set([
+      classLabel.trim().toLowerCase(),
+      ageLabel.trim().toLowerCase(),
+      ageLabel.replace(/–/g, "-").trim().toLowerCase(),
+      ageLabel.replace(/–/g, "-").replace(" years", "").trim().toLowerCase()
+    ])).filter(Boolean);
+
+    for (const key of searchKeys) {
+      const stored = localStorage.getItem(`spaceece_custom_qb_${key}`);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed && (parsed.sections?.length > 0 || parsed.questions?.length > 0)) {
+            const secs = parsed.sections || mapQuestionsToSections(parsed.questions, parsed.title, parsed.subject);
+            setActiveSections(secs);
+            setSectionsSource("custom_local");
+            setSectionsLoading(false);
+            return;
+          }
+        } catch (e) {}
+      }
+    }
+
     const keysToTry = Array.from(new Set([classLabel, ageLabel, "2–3 Years"])).filter(Boolean);
 
     let resolved = false;
@@ -521,8 +546,10 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {sectionsSource === "fallback" && (
+          {sectionsSource === "fallback" ? (
             <Badge children="Using built-in question set" color="#92400e" bg="#fef3c7" />
+          ) : (
+            <Badge children="✨ Custom Uploaded Assessment Active" color="#15803d" bg="#dcfce7" />
           )}
           <span style={{ fontSize: 11, fontWeight: 700, background: stageTheme.color, color: "white", padding: "4px 12px", borderRadius: 20 }}>
             {stageTheme.icon} {stage} Stage Evaluation

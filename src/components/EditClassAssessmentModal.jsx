@@ -463,6 +463,26 @@ export default function EditClassAssessmentModal({
         }))
       }));
 
+      // Save to local storage cache for instant reflection across all child dashboards
+      const customCacheObj = {
+        title: form.title,
+        subject: form.subject,
+        questions: questionsList,
+        sections: sectionPayload,
+        updatedAt: new Date().toISOString()
+      };
+      const cacheStr = JSON.stringify(customCacheObj);
+      if (classData?.name) {
+        localStorage.setItem(`spaceece_custom_qb_${classData.name.trim().toLowerCase()}`, cacheStr);
+      }
+      if (classData?.ageGroup) {
+        const agLow = classData.ageGroup.trim().toLowerCase();
+        localStorage.setItem(`spaceece_custom_qb_${agLow}`, cacheStr);
+        const norm = agLow.replace(/–/g, "-");
+        localStorage.setItem(`spaceece_custom_qb_${norm}`, cacheStr);
+        localStorage.setItem(`spaceece_custom_qb_${norm.replace(" years", "")}`, cacheStr);
+      }
+
       if (classData?.name) {
         await updateQuestionBankSections(classData.name, sectionPayload).catch(() => {});
       }
