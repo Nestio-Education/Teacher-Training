@@ -1741,7 +1741,12 @@ export function triggerHaalsAiReportStub(fellowId, month) {
 
 // ── Admin Quiz APIs ──
 export function getAdminQuizzes() {
-  return request("/api/admin/quizzes");
+  return request("/api/admin/quizzes").catch((err) => {
+    if (err.response && err.response.status === 404) {
+      return { quizzes: [] };
+    }
+    return { quizzes: [] };
+  });
 }
 
 export function createAdminQuiz(payload) {
