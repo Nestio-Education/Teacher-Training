@@ -3,6 +3,7 @@ import { t } from "../services/i18n";
 import { useState, useEffect } from "react";
 import { Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
 import { getCenters, createCenter, updateCenter, deleteCenter, getAdminTeachers, updateTeacherProfile, getClasses, createClass, updateClass, deleteClass, getClassLogs, getCenterTeacherAssignments, validateCenterAssignments, getAdminMentors } from "../services/api";
+import EditClassAssessmentModal from "../components/EditClassAssessmentModal";
 
 const mapCenterFromApi = (c) => ({
   id: c._id || c.id,
@@ -1844,8 +1845,9 @@ function ClassManagementModal({ centerId, centerName, classes, onSave, onClose, 
       </div>
 
       {editAssessmentClass && (
-        <ClassAssessmentModal
+        <EditClassAssessmentModal
           classData={editAssessmentClass}
+          allClasses={classes}
           onClose={() => setEditAssessmentClass(null)}
           setToast={setToast}
           onSave={onSave}
@@ -2368,8 +2370,9 @@ export default function CenterManagementTab({ setToast }) {
       )}
 
       {editAssessmentClass && (
-        <ClassAssessmentModal
+        <EditClassAssessmentModal
           classData={editAssessmentClass}
+          allClasses={classes}
           onClose={() => setEditAssessmentClass(null)}
           setToast={showToast}
           onSave={loadClasses}

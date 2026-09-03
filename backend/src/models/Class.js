@@ -8,6 +8,25 @@ const classSchema = new mongoose.Schema(
     curriculumLevel: String,
     schedule: String,
     capacity: { type: Number, default: 0 },
+    assessmentTitle: String,
+    assessmentSubject: String,
+    assessmentQuestions: { type: Number, default: 0 },
+    assessmentPassMark: { type: Number, default: 60 },
+    assessmentInstructions: String,
+    assessmentStatus: { type: String, default: "active" },
+    assessmentQuestionsList: [
+      {
+        question: String,
+        options: [String],
+        correctAnswer: String,
+        points: { type: Number, default: 1 },
+      },
+    ],
+    lastUpdatedBy: {
+      role: String,
+      name: String,
+      updatedAt: Date,
+    },
   },
   { timestamps: true }
 );

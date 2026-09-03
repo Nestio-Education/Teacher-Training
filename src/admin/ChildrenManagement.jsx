@@ -2,6 +2,7 @@ import { t } from "../services/i18n";
 import { useState, useEffect } from "react";
 import { Modal, S, SearchBar, StatCard, StatusBadge, Toast } from "../components/Shared";
 import { getChildren, updateChild, deleteChild, getCenters, getClasses, getChildFeedbackByChild } from "../services/api";
+import EditClassAssessmentModal from "../components/EditClassAssessmentModal";
 
 const mapChildFromApi = (c) => ({
   id: c._id || c.id,
@@ -328,6 +329,7 @@ export default function ChildrenManagementTab({ setToast }) {
   const [editChild, setEditChild] = useState(null);
   const [detailChild, setDetailChild] = useState(null);
   const [feedbackChild, setFeedbackChild] = useState(null);
+  const [editAssessmentClass, setEditAssessmentClass] = useState(null);
   const [loading, setLoading] = useState(true);
   const [localToast, setLocalToast] = useState({ msg: "", type: "" });
 
@@ -479,6 +481,18 @@ export default function ChildrenManagementTab({ setToast }) {
         />
       )}
 
+      {/* Edit Assessment Modal */}
+      {editAssessmentClass && (
+        <EditClassAssessmentModal
+          classData={editAssessmentClass}
+          allClasses={classes}
+          isTeacher={false}
+          onClose={() => setEditAssessmentClass(null)}
+          onSave={loadData}
+          setToast={showToast}
+        />
+      )}
+
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
@@ -551,8 +565,34 @@ export default function ChildrenManagementTab({ setToast }) {
       {/* ── STEP 2: CLASSES CHIPS ROW ── */}
       {selectedCenterId && (
         <div style={{ marginBottom: 20, padding: "14px 16px", background: "#f8fafc", borderRadius: 14, border: "1px solid #e2e8f0" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-            🎒 {t("Select Class Room")}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              🎒 {t("Select Class Room")}
+            </div>
+            {selectedClassId && (
+              <button
+                type="button"
+                onClick={() => {
+                  const cls = activeCenterClasses.find(c => String(c._id || c.id) === String(selectedClassId));
+                  if (cls) setEditAssessmentClass(cls);
+                }}
+                style={{
+                  padding: "5px 12px",
+                  borderRadius: 16,
+                  border: "1.5px solid #7c3aed",
+                  background: "#f3e8ff",
+                  color: "#6b21a8",
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4
+                }}
+              >
+                📝 Edit Class Assessment
+              </button>
+            )}
           </div>
           {activeCenterClasses.length === 0 ? (
             <div style={{ fontSize: 12, color: "#9ca3af" }}>

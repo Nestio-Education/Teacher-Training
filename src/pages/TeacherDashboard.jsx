@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import UniversalActivityReportModal, { ACTIVITY_CATEGORIES } from "../components/UniversalActivityReportModal";
+import EditClassAssessmentModal from "../components/EditClassAssessmentModal";
 import { Logo, Toast, Badge, StatusBadge, StatCard, SectionCard, S, globalCSS } from "../components/Shared";
 import { t, setLanguage, getLanguageList, getCurrentLanguage, LANG_CHANGE_EVENT } from "../services/i18n";
 // Start: Snehal change
@@ -3186,6 +3187,7 @@ export default function TeacherDashboard({ user, onLogout }) {
   const [certificates, setCertificates] = useState([]);
   const [teacherChildren, setTeacherChildren] = useState([]);
   const [teacherClasses, setTeacherClasses] = useState([]);
+  const [editAssessmentClass, setEditAssessmentClass] = useState(null);
   const [selectedChildClassId, setSelectedChildClassId] = useState("");
   const [childForm, setChildForm] = useState({ name: "", age: "", gender: "Male", parentName: "", phone: "", email: "", address: "" });
   const [childSaving, setChildSaving] = useState(false);
@@ -3681,6 +3683,33 @@ export default function TeacherDashboard({ user, onLogout }) {
               {t("User Guide")}
             </button>
 
+            {teacherClasses && teacherClasses.length > 0 && (
+              <button
+                className="teacher-header-action"
+                onClick={() => setEditAssessmentClass(teacherClasses[0])}
+                title="Edit Class Assessment & Questions"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "6px 14px",
+                  borderRadius: 20,
+                  border: "1.5px solid #7c3aed",
+                  background: "#f3e8ff",
+                  color: "#6b21a8",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  boxShadow: "0 1px 3px rgba(124,58,237,0.15)",
+                  transition: "all 0.18s",
+                }}
+              >
+                <span style={{ fontSize: 14 }}>📝</span>
+                Edit Assessment
+              </button>
+            )}
+
             <div className="teacher-profile-trigger"
               onClick={() => setMenuOpen(!menuOpen)}
               style={{
@@ -3843,6 +3872,17 @@ export default function TeacherDashboard({ user, onLogout }) {
       </div>
 
       {showGuide && <TeacherUserGuide onClose={() => setShowGuide(false)} />}
+
+      {editAssessmentClass && (
+        <EditClassAssessmentModal
+          classData={editAssessmentClass}
+          allClasses={teacherClasses}
+          isTeacher={true}
+          onClose={() => setEditAssessmentClass(null)}
+          onSave={refreshCoreData}
+          setToast={setToast}
+        />
+      )}
     </div>
   );
 }

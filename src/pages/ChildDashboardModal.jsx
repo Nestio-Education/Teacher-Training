@@ -232,19 +232,118 @@ function ChildAssessmentTab({ child, onAssessmentSaved }) {
   useEffect(() => {
     if (!child) return;
     setSectionsLoading(true);
-    getActiveQuestionBank(ageGroup)
-      .then(res => {
-        setActiveSections(res.questionBank.sections);
-        setSectionsSource("db");
-      })
-      .catch(err => {
-        // No DB question bank yet for this age group — fall back to the static file so
-        // the tab still works for age groups that haven't been migrated yet.
-        console.warn(`No DB question bank for ${ageGroup}, using static fallback.`, err);
-        setActiveSections(AGE_GROUPS[ageGroup] || SECTIONS_2_3_YEARS);
-        setSectionsSource("fallback");
-      })
-      .finally(() => setSectionsLoading(false));
+
+    const mapQuestionsToSections = (qList, defaultTitle, defaultSubject) => {
+      const domainGroups = {};
+      qList.forEach((q, idx) => {
+        let domainName = q.domain || q.category || q.subject || "";
+        if (!domainName && q.milestone && !q.milestone.includes("Level")) {
+          domainName = q.milestone;
+        }
+        if (!domainName) {
+          const qText = q.questionText || q.question || "";
+          if (/physical|motor|hopping|climbing|walking|running|jumping/i.test(qText)) domainName = "Physical Development";
+          else if (/cognitive|sorting|math|counting|shape|color/i.test(qText)) domainName = "Cognitive Development";
+          else if (/social|peer|play|turn|share|friend/i.test(qText)) domainName = "Social-Emotional Development";
+          else if (/language|word|sentence|talk|speak|phonics|reading/i.test(qText)) domainName = "Language & Communication";
+          else if (/adaptive|self-help|wash|feed|dress|toilet/i.test(qText)) domainName = "Adaptive (Self-Help) Skills";
+          else if (/sensory|aesthetic|art|draw|music|sing/i.test(qText)) domainName = "Sensory & Aesthetic Development";
+          else domainName = defaultSubject || "Developmental Assessment";
+        }
+
+        if (!domainGroups[domainName]) {
+          domainGroups[domainName] = [];
+        }
+
+        domainGroups[domainName].push({
+          id: `q_${idx + 1}`,
+          title: q.questionText || q.question || `Question ${idx + 1}`,
+          text: q.questionText || q.question || `Question ${idx + 1}`,
+          milestone: q.milestone || domainName,
+          targetAge: q.targetAge || "",
+          ratingScale: q.options && q.options.length >= 2 ? q.options : ["1 (Not yet)", "2 (Emerging)", "3 (Achieved)"]
+        });
+      });
+
+      const domainKeys = Object.keys(domainGroups);
+      if (domainKeys.length === 0) {
+        return [{
+          id: "sec_1",
+          number: 1,
+          title: defaultTitle || `${child.name}'s Class Assessment`,
+          items: qList.map((q, idx) => ({
+            id: `q_${idx + 1}`,
+            title: q.questionText || q.question || `Question ${idx + 1}`,
+            text: q.questionText || q.question || `Question ${idx + 1}`,
+            milestone: q.milestone || defaultSubject || "Class Assessment",
+            ratingScale: q.options && q.options.length >= 2 ? q.options : ["1 (Not yet)", "2 (Emerging)", "3 (Achieved)"]
+          }))
+        }];
+      }
+
+      return domainKeys.map((dTitle, dIdx) => ({
+        id: `sec_${dIdx + 1}`,
+        number: dIdx + 1,
+        title: dTitle,
+        items: domainGroups[dTitle]
+      }));
+    };
+
+    // 1. Direct child/class assessmentQuestionsList
+    const classQuestions = child.class?.assessmentQuestionsList || child.assessmentQuestionsList;
+    if (classQuestions && classQuestions.length > 0) {
+      setActiveSections(mapQuestionsToSections(classQuestions, child.class?.assessmentTitle, child.class?.assessmentSubject));
+      setSectionsSource("class_db");
+      setSectionsLoading(false);
+      return;
+    }
+
+    // 2. Class label & Age group variations
+    const classLabel = child.className || child.class?.name || (typeof child.class === "string" ? child.class : "");
+    const ageLabel = ageGroup;
+    const keysToTry = Array.from(new Set([classLabel, ageLabel, "2–3 Years"])).filter(Boolean);
+
+    let resolved = false;
+    const tryKey = async (idx) => {
+      if (idx >= keysToTry.length) {
+        if (!resolved) {
+          setActiveSections(AGE_GROUPS[ageGroup] || SECTIONS_2_3_YEARS);
+          setSectionsSource("fallback");
+          setSectionsLoading(false);
+        }
+        return;
+      }
+      try {
+        const res = await getActiveQuestionBank(keysToTry[idx]);
+        if (res?.questionBank?.sections && res.questionBank.sections.length > 0) {
+          const formattedSecs = res.questionBank.sections.map(sec => ({
+            ...sec,
+            items: (sec.items && sec.items.length > 0)
+              ? sec.items
+              : (sec.questions || []).map((q, qIdx) => ({
+                  id: `q_${qIdx + 1}`,
+                  title: q.questionText || q.question || `Item ${qIdx + 1}`,
+                  text: q.questionText || q.question || `Item ${qIdx + 1}`,
+                  milestone: q.milestone || "Class Assessment",
+                  ratingScale: q.options || ["1 (Not yet)", "2 (Emerging)", "3 (Achieved)"]
+                }))
+          }));
+          const itemCount = formattedSecs.flatMap(s => s.items || []).length;
+          if (itemCount > 0) {
+            setActiveSections(formattedSecs);
+            setSectionsSource("db");
+            setSectionsLoading(false);
+            resolved = true;
+            return;
+          }
+        }
+      } catch (err) {
+        // Continue to next key
+      }
+      tryKey(idx + 1);
+    };
+
+    tryKey(0);
   }, [child, ageGroup]);
 
   // Load any previously saved assessments for this child from the backend database

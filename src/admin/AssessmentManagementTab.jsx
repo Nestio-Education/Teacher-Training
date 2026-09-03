@@ -1,7 +1,8 @@
 import { t } from "../services/i18n";
 import { useState, useEffect } from "react";
 import { Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
-import { getAdminQuizzes, createAdminQuiz, updateAdminQuiz, deleteAdminQuiz, duplicateAdminQuiz, toggleAdminQuizPublish } from "../services/api";
+import { getAdminQuizzes, createAdminQuiz, updateAdminQuiz, deleteAdminQuiz, duplicateAdminQuiz, toggleAdminQuizPublish, getClasses } from "../services/api";
+import EditClassAssessmentModal from "../components/EditClassAssessmentModal";
 
 const MOCK_QUESTION_BANK = [];
 
@@ -12,6 +13,22 @@ export default function AssessmentManagementTab({ assessmentsData = [], setAsses
   const [questionBuilderModal, setQuestionBuilderModal] = useState(false);
   const [addQuestionBankModal, setAddQuestionBankModal] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [classList, setClassList] = useState([]);
+  const [selectedClassId, setSelectedClassId] = useState("");
+  const [editAssessmentClass, setEditAssessmentClass] = useState(null);
+
+  const loadClasses = () => {
+    getClasses()
+      .then(res => {
+        if (res?.classes) {
+          setClassList(res.classes);
+          if (res.classes.length > 0 && !selectedClassId) {
+            setSelectedClassId(res.classes[0]._id || res.classes[0].id);
+          }
+        }
+      })
+      .catch(err => console.error("Failed to load classes in assessment tab:", err));
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -25,6 +42,8 @@ export default function AssessmentManagementTab({ assessmentsData = [], setAsses
         console.warn("Notice: Loading quizzes locally/persisted fallback.", err?.message);
       })
       .finally(() => setLoading(false));
+
+    loadClasses();
   }, []);
 
   const [questionBank, setQuestionBank] = useState(() => {
@@ -310,6 +329,74 @@ export default function AssessmentManagementTab({ assessmentsData = [], setAsses
         <StatCard icon="👥" label="Attempts" val={totalAttempts} color="#06b6d4" bg="#cffafe" />
       </div>
 
+      {/* Class Assessment Configuration Hub */}
+      <div style={{
+        background: "linear-gradient(135deg, #ffffff, #faf5ff)",
+        border: "1.5px solid #e9d5ff",
+        borderRadius: 16,
+        padding: "18px 22px",
+        marginBottom: 20,
+        boxShadow: "0 4px 14px rgba(124, 58, 237, 0.05)"
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#5b21b6", display: "flex", alignItems: "center", gap: 8 }}>
+              <span>🏫 ECE Class Assessment Hub</span>
+              <span style={{ fontSize: 11, background: "#7c3aed", color: "white", padding: "2px 8px", borderRadius: 12 }}>Single & All-Centers Sync</span>
+            </h3>
+            <p style={{ margin: "4px 0 0 0", fontSize: 12, color: "#6d28d9" }}>
+              Select any class to configure its pre-built ECE templates, question bank, passing score, and target update scope.
+            </p>
+          </div>
+          {classList.length > 0 ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <select
+                value={selectedClassId}
+                onChange={e => setSelectedClassId(e.target.value)}
+                style={{
+                  padding: "8px 14px",
+                  borderRadius: 8,
+                  border: "1.5px solid #c4b5fd",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: "#5b21b6",
+                  background: "white",
+                  cursor: "pointer"
+                }}
+              >
+                {classList.map(cls => (
+                  <option key={cls._id || cls.id} value={cls._id || cls.id}>
+                    {cls.name} ({cls.center?.name || cls.centerName || "Center"})
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => {
+                  const cls = classList.find(c => (c._id || c.id) === selectedClassId) || classList[0];
+                  if (cls) setEditAssessmentClass(cls);
+                }}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "linear-gradient(135deg, #7c3aed, #6d28d9)",
+                  color: "white",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(124, 58, 237, 0.25)"
+                }}
+              >
+                📝 Edit Selected Class Assessment
+              </button>
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: "#6b7280", fontStyle: "italic" }}>Loading classes...</div>
+          )}
+        </div>
+      </div>
+
       <SearchBar value={search} onChange={setSearch} placeholder="Search quizzes or courses..." />
 
       <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 20, marginBottom: 20 }}>
@@ -542,6 +629,17 @@ export default function AssessmentManagementTab({ assessmentsData = [], setAsses
             <button type="submit" style={{ ...S.primaryBtn, width: "100%" }}>Save Question →</button>
           </form>
         </Modal>
+      )}
+
+      {editAssessmentClass && (
+        <EditClassAssessmentModal
+          classData={editAssessmentClass}
+          allClasses={classList}
+          isTeacher={false}
+          onClose={() => setEditAssessmentClass(null)}
+          onSave={loadClasses}
+          setToast={setToast}
+        />
       )}
     </div>
   );

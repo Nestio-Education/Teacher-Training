@@ -54,17 +54,16 @@ export async function parseDocxQuestionBank(buffer) {
       const end = i + 1 < domainMatches.length ? domainMatches[i + 1].index : text.length;
       const block = text.slice(start, end);
 
-      const qPattern = /(?:Question\s+(\d+)|\b(\d+)\.)\s*:?\s*(.+)/gi;
+      const qPattern = /(?:###\s*|\*\*\s*)?Question\s+(\d+)\s*:?\s*(.+)/gi;
       const qMatches = [...block.matchAll(qPattern)];
 
       const items = [];
       for (let j = 0; j < qMatches.length; j++) {
         const qm = qMatches[j];
-        const qNum = qm[1] ? parseInt(qm[1], 10) : (qm[2] ? parseInt(qm[2], 10) : j + 1);
-        const qTitle = (qm[3] || "").split("\n")[0].trim();
+        const qNum = parseInt(qm[1], 10);
+        const qTitle = (qm[2] || "").split("\n")[0].replace(/\*+/g, "").trim();
 
-        // Skip non-question summary header lines (e.g. "8 Questions (with 3+ activities per question)")
-        if (/\d+\s+Questions/i.test(qTitle) || /with 3\+ activities/i.test(qTitle) || /^s\s*\(/i.test(qTitle) || /^Questions\b/i.test(qTitle)) {
+        if (!qTitle || /\d+\s+Questions/i.test(qTitle)) {
           continue;
         }
 
@@ -78,12 +77,17 @@ export async function parseDocxQuestionBank(buffer) {
         const targetAge = ageM ? ageM[1] : "";
         const milestone = milestoneRaw.replace(/\s*\(Level[^)]*\)\s*/, "").trim();
 
-        const qTextM = qBlock.match(/(Does the child[^?]*\?)/i) || qBlock.match(/([A-Z][^?]*\?)/);
-        const qText = qTextM ? qTextM[1].replace(/\s+/g, " ").trim() : qTitle;
+        const qTextM = qBlock.match(/(Does the child[^?\n]*\?)/i) || qBlock.match(/(\*?During[^?\n]*\?)/i) || qBlock.match(/([A-Z][^?\n]*\?)/);
+        const qText = qTextM ? qTextM[1].replace(/\*+/g, "").replace(/\s+/g, " ").trim() : qTitle;
 
-        const actBlockM = qBlock.match(/Activities to observe\/implement:?\s*([\s\S]+?)(?=Rating Scale|$)/i);
+        const actBlockM = qBlock.match(/Activities to observe\/implement:?\s*([\s\S]+?)(?=Rating Scale|Rating:|$)/i);
         const actBlock = actBlockM ? actBlockM[1] : "";
-        const actLines = actBlock.split(/\n(?=\d+\.\s*)/).map(l => l.replace(/\s+/g, " ").trim()).filter(l => l.length > 5);
+        const actLines = actBlock.split(/\n(?=\d+\.\s*)/).map(l => l.replace(/\*+/g, "").replace(/\s+/g, " ").trim()).filter(l => l.length > 5);
+
+        const hasCantDo = /Can't do/i.test(qBlock) || /Does Independently/i.test(qBlock);
+        const ratingScale = hasCantDo
+          ? ["1 (Can't do)", "2 (Emerging)", "3 (Does Independently)"]
+          : ["1 (Not yet)", "2 (Emerging)", "3 (Achieved)"];
 
         items.push({
           id: `${code}_${qNum}`,
@@ -92,16 +96,26 @@ export async function parseDocxQuestionBank(buffer) {
           targetAge,
           text: qText,
           activities: actLines.length > 0 ? actLines : undefined,
-          ratingScale: ["Not yet", "Emerging", "Achieved"],
+          ratingScale,
         });
       }
 
       if (items.length > 0) {
+        const questions = items.map(it => ({
+          questionText: it.title && it.text && it.title !== it.text ? `${it.title}: ${it.text}` : (it.text || it.title),
+          question: it.title && it.text && it.title !== it.text ? `${it.title}: ${it.text}` : (it.text || it.title),
+          options: it.ratingScale || ["1 (Not yet)", "2 (Emerging)", "3 (Achieved)"],
+          correctAnswer: it.ratingScale ? it.ratingScale[it.ratingScale.length - 1] : "3 (Achieved)",
+          milestone: it.milestone,
+          activities: it.activities
+        }));
+
         sections.push({
           id: sectionId,
           number: domainNum,
           title: domainTitleRaw.replace(/\b\w/g, c => c.toUpperCase()),
           items,
+          questions
         });
       }
     }

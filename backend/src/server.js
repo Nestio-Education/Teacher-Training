@@ -3742,9 +3742,63 @@ app.patch("/api/admin/classes/:id", requireAuth, requireRole("admin"), async (re
     requireObjectId(req.params.id, "class id");
     const existing = await ClassModel.findById(req.params.id);
     if (!existing) return res.status(404).json({ message: "Class not found." });
-    const classRecord = await ClassModel.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    await logClassAction("update", classRecord._id, classRecord.name, classRecord.center, req.user.id, req.user.name, { before: existing?.toObject(), after: req.body });
-    res.json({ class: classRecord });
+
+    const applyToAllCenters = req.body.applyToAllCenters === true || req.query.applyToAllCenters === "true";
+    const updatePayload = { ...req.body };
+    delete updatePayload.applyToAllCenters;
+
+    updatePayload.lastUpdatedBy = {
+      role: "admin",
+      name: req.user?.name || req.user?.email || "Admin",
+      updatedAt: new Date(),
+    };
+
+    let classRecord;
+    if (applyToAllCenters && existing.name) {
+      await ClassModel.updateMany({ name: existing.name }, { $set: updatePayload });
+      classRecord = await ClassModel.findById(req.params.id);
+    } else {
+      classRecord = await ClassModel.findByIdAndUpdate(req.params.id, updatePayload, { new: true });
+    }
+
+    await logClassAction("update", classRecord._id, classRecord.name, classRecord.center, req.user.id, req.user.name, { before: existing?.toObject(), after: updatePayload });
+    res.json({ class: classRecord, updatedAll: applyToAllCenters });
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+app.patch("/api/teacher/classes/:id/assessment", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
+  try {
+    requireObjectId(req.params.id, "class id");
+    const existing = await ClassModel.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: "Class not found." });
+
+    const applyToAllCenters = req.body.applyToAllCenters === true || req.query.applyToAllCenters === "true";
+    const updatePayload = {
+      assessmentTitle: req.body.assessmentTitle,
+      assessmentSubject: req.body.assessmentSubject,
+      assessmentQuestions: req.body.assessmentQuestions,
+      assessmentPassMark: req.body.assessmentPassMark,
+      assessmentInstructions: req.body.assessmentInstructions,
+      assessmentStatus: req.body.assessmentStatus,
+      assessmentQuestionsList: req.body.assessmentQuestionsList,
+      lastUpdatedBy: {
+        role: "teacher",
+        name: req.user?.name || req.user?.email || "Teacher",
+        updatedAt: new Date(),
+      },
+    };
+
+    let classRecord;
+    if (applyToAllCenters && existing.name) {
+      await ClassModel.updateMany({ name: existing.name }, { $set: updatePayload });
+      classRecord = await ClassModel.findById(req.params.id);
+    } else {
+      classRecord = await ClassModel.findByIdAndUpdate(req.params.id, updatePayload, { new: true });
+    }
+
+    res.json({ class: classRecord, updatedAll: applyToAllCenters });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
   }
@@ -6896,7 +6950,7 @@ app.use("/api/pdca", requireAuth, pdcaGenerateRouter);
 import mentorTasksRouter from "./routes/mentorTasks.js";
 app.use("/api/mentor-tasks", requireAuth, mentorTasksRouter);
 import questionBankRoutes from "./routes/questionBankRoutes.js";
-app.use("/api/teacher/question-banks", requireAuth, requireRole("teacher", "fellow"), questionBankRoutes);
+app.use("/api/teacher/question-banks", requireAuth, requireRole("teacher", "fellow", "admin"), questionBankRoutes);
 // ── Teacher/Fellow: View goals set by Mentor (My Goals panel) ──
 app.get("/api/teacher/goals", requireAuth, (req, res, next) => {
   if (!req.user || !(["teacher", "fellow"].includes(req.user.role))) {

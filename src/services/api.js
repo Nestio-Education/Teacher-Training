@@ -205,6 +205,13 @@ export function updateClass(id, classData) {
   });
 }
 
+export function updateTeacherClassAssessment(id, assessmentData) {
+  return request(`/api/teacher/classes/${id}/assessment`, {
+    method: "PATCH",
+    body: JSON.stringify(assessmentData)
+  });
+}
+
 export function deleteClass(id) {
   return request(`/api/admin/classes/${id}`, {
     method: "DELETE"
