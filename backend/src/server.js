@@ -3852,7 +3852,7 @@ app.delete("/api/admin/children/:id", requireAuth, requireRole("admin"), async (
 // ==========================================
 // TEACHER MANAGEMENT
 // ==========================================
-app.patch("/api/admin/teachers/:id", requireAuth, requireRole("admin"), async (req, res, next) => {
+app.patch("/api/admin/teachers/:id", requireAuth, requireRole("admin", "mentor"), async (req, res, next) => {
   try {
     const { name, phone, email, teacherProfile } = req.body;
     const updateData = {};

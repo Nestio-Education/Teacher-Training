@@ -42,7 +42,10 @@ import {
   deleteTeacherTask,
   getTeacherAttendance,
   getFellowAssignedTasks,
-  submitTaskEvidence
+    submitTaskEvidence,
+  getTeacherChecklist,
+  getFellowPDCAProgress,
+  getFellowPDCAMonth
 } from "../services/api";
 // Start: Dnyaneshwari Thorat
 import { downloadCertificatePdf, viewCertificatePdf } from "../services/api";
@@ -1111,8 +1114,10 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
                   <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#94a3b8", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.4px" }}>
                     Category
                   </label>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {Object.entries(ACTIVITY_CATEGORIES).map(([key, cat]) => {
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {Object.entries(ACTIVITY_CATEGORIES)
+                      .filter(([key]) => !HIDDEN_CALENDAR_CATEGORIES.includes(key))
+                      .map(([key, cat]) => {
                       const block = categoryBlock[key] || categoryBlock.class_lesson;
                       const isActive = taskCategory === key;
                       return (
@@ -1483,6 +1488,171 @@ function MyAttendanceSummaryCard({ attendance = 0, summary = {}, attendanceMap =
   );
 }
 
+/* ── Fellow Dashboard: Compact Sidebar PDCA Checklist Widget ── */
+function FellowPDCAChecklistWidget() {
+  const [deliverables, setDeliverables] = useState([]);
+  const [activeMonth, setActiveMonth] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getFellowPDCAProgress()
+      .then(res => {
+        const months = res?.months || [];
+        const active = months.find(m => m.status !== "approved") || months[0];
+        if (active) {
+          setActiveMonth(active.month);
+          return getFellowPDCAMonth(active.month);
+        }
+      })
+      .then(res => {
+        if (res?.deliverablesStatus) setDeliverables(res.deliverablesStatus);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const metCount = deliverables.filter(d => d.status === "met").length;
+  const total = deliverables.length;
+
+  return (
+    <div style={{
+      background: "white", borderRadius: 14,
+      border: "1.5px solid #e2e8f0",
+      padding: "14px 16px",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#1e293b", display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ color: metCount === total && total > 0 ? "#16a34a" : "#cbd5e1" }}>✔</span>
+          PDCA Checklist
+        </div>
+        <div style={{
+          background: "#eef2ff", color: "#4f46e5",
+          borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 800
+        }}>
+          {metCount}/{total}
+        </div>
+      </div>
+      <div style={{ fontSize: 10.5, color: "#94a3b8", marginBottom: 10 }}>
+        {activeMonth ? `Month ${activeMonth} deliverables` : "Ticks as you report each activity"}
+      </div>
+
+      {loading ? (
+        <div style={{ fontSize: 11, color: "#94a3b8", textAlign: "center", padding: 10 }}>Loading...</div>
+      ) : deliverables.length === 0 ? (
+        <div style={{ fontSize: 11, color: "#94a3b8", textAlign: "center", padding: 10 }}>No deliverables yet.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {deliverables.map(d => {
+            const met = d.status === "met";
+            const overridden = d.mentorOverride;
+            return (
+              <div key={d.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "6px 4px", borderRadius: 8 }}>
+                <div style={{
+                  width: 15, height: 15, borderRadius: 4, flexShrink: 0, marginTop: 1,
+                  background: met ? (overridden ? "#8b5cf6" : "#10b981") : "white",
+                  border: `1.5px solid ${met ? (overridden ? "#8b5cf6" : "#10b981") : "#cbd5e1"}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 9, color: "white", fontWeight: 800
+                }}>
+                  {met ? "✓" : ""}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: met ? "#15803d" : "#334155", lineHeight: 1.3 }}>
+                    {d.label}
+                    {overridden && (
+                      <span style={{ marginLeft: 5, fontSize: 8, fontWeight: 700, color: "#7c3aed", background: "#ede9fe", padding: "1px 4px", borderRadius: 4 }}>MENTOR SET</span>
+                    )}
+                  </div>
+                  {d.count !== undefined && (
+                    <div style={{ fontSize: 9.5, color: "#94a3b8", marginTop: 1 }}>
+                      {d.count}/{d.targetCount || 1} done
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Teacher Sidebar Checklist Panel (compact, matches Fellow style) ── */
+function TeacherMonthChecklistPanel({ user }) {
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year] = useState(now.getFullYear());
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    getTeacherChecklist(month, year)
+      .then(res => { if (res?.items) setItems(res.items); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [month, year]);
+
+  const metCount = items.filter(i => i.met).length;
+  const total = items.length;
+
+  const ICONS = { activities:"📚", lesson_plans:"📝", courses:"🎓", assessments:"📊", pcb_sessions:"🏡" };
+
+  return (
+    <div style={{ background: "white", borderRadius: 14, border: "1.5px solid #e2e8f0", padding: "14px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#1e293b", display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ color: metCount === total && total > 0 ? "#16a34a" : "#cbd5e1" }}>✔</span>
+          Teacher Checklist
+        </div>
+        <div style={{ background: "#eef2ff", color: "#4f46e5", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 800 }}>
+          {metCount}/{total}
+        </div>
+      </div>
+      <div style={{ fontSize: 10.5, color: "#94a3b8", marginBottom: 10 }}>
+        Ticks as you report each activity
+      </div>
+
+      {loading ? (
+        <div style={{ fontSize: 11, color: "#94a3b8", textAlign: "center", padding: 10 }}>Loading...</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {items.map(item => (
+            <div key={item.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "6px 4px", borderRadius: 8, opacity: !item.required && !item.met ? 0.75 : 1 }}>
+              <div style={{
+                width: 15, height: 15, borderRadius: 4, flexShrink: 0, marginTop: 1,
+                background: item.met ? (item.mentorOverride ? "#8b5cf6" : "#10b981") : "white",
+                border: `1.5px solid ${item.met ? (item.mentorOverride ? "#8b5cf6" : "#10b981") : "#cbd5e1"}`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 9, color: "white", fontWeight: 800
+              }}>
+                {item.met ? "✓" : ""}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: item.met ? "#15803d" : "#334155", lineHeight: 1.3 }}>
+                  {ICONS[item.id] || "📌"} {item.label}
+                  {!item.required && (
+                    <span style={{ marginLeft: 5, fontSize: 8, fontWeight: 700, color: "#94a3b8", background: "#f1f5f9", padding: "1px 4px", borderRadius: 4 }}>OPTIONAL</span>
+                  )}
+                  {item.mentorOverride && (
+                    <span style={{ marginLeft: 5, fontSize: 8, fontWeight: 700, color: "#7c3aed", background: "#ede9fe", padding: "1px 4px", borderRadius: 4 }}>MENTOR SET</span>
+                  )}
+                </div>
+                <div style={{ fontSize: 9.5, color: "#94a3b8", marginTop: 1 }}>
+                  {item.count}/{item.target} done
+                  {item.mentorNote ? ` · ${item.mentorNote}` : ""}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── OverviewTab ── */
 function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lessons = [], activities = [], summary = {} }) {
   const attendanceMap = summary.attendanceMap || {};
@@ -1540,58 +1710,61 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
   // Get full class details for the assigned classes (use only classes array, ignore old class field)
   const allAssignedClasses = user.teacherProfile?.classes || [];
 
-  return (
+    return (
     <div className="teacher-overview" style={{ animation: "fadeIn 0.3s ease" }}>
 
+      {/* ── 2-column layout: left = main dashboard, right = small checklist sidebar ── */}
+      <div className="teacher-overview-grid" style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 20, alignItems: "start" }}>
 
-      {/* KPI Cards Section */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 16, marginBottom: 24 }}>
-        <TeacherStatCard icon="👥" label="Total Students" val={studentsCount} accent="#3b82f6" subtitle="Active" />
-        <TeacherStatCard icon="📊" label="Attendance" val={`${attendance}%`} accent={attColor} subtitle={attendance >= 85 ? "Great ✓" : attendance >= 70 ? "Keep it up" : "Needs attention"} />
-        <TeacherStatCard icon="🏆" label="Avg Grade" val={gradedAssignments.length ? `${averageScore}%` : "N/A"} accent="#8b5cf6" subtitle={gradedAssignments.length ? `${gradedAssignments.length} graded` : "No grades yet"} />
-        <TeacherStatCard icon="📜" label="Certificates" val={certificatesCount} accent="#06b6d4" subtitle="Earned" />
-        <TeacherStatCard icon="📋" label="Pending Tasks" val={pendingTasksCount} accent="#ef4444" subtitle={pendingTasksCount === 0 ? "All clear ✓" : "Awaiting submission"} />
+        {/* ── LEFT COLUMN: everything as before ── */}
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 16, marginBottom: 24 }}>
+            <TeacherStatCard icon="👥" label="Total Students" val={studentsCount} accent="#3b82f6" subtitle="Active" />
+            <TeacherStatCard icon="📊" label="Attendance" val={`${attendance}%`} accent={attColor} subtitle={attendance >= 85 ? "Great ✓" : attendance >= 70 ? "Keep it up" : "Needs attention"} />
+            <TeacherStatCard icon="🏆" label="Avg Grade" val={gradedAssignments.length ? `${averageScore}%` : "N/A"} accent="#8b5cf6" subtitle={gradedAssignments.length ? `${gradedAssignments.length} graded` : "No grades yet"} />
+            <TeacherStatCard icon="📜" label="Certificates" val={certificatesCount} accent="#06b6d4" subtitle="Earned" />
+            <TeacherStatCard icon="📋" label="Pending Tasks" val={pendingTasksCount} accent="#ef4444" subtitle={pendingTasksCount === 0 ? "All clear ✓" : "Awaiting submission"} />
+          </div>
+
+          <WeeklyScheduleTaskPlannerWidget user={user} lessons={lessons} assignments={assignments} courses={courses} setActiveTab={setActiveTab} />
+
+          <div className="teacher-support-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+            <MyAttendanceSummaryCard attendance={attendance} summary={summary} attendanceMap={summary.attendanceMap || {}} setActiveTab={setActiveTab} />
+
+            <div className="teacher-course-progress"><SectionCard title="Course Progress">
+              {courses.length === 0 ? (
+                <div style={{ padding: 20, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>No assigned courses yet.</div>
+              ) : (
+                featuredCourseProgress.map((c, i) => {
+                  const progress = c.progressPercent || 0;
+                  return (
+                    <div className="teacher-course-row" key={i} style={{ marginBottom: 14 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{c.course?.title?.split(" ").slice(0, 3).join(" ") || "Course"}...</span>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: "#f59e0b" }}>{progress}%</span>
+                      </div>
+                      <div className="teacher-progress-track" style={{ height: 6, background: "#f3f4f6", borderRadius: 4, overflow: "hidden", marginBottom: 2 }}>
+                        <div className="teacher-progress-fill" style={{ height: "100%", width: `${progress}%`, background: "linear-gradient(90deg,#f59e0b,#d97706)", borderRadius: 4 }} />
+                      </div>
+                      <div style={{ fontSize: 10, color: "#9ca3af" }}>{c.status || "Assigned"} · Due: {c.dueDate ? new Date(c.dueDate).toLocaleDateString() : "No deadline"}</div>
+                    </div>
+                  );
+                })
+              )}
+              <button onClick={() => setActiveTab("courses")} style={{ fontSize: 12, color: "#d97706", fontWeight: 700, background: "none", border: "none", cursor: "pointer", padding: 0, marginTop: 4 }}>View all courses →</button>
+            </SectionCard></div>
+          </div>
+        </div>
+
+        {/* ── RIGHT COLUMN: small sticky checklist sidebar ── */}
+        <div className="teacher-checklist-sidebar" style={{ position: "sticky", top: 16 }}>
+          {user.role === "fellow"
+            ? <FellowPDCAChecklistWidget />
+            : <TeacherMonthChecklistPanel user={user} />
+          }
+        </div>
+
       </div>
-
-      {/* ── Weekly Course Schedule & Task Planner Widget ── */}
-      <WeeklyScheduleTaskPlannerWidget
-        user={user}
-        lessons={lessons}
-        assignments={assignments}
-        courses={courses}
-        setActiveTab={setActiveTab}
-      />
-
-
-      <div className="teacher-support-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
-        <MyAttendanceSummaryCard attendance={attendance} summary={summary} attendanceMap={summary.attendanceMap || {}} setActiveTab={setActiveTab} />
-
-        <div className="teacher-course-progress"><SectionCard title="Course Progress">
-          {courses.length === 0 ? (
-            <div style={{ padding: 20, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>No assigned courses yet.</div>
-          ) : (
-            // Start: Dnyaneshwari Thorat
-            featuredCourseProgress.map((c, i) => {
-              // End: Dnyaneshwari Thorat
-              const progress = c.progressPercent || 0;
-              return (
-                <div className="teacher-course-row" key={i} style={{ marginBottom: 14 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{c.course?.title?.split(" ").slice(0, 3).join(" ") || "Course"}...</span>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: "#f59e0b" }}>{progress}%</span>
-                  </div>
-                  <div className="teacher-progress-track" style={{ height: 6, background: "#f3f4f6", borderRadius: 4, overflow: "hidden", marginBottom: 2 }}>
-                    <div className="teacher-progress-fill" style={{ height: "100%", width: `${progress}%`, background: "linear-gradient(90deg,#f59e0b,#d97706)", borderRadius: 4 }} />
-                  </div>
-                  <div style={{ fontSize: 10, color: "#9ca3af" }}>{c.status || "Assigned"} · Due: {c.dueDate ? new Date(c.dueDate).toLocaleDateString() : "No deadline"}</div>
-                </div>
-              );
-            })
-          )}
-          <button onClick={() => setActiveTab("courses")} style={{ fontSize: 12, color: "#d97706", fontWeight: 700, background: "none", border: "none", cursor: "pointer", padding: 0, marginTop: 4 }}>View all courses →</button>
-        </SectionCard></div>
-      </div>
-
     </div>
   );
 }

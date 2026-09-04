@@ -8,3 +8,13 @@ body {
   font-family: 'Segoe UI', 'Inter', -apple-system, sans-serif; 
   zoom: 1;
 }
+
+/* Teacher/Fellow dashboard: stack the checklist sidebar below content on narrow screens */
+@media (max-width: 900px) {
+  .teacher-overview-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .teacher-checklist-sidebar {
+    position: static !important;
+  }
+}

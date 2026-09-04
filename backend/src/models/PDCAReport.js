@@ -65,6 +65,14 @@ const pdcaReportSchema = new mongoose.Schema(
     status: { type: String, enum: ["draft", "approved"], default: "draft" },
     approvedAt: Date,
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+
+    // Option B — "Unlock Month": lets a mentor move an approved (locked)
+    // month back to draft so fresh activity/evidence can update it again.
+    // approvedAt/approvedBy are left as-is (last approval on record) and
+    // get overwritten the next time this month is approved again.
+    unlockedAt: Date,
+    unlockedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    unlockCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

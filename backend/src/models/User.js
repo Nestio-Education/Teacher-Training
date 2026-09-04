@@ -30,6 +30,10 @@ const userSchema = new mongoose.Schema(
       subject: String,
       experience: String,
       address: String,
+      // Month-1 anchor for PDCA auto-matching (Growth Cycle checklist).
+      // Set by mentor/admin when the fellow's field placement actually
+      // started. Falls back to account createdAt if left null.
+      fellowshipStartDate: { type: Date, default: null },
       performanceRating: { type: Number, default: 0 },
       completionRate: { type: Number, default: 0 },
       activityScore: { type: Number, default: 0 },
@@ -39,6 +43,7 @@ const userSchema = new mongoose.Schema(
       communityProfilingStatus: { type: String, enum: ["pending", "in_progress", "completed"], default: "pending" },
       communityImmersionStatus: { type: String, enum: ["pending", "in_progress", "completed"], default: "pending" },
       curriculumImplementationStatus: { type: String, enum: ["pending", "in_progress", "completed"], default: "pending" },
+      
     },
     mentorProfile: {
       center: { type: mongoose.Schema.Types.ObjectId, ref: "Center" },

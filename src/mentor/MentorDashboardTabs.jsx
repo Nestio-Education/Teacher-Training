@@ -1,8 +1,271 @@
 import PDCAGenerator from "./PDCAGenerator";
 import { useState, useEffect, useRef } from "react";
 import { S, SectionCard, Toast, StatCard, StatusBadge, SearchBar, Modal } from "../components/Shared";
-import { uploadFile, submitFeedback, getFeedbacks, updateMentorMe, changeMentorPassword, recordMenteeObservation, getMenteeObservations, submitCapstoneMilestone, getCapstoneSubmissions, submitPDCACycle, getPDCACycles, getMentorFellows, updateFellowStatus, getMentorMe, updateMenteeTracking, claimFellow, unclaimFellow, deleteMentorFellow, getMentorAttendance, getCourseAssignments } from "../services/api";
+import { uploadFile, submitFeedback, getFeedbacks, updateMentorMe, changeMentorPassword, recordMenteeObservation, getMenteeObservations, submitCapstoneMilestone, getCapstoneSubmissions, submitPDCACycle, getPDCACycles, getMentorFellows, updateFellowStatus, getMentorMe, updateMenteeTracking, claimFellow, unclaimFellow, deleteMentorFellow, getMentorAttendance, getCourseAssignments, getTeacherChecklist, mentorOverrideTeacherChecklist, getMentorFellowChecklist, mentorOverrideFellowChecklist } from "../services/api";
+/* ── Mentor: Teacher Month Checklist Override Panel ── */
+export function MentorTeacherChecklistPanel({ teacherId, setToast }) {
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year] = useState(now.getFullYear());
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
+  const fetchChecklist = () => {
+    if (!teacherId) return;
+    setLoading(true);
+    // Mentor calls teacher's checklist via a teacherId param
+    // We'll piggy-back on the same endpoint by passing the teacherId via query
+    fetch(`${API_BASE_URL}/api/teacher-tasks/checklist?month=${month}&year=${year}&teacherId=${teacherId}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("spaceece_auth_token")}` }
+    })
+      .then(r => r.json())
+      .then(res => { if (res?.items) setItems(res.items); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchChecklist(); }, [teacherId, month, year]);
+
+  const toggleOverride = (id) => {
+    setItems(prev => prev.map(item =>
+      item.id === id
+        ? { ...item, mentorOverride: !item.mentorOverride, met: !item.mentorOverride ? true : item.met }
+        : item
+    ));
+  };
+
+  const setNote = (id, note) => {
+    setItems(prev => prev.map(item => item.id === id ? { ...item, mentorNote: note } : item));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const token = localStorage.getItem("spaceece_auth_token");
+      const response = await fetch(`${API_BASE_URL}/api/teacher-tasks/checklist/mentor-override`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ teacherId, month, year, items }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.message || `Failed to save checklist (${response.status})`);
+      }
+
+      setToast?.({ msg: "✅ Checklist overrides saved!", type: "success" });
+      fetchChecklist();
+    } catch (err) {
+      setToast?.({ msg: err.message || "Failed to save", type: "error" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const ICONS = { activities:"📚", lesson_plans:"📝", courses:"🎓", assessments:"📊", pcb_sessions:"🏡" };
+  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+  return (
+    <div style={{ background: "#f8fafc", borderRadius: 12, border: "1.5px solid #e2e8f0", padding: 16, marginTop: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>📋 Task of the Month Checklist</div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <select
+            value={month}
+            onChange={e => setMonth(Number(e.target.value))}
+            style={{ fontSize: 11, fontWeight: 700, border: "1.5px solid #e2e8f0", borderRadius: 8, padding: "3px 6px", color: "#334155", background: "white" }}
+          >
+            {monthNames.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+          </select>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            style={{ fontSize: 11, fontWeight: 700, background: "#4f46e5", color: "white", border: "none", borderRadius: 8, padding: "5px 12px", cursor: "pointer", opacity: saving ? 0.6 : 1 }}
+          >
+            {saving ? "Saving..." : "💾 Save Overrides"}
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: 12 }}>Loading...</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {items.map(item => (
+            <div key={item.id} style={{
+              display: "flex", alignItems: "flex-start", gap: 10,
+              padding: "10px 12px", borderRadius: 10,
+              background: item.met ? "#f0fdf4" : "white",
+              border: `1.5px solid ${item.mentorOverride ? "#a78bfa" : item.met ? "#bbf7d0" : "#e2e8f0"}`,
+            }}>
+              <div style={{ paddingTop: 2 }}>
+                {/* Auto status */}
+                <div style={{ fontSize: 11, color: item.met ? "#16a34a" : "#94a3b8", fontWeight: 700 }}>
+                  {item.met ? "✅" : "⬜"} {ICONS[item.id]} {item.label}
+                  {!item.required && <span style={{ fontSize: 9, color: "#94a3b8", marginLeft: 4 }}>(optional)</span>}
+                </div>
+                <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 1 }}>
+                  Auto: {item.count}/{item.target} done
+                </div>
+              </div>
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+                {/* Override toggle */}
+                <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, fontWeight: 700, color: "#7c3aed" }}>
+                  <input
+                    type="checkbox"
+                    checked={item.mentorOverride || false}
+                    onChange={() => toggleOverride(item.id)}
+                    style={{ accentColor: "#7c3aed" }}
+                  />
+                  Mentor Override {item.mentorOverride ? "(mark as met)" : ""}
+                </label>
+                {item.mentorOverride && (
+                  <input
+                    type="text"
+                    value={item.mentorNote || ""}
+                    onChange={e => setNote(item.id, e.target.value)}
+                    placeholder="Add note (optional)..."
+                    style={{ fontSize: 11, border: "1px solid #ddd6fe", borderRadius: 6, padding: "4px 8px", outline: "none", width: "100%", boxSizing: "border-box" }}
+                  />
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Mentor: Fellow PDCA Checklist Override Panel ── */
+export function MentorFellowPDCAChecklistPanel({ fellowId, setToast }) {
+  const [month, setMonth] = useState(1);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [locked, setLocked] = useState(false);
+
+  const fetchChecklist = () => {
+    if (!fellowId) return;
+    setLoading(true);
+    getMentorFellowChecklist(fellowId, month)
+      .then(res => {
+        if (res?.deliverablesStatus) setItems(res.deliverablesStatus);
+        setLocked(!!res?.isApproved);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { fetchChecklist(); }, [fellowId, month]);
+
+  const toggleOverride = (id) => {
+    setItems(prev => prev.map(item =>
+      item.id === id
+        ? { ...item, mentorOverride: !item.mentorOverride, status: !item.mentorOverride ? "met" : item.status }
+        : item
+    ));
+  };
+
+  const setNote = (id, note) => {
+    setItems(prev => prev.map(item => item.id === id ? { ...item, note } : item));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await mentorOverrideFellowChecklist(fellowId, month, items);
+      setToast?.({ msg: "✅ PDCA checklist overrides saved!", type: "success" });
+      fetchChecklist();
+    } catch (err) {
+      setToast?.({ msg: err.message || "Failed to save", type: "error" });
+    } finally { setSaving(false); }
+  };
+
+  const monthOptions = Array.from({ length: 24 }, (_, i) => i + 1);
+
+  return (
+    <div style={{ background: "#f8fafc", borderRadius: 12, border: "1.5px solid #e2e8f0", padding: 16, marginTop: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>📈 PDCA Deliverables Checklist</div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <select
+            value={month}
+            onChange={e => setMonth(Number(e.target.value))}
+            style={{ fontSize: 11, fontWeight: 700, border: "1.5px solid #e2e8f0", borderRadius: 8, padding: "3px 6px", color: "#334155", background: "white" }}
+          >
+            {monthOptions.map(m => <option key={m} value={m}>Month {m}</option>)}
+          </select>
+          <button
+            onClick={handleSave}
+            disabled={saving || locked}
+            style={{ fontSize: 11, fontWeight: 700, background: locked ? "#cbd5e1" : "#4f46e5", color: "white", border: "none", borderRadius: 8, padding: "5px 12px", cursor: locked ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}
+          >
+            {saving ? "Saving..." : "💾 Save Overrides"}
+          </button>
+        </div>
+      </div>
+
+      {locked && (
+        <div style={{ fontSize: 11, color: "#a16207", background: "#fef9c3", border: "1px solid #fde047", borderRadius: 8, padding: "6px 10px", marginBottom: 10 }}>
+          🔒 This month is approved and locked. Unlock it from the PDCA Generator to edit the checklist.
+        </div>
+      )}
+
+      {loading ? (
+        <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: 12 }}>Loading...</div>
+      ) : items.length === 0 ? (
+        <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: 12 }}>No deliverables for this month.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {items.map(item => (
+            <div key={item.id} style={{
+              display: "flex", alignItems: "flex-start", gap: 10,
+              padding: "10px 12px", borderRadius: 10,
+              background: item.status === "met" ? "#f0fdf4" : "white",
+              border: `1.5px solid ${item.mentorOverride ? "#a78bfa" : item.status === "met" ? "#bbf7d0" : "#e2e8f0"}`,
+            }}>
+              <div style={{ paddingTop: 2 }}>
+                <div style={{ fontSize: 11, color: item.status === "met" ? "#16a34a" : "#94a3b8", fontWeight: 700 }}>
+                  {item.status === "met" ? "✅" : item.status === "needs_mentor_review" ? "🟡" : "⬜"} {item.label}
+                </div>
+                <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 1 }}>
+                  Auto: {item.count || 0}/{item.targetCount || 1} done
+                </div>
+              </div>
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: locked ? "not-allowed" : "pointer", fontSize: 11, fontWeight: 700, color: "#7c3aed" }}>
+                  <input
+                    type="checkbox"
+                    checked={item.mentorOverride || false}
+                    disabled={locked}
+                    onChange={() => toggleOverride(item.id)}
+                    style={{ accentColor: "#7c3aed" }}
+                  />
+                  Mentor Override {item.mentorOverride ? "(mark as met)" : ""}
+                </label>
+                {item.mentorOverride && (
+                  <input
+                    type="text"
+                    value={item.note || ""}
+                    disabled={locked}
+                    onChange={e => setNote(item.id, e.target.value)}
+                    placeholder="Add note (optional)..."
+                    style={{ fontSize: 11, border: "1px solid #ddd6fe", borderRadius: 6, padding: "4px 8px", outline: "none", width: "100%", boxSizing: "border-box" }}
+                  />
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 const getMentorPhotoUrl = (user) => {
@@ -916,24 +1179,36 @@ export function MenteeManagementTab({ user, setToast, onUserUpdate }) {
                   </div>
                 </div>
 
-                {/* 2. Checklist */}
+                                {/* 2. Checklist */}
                 <div style={{ background: "#f1f5f9", padding: 16, borderRadius: 10, display: "flex", flexDirection: "column", gap: 10, flex: "2 1 350px" }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", borderBottom: "1px solid #cbd5e1", paddingBottom: 6 }}>📋 Mentor Tracking Checklist</div>
-                  
+                  {/* ── Task of the Month (teacher) or PDCA Deliverables (fellow) — auto-computed + mentor override ── */}
+                  {mentee.role === "fellow" ? (
+                    <MentorFellowPDCAChecklistPanel
+                      fellowId={mentee._id}
+                      setToast={setToast}
+                    />
+                  ) : (
+                    <MentorTeacherChecklistPanel
+                      teacherId={mentee._id}
+                      setToast={setToast}
+                    />
+                  )}
+
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
                     <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>1. Community Profiling</span>
-                    <select 
-                      value={mentee.teacherProfile?.communityProfilingStatus || "pending"} 
+                    <select
+                      value={mentee.teacherProfile?.communityProfilingStatus || "pending"}
                       onChange={async (e) => {
                         const newVal = e.target.value;
                         // Optimistic UI Update
-                        const updatedMentees = mentees.map(m => 
-                          (m._id || m.id) === mentee._id 
-                            ? { ...m, teacherProfile: { ...m.teacherProfile, communityProfilingStatus: newVal } } 
+                        const updatedMentees = mentees.map(m =>
+                          (m._id || m.id) === mentee._id
+                            ? { ...m, teacherProfile: { ...m.teacherProfile, communityProfilingStatus: newVal } }
                             : m
                         );
                         onUserUpdate({ ...user, mentorProfile: { ...user.mentorProfile, assignedTeachers: updatedMentees } });
-                        
+
                         try {
                           await updateMenteeTracking(mentee._id, { communityProfilingStatus: newVal });
                           setToast?.({ msg: "Community Profiling status updated!", type: "success" });
@@ -953,14 +1228,14 @@ export function MenteeManagementTab({ user, setToast, onUserUpdate }) {
 
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
                     <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>2. Community Immersion</span>
-                    <select 
-                      value={mentee.teacherProfile?.communityImmersionStatus || "pending"} 
+                    <select
+                      value={mentee.teacherProfile?.communityImmersionStatus || "pending"}
                       onChange={async (e) => {
                         const newVal = e.target.value;
                         // Optimistic UI Update
-                        const updatedMentees = mentees.map(m => 
-                          (m._id || m.id) === mentee._id 
-                            ? { ...m, teacherProfile: { ...m.teacherProfile, communityImmersionStatus: newVal } } 
+                        const updatedMentees = mentees.map(m =>
+                          (m._id || m.id) === mentee._id
+                            ? { ...m, teacherProfile: { ...m.teacherProfile, communityImmersionStatus: newVal } }
                             : m
                         );
                         onUserUpdate({ ...user, mentorProfile: { ...user.mentorProfile, assignedTeachers: updatedMentees } });
@@ -984,14 +1259,14 @@ export function MenteeManagementTab({ user, setToast, onUserUpdate }) {
 
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
                     <span style={{ fontSize: 12, fontWeight: 600, color: "#475569" }}>3. Daily Curriculum Implementation</span>
-                    <select 
-                      value={mentee.teacherProfile?.curriculumImplementationStatus || "pending"} 
+                    <select
+                      value={mentee.teacherProfile?.curriculumImplementationStatus || "pending"}
                       onChange={async (e) => {
                         const newVal = e.target.value;
                         // Optimistic UI Update
-                        const updatedMentees = mentees.map(m => 
-                          (m._id || m.id) === mentee._id 
-                            ? { ...m, teacherProfile: { ...m.teacherProfile, curriculumImplementationStatus: newVal } } 
+                        const updatedMentees = mentees.map(m =>
+                          (m._id || m.id) === mentee._id
+                            ? { ...m, teacherProfile: { ...m.teacherProfile, curriculumImplementationStatus: newVal } }
                             : m
                         );
                         onUserUpdate({ ...user, mentorProfile: { ...user.mentorProfile, assignedTeachers: updatedMentees } });

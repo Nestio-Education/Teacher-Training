@@ -1626,6 +1626,15 @@ export function getMentorPDCAReports() {
   return request("/api/pdca/mentor/reports");
 }
 
+// Mentor unlocks an approved (locked) month back to draft so the fellow's
+// checklist and the mentor's PDCA text can be edited again.
+export function unlockPDCAReport(fellowId, month = 1) {
+  return request(`/api/pdca/${fellowId}/unlock`, {
+    method: "POST",
+    body: JSON.stringify({ month }),
+  });
+}
+
 // ── Fellow PDCA Growth Cycle Checklist & Progress ──
 export function getFellowPDCAProgress() {
   return request("/api/pdca/fellow/progress");
@@ -1778,5 +1787,30 @@ export function duplicateAdminQuiz(id) {
 export function toggleAdminQuizPublish(id) {
   return request(`/api/admin/quizzes/${id}/toggle-publish`, {
     method: "PATCH"
+  });
+}
+
+
+// ── Teacher Monthly Checklist ──
+export function getTeacherChecklist(month, year) {
+  return request(`/api/teacher-tasks/checklist?month=${month}&year=${year}`);
+}
+
+export function mentorOverrideTeacherChecklist({ teacherId, month, year, items }) {
+  return request("/api/teacher-tasks/checklist/mentor-override", {
+    method: "PATCH",
+    body: JSON.stringify({ teacherId, month, year, items }),
+  });
+}
+
+// ── Mentor: Fellow's PDCA Checklist (view + override) ──
+export function getMentorFellowChecklist(fellowId, month) {
+  return request(`/api/pdca/mentor/${fellowId}/checklist/${month}`);
+}
+
+export function mentorOverrideFellowChecklist(fellowId, month, deliverablesStatus) {
+  return request(`/api/pdca/mentor/${fellowId}/checklist/${month}`, {
+    method: "PATCH",
+    body: JSON.stringify({ deliverablesStatus }),
   });
 }

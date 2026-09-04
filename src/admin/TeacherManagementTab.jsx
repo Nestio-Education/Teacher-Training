@@ -3,6 +3,7 @@ import { AttendanceBar, Modal, S, SearchBar, SectionCard, StatCard, StatusBadge,
 import { getAdminTeachers, updateTeacherStatus, updateTeacherProfile, registerTeacher, getCenters, getClasses, sendDirectMessageToTeacher, blockTeacher, unblockTeacher, deleteTeacher, assignTeacherTaskByAdmin, getMentorFellows, claimFellow, unclaimFellow, updateFellowStatus, deleteMentorFellow } from "../services/api";
 import { t } from "../services/i18n";
 import MentorManagementTab from "../mentor/MentorManagementTab";
+import { MentorTeacherChecklistPanel, MentorFellowPDCAChecklistPanel } from "../mentor/MentorDashboardTabs";
 
 // Reuse same base URL pattern as ActivityMonitoringTab
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
@@ -70,8 +71,13 @@ const mapTeacherFromApi = (tr) => ({
   dob: tr.teacherProfile?.dob ? new Date(tr.teacherProfile.dob).toLocaleDateString("en-IN") : "",
   gender: tr.teacherProfile?.gender || "",
   languages: tr.teacherProfile?.languages || [],
+  // Month-1 anchor for the PDCA Growth Cycle auto-matching. Kept as a
+  // plain yyyy-mm-dd string so it drops straight into an <input type="date">.
+    fellowshipStartDate: tr.teacherProfile?.fellowshipStartDate
+    ? new Date(tr.teacherProfile.fellowshipStartDate).toISOString().slice(0, 10)
+    : "",
+  role: tr.role || "teacher",
 });
-
 /* ─── Reusable teacher avatar with graceful fallback ─── */
 function TeacherAvatar({ teacher, size = 34, borderColor = "#e2e8f0", borderWidth = 1 }) {
   const [src, setSrc] = useState(avatarSrc(teacher));
@@ -209,6 +215,7 @@ function EditTeacherModal({ teacher, onSave, onClose, setToast }) {
     qualification: teacher.qualification || "",
     experience: teacher.experience || "",
     address: teacher.address || "",
+    fellowshipStartDate: teacher.fellowshipStartDate || "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -229,6 +236,7 @@ function EditTeacherModal({ teacher, onSave, onClose, setToast }) {
           qualification: form.qualification,
           experience: form.experience,
           address: form.address,
+          ...(form.fellowshipStartDate ? { fellowshipStartDate: form.fellowshipStartDate } : {}),
         },
       });
       setToast({ msg: "Teacher profile updated!", type: "success" });
@@ -276,6 +284,18 @@ function EditTeacherModal({ teacher, onSave, onClose, setToast }) {
             <select style={S.input} value={form.experience} onChange={e => setForm({ ...form, experience: e.target.value })}>
               {["", "Fresher", "1-2 yrs", "3-5 yrs", "5-10 yrs", "10+ yrs"].map(o => <option key={o} value={o}>{o || "Select..."}</option>)}
             </select>
+          </div>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <label style={S.label}>Fellowship Start Date</label>
+          <input
+            style={S.input}
+            type="date"
+            value={form.fellowshipStartDate}
+            onChange={e => setForm({ ...form, fellowshipStartDate: e.target.value })}
+          />
+          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
+            Month-1 anchor for this fellow's PDCA Growth Cycle roadmap. Leave blank to keep using their account signup date.
           </div>
         </div>
         <div style={{ marginTop: 12 }}>
@@ -375,7 +395,7 @@ function ChangeCenterModal({ teacher, centers = [], classes = [], onSave, onClos
 }
 
 /* ── Teacher Full Profile View ── */
-function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpdate, setToast }) {
+function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpdate, setToast, isMentorView = false }) {
   const [activeSection, setActiveSection] = useState("overview");
   const [showReject, setShowReject] = useState(false);
   const [showBlock, setShowBlock] = useState(false);
@@ -550,9 +570,9 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
         ))}
       </div>
 
-      {/* Tabs */}
+            {/* Tabs */}
       <div style={{ display: "flex", gap: 10, borderBottom: "1px solid #e5e7eb", marginBottom: 20 }}>
-        {["overview", "activity"].map(sec => (
+        {["overview", "activity", ...(isMentorView ? ["checklist"] : [])].map(sec => (
           <button key={sec} onClick={() => setActiveSection(sec)}
             style={{
               padding: "10px 16px", background: "none", border: "none",
@@ -560,7 +580,7 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
               color: activeSection === sec ? "#d97706" : "#6b7280",
               fontSize: 13, fontWeight: 700, cursor: "pointer", textTransform: "capitalize"
             }}>
-            {sec}
+            {sec === "checklist" ? "📋 Checklist" : sec}
           </button>
         ))}
       </div>
@@ -650,6 +670,16 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
               </div>
             </div>
           ))}
+        </SectionCard>
+      )}
+
+      {activeSection === "checklist" && isMentorView && (
+        <SectionCard title={teacher.role === "fellow" ? "📈 PDCA Deliverables Checklist" : "📋 Task of the Month Checklist"}>
+          {teacher.role === "fellow" ? (
+            <MentorFellowPDCAChecklistPanel fellowId={teacher.id} setToast={setToast} />
+          ) : (
+            <MentorTeacherChecklistPanel teacherId={teacher.id} setToast={setToast} />
+          )}
         </SectionCard>
       )}
     </div>
@@ -760,7 +790,7 @@ export function TeacherManagementList({ setToast, role = "admin", user = null, o
     </div>
   );
 
-  if (selected) {
+    if (selected) {
     return (
       <TeacherProfileView
         teacher={teachers.find(t => t.id === selected.id) || selected}
@@ -769,6 +799,7 @@ export function TeacherManagementList({ setToast, role = "admin", user = null, o
         onBack={() => { setSelected(null); loadData(); }}
         onUpdate={loadData}
         setToast={showToast}
+        isMentorView={isMentorView}
       />
     );
   }
