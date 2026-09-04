@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { AttendanceBar, Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
-import { getAdminTeachers, updateTeacherStatus, updateTeacherProfile, registerTeacher, getCenters, getClasses, sendDirectMessageToTeacher, blockTeacher, unblockTeacher, deleteTeacher, assignTeacherTaskByAdmin, getMentorFellows, claimFellow, unclaimFellow, updateFellowStatus, deleteMentorFellow } from "../services/api";
+import { AttendanceBar, ExportMonthModal, Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
+import { getAdminTeachers, updateTeacherStatus, updateTeacherProfile, registerTeacher, getCenters, getClasses, sendDirectMessageToTeacher, blockTeacher, unblockTeacher, deleteTeacher, assignTeacherTaskByAdmin, getMentorFellows, claimFellow, unclaimFellow, updateFellowStatus, deleteMentorFellow, exportActivitySubmissions } from "../services/api";
 import { t } from "../services/i18n";
 import MentorManagementTab from "../mentor/MentorManagementTab";
 
@@ -423,12 +423,14 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
       .catch(err => setToast({ msg: err.message, type: "error" }));
 
   const [showAssignTask, setShowAssignTask] = useState(false);
+  const [showExport, setShowExport] = useState(false);
 
   const quickActions = [
     { icon: "📌", label: "Assign Task", onClick: () => setShowAssignTask(true), color: "#059669", bg: "#d1fae5" },
     { icon: "💬", label: "Send Message", onClick: () => setShowMsg(true), color: "#8b5cf6", bg: "#ede9fe" },
     { icon: "🏫", label: "Change Center", onClick: () => setShowCourses(true), color: "#f59e0b", bg: "#fef3c7" },
     { icon: "✏️", label: "Edit Profile", onClick: () => setShowEdit(true), color: "#2563eb", bg: "#dbeafe" },
+    { icon: "📊", label: "Export Report", onClick: () => setShowExport(true), color: "#0891b2", bg: "#cffafe" },
   ];
 
   return (
@@ -439,6 +441,19 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
       {showCourses && <ChangeCenterModal teacher={teacher} centers={centers} classes={classes} onClose={() => setShowCourses(false)} onSave={doChangeCenter} />}
       {showEdit && <EditTeacherModal teacher={teacher} onClose={() => setShowEdit(false)} onSave={() => { onUpdate(); }} setToast={setToast} />}
       {showAssignTask && <AssignTaskModal teacher={teacher} onClose={() => setShowAssignTask(false)} setToast={setToast} />}
+      {showExport && (
+        <ExportMonthModal
+          title={`Export — ${teacher.name}`}
+          subtitle="Downloads every activity, lesson, field visit, and PCB session this teacher reported for the selected month."
+          onClose={() => setShowExport(false)}
+          setToast={setToast}
+          onExport={(month) => exportActivitySubmissions({
+            teacherId: teacher.id,
+            month,
+            filenameHint: `${teacher.name.replace(/[^a-z0-9]+/gi, "-")}-${month}.xlsx`
+          })}
+        />
+      )}
 
       {/* NEW: full-size photo lightbox */}
       {photoLightbox && teacher.photoUrl && (

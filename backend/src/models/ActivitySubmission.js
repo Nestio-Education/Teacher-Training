@@ -14,6 +14,9 @@ const activitySubmissionSchema = new mongoose.Schema(
     duration: { type: String },
     level: { type: String },
     type: { type: String },
+    itemType: { type: String, enum: ["activity", "lesson", "task"], default: "activity", index: true },
+    taskCategory: { type: String }, // e.g. "field_visit", "pcb_session" — only set when itemType === "task"
+    sourceTeacherTask: { type: mongoose.Schema.Types.ObjectId, ref: "TeacherTask", index: true },
     ageGroup: { type: String },
     milestone: String,
     developmentalDomain: [String],

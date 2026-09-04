@@ -7,8 +7,9 @@ import {
   getFellowAssignedTasks,
   submitTaskEvidence,
   getTeacherTasks,
+  toggleTeacherTask,
 } from "../services/api";
-import UniversalActivityReportModal from "../components/UniversalActivityReportModal";
+import { MarkCompleteModal } from "./TrainingAndClassroomManager";
 import { MONTH_TITLES, SEMESTER_LABELS, semesterOf } from "../mentor/monthMeta";
 import { MONTH_CURRICULA } from "../mentor/monthCurricula";
 
@@ -933,12 +934,17 @@ export default function FellowGrowthCycleTab({ user, setToast }) {
         </div>
 
         {visitReportTask && (
-          <UniversalActivityReportModal
-            task={visitReportTask}
-            onClose={() => setVisitReportTask(null)}
-            onSubmitSuccess={(taskId) => {
+          <MarkCompleteModal
+            activity={visitReportTask}
+            itemType="task"
+            user={user}
+            onSubmit={() => {
+              const taskId = visitReportTask.id;
+              toggleTeacherTask(taskId).catch(err => console.warn("[FellowGrowthCycleTab] Toggle task failed:", err?.message));
               setVisitTasks(prev => prev.map(t => (t._id || t.id) === taskId ? { ...t, completed: true } : t));
+              setVisitReportTask(null);
             }}
+            onClose={() => setVisitReportTask(null)}
           />
         )}
 

@@ -127,6 +127,9 @@ router.post("/activities/:activityId/complete", requireAuth, async (req, res) =>
     if (!payload.mentor || payload.mentor === "" || !mongoose.Types.ObjectId.isValid(payload.mentor)) {
       delete payload.mentor;
     }
+    if (!payload.sourceTeacherTask || !mongoose.Types.ObjectId.isValid(payload.sourceTeacherTask)) {
+      delete payload.sourceTeacherTask;
+    }
 
     // Clean up flaggedChildren ObjectIds if custom child name typed
     if (Array.isArray(payload.flaggedChildren)) {

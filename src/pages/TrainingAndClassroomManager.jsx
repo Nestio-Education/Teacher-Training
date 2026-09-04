@@ -641,6 +641,9 @@ export function MarkCompleteModal({ activity, itemType = "activity", user, onSub
         activityDate: new Date().toISOString(),
         activityBank: itemType === "activity" ? (activity._id || activity.id) : undefined,
         lessonPlan: itemType === "lesson" ? (activity.lessonPlan?._id || activity.lessonPlan?.id) : undefined,
+        itemType,
+        taskCategory: itemType === "task" ? activity.category : undefined,
+        sourceTeacherTask: itemType === "task" ? (activity._id || activity.id) : undefined,
         activityName: activity.activityName || activity.title || activity.lessonPlan?.title,
         duration: activity.duration || activity.lessonPlan?.duration,
         level: activity.level,
@@ -1633,7 +1636,7 @@ export default function TrainingAndClassroomManager({ user }) {
       return;
     }
     try {
-      console.log("Deleting activity:", id, activity);
+      // Deleting activity
       await deleteActivity(id);
       setToast({ msg: `"${name}" deleted successfully.`, type: "success" });
       loadData();
