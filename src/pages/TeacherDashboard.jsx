@@ -1,5 +1,13 @@
 import { useState, useEffect, useRef } from "react";
-import { ACTIVITY_CATEGORIES } from "../components/UniversalActivityReportModal";
+
+export const ACTIVITY_CATEGORIES = {
+  class_lesson:      { label: "Class Lesson",       icon: "📖", bg: "#dbeafe", border: "#3b82f6", color: "#1e3a8a" },
+  field_visit:       { label: "Field Visit",         icon: "🏕️", bg: "#d1fae5", border: "#10b981", color: "#065f46" },
+  pcb_session:       { label: "PCB Session",         icon: "🧪", bg: "#fce7f3", border: "#ec4899", color: "#831843" },
+  pdca_deliverable:  { label: "PDCA Deliverable",    icon: "📈", bg: "#ede9fe", border: "#8b5cf6", color: "#4c1d95" },
+  self_learning:     { label: "Self-Learning",        icon: "🧠", bg: "#fef3c7", border: "#f59e0b", color: "#92400e" },
+  custom_task:       { label: "Custom Task",          icon: "📝", bg: "#f1f5f9", border: "#64748b", color: "#1e293b" },
+};
 import EditClassAssessmentModal from "../components/EditClassAssessmentModal";
 import { Logo, Toast, Badge, StatusBadge, StatCard, SectionCard, S, globalCSS } from "../components/Shared";
 import { t, setLanguage, getLanguageList, getCurrentLanguage, LANG_CHANGE_EVENT } from "../services/i18n";
