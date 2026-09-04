@@ -1,8 +1,8 @@
 // CenterManagementTab.jsx
 import { t } from "../services/i18n";
 import { useState, useEffect } from "react";
-import { Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
-import { getCenters, createCenter, updateCenter, deleteCenter, getAdminTeachers, updateTeacherProfile, getClasses, createClass, updateClass, deleteClass, getClassLogs, getCenterTeacherAssignments, validateCenterAssignments, getAdminMentors } from "../services/api";
+import { ExportMonthModal, Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
+import { getCenters, createCenter, updateCenter, deleteCenter, getAdminTeachers, updateTeacherProfile, getClasses, createClass, updateClass, deleteClass, getClassLogs, getCenterTeacherAssignments, validateCenterAssignments, getAdminMentors, exportActivitySubmissions, exportAllCentersActivitySubmissions } from "../services/api";
 import EditClassAssessmentModal from "../components/EditClassAssessmentModal";
 
 const mapCenterFromApi = (c) => ({
@@ -780,6 +780,7 @@ function CenterFormModal({ center, allTeachers = [], onSave, onClose, setToast }
 function CenterDetailModal({ center, allTeachers = [], onClose, setToast }) {
   const [assignments, setAssignments] = useState([]);
   const [loadingAssignments, setLoadingAssignments] = useState(true);
+  const [showExport, setShowExport] = useState(false);
 
   useEffect(() => {
     loadAssignments();
@@ -813,12 +814,34 @@ function CenterDetailModal({ center, allTeachers = [], onClose, setToast }) {
 
   return (
     <Modal title={`🏫 ${center.name}`} onClose={onClose}>
-      <div style={{ display: "flex", gap: 10, marginBottom: 14, alignItems: "center" }}>
-        <StatusBadge status={center.status} />
-        <span style={{ fontSize: 12, color: "#9ca3af" }}>
-          📍 {center.city}{center.pincode ? ` · ${center.pincode}` : ""}
-        </span>
+      <div style={{ display: "flex", gap: 10, marginBottom: 14, alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <StatusBadge status={center.status} />
+          <span style={{ fontSize: 12, color: "#9ca3af" }}>
+            📍 {center.city}{center.pincode ? ` · ${center.pincode}` : ""}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowExport(true)}
+          style={{ ...S.exportBtn, color: "#0891b2", borderColor: "#67e8f9" }}
+        >
+          📊 Export Month
+        </button>
       </div>
+      {showExport && (
+        <ExportMonthModal
+          title={`Export — ${center.name}`}
+          subtitle="Downloads every activity, lesson, field visit, and PCB session reported by this center's teachers for the selected month."
+          onClose={() => setShowExport(false)}
+          setToast={setToast}
+          onExport={(month) => exportActivitySubmissions({
+            centerId: center.id,
+            month,
+            filenameHint: `${center.name.replace(/[^a-z0-9]+/gi, "-")}-${month}.xlsx`
+          })}
+        />
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
         {[
@@ -1930,6 +1953,7 @@ export default function CenterManagementTab({ setToast }) {
   const [centerAssignments, setCenterAssignments] = useState({});
   const [loading, setLoading]         = useState(true);
   const [toast, setLocalToast]        = useState({ msg: "", type: "" });
+  const [showAllCentersExport, setShowAllCentersExport] = useState(false);
 
   const showToast = setToast || setLocalToast;
 
@@ -2117,6 +2141,18 @@ export default function CenterManagementTab({ setToast }) {
           setToast={showToast}
         />
       )}
+      {showAllCentersExport && (
+        <ExportMonthModal
+          title="Export All Centers"
+          subtitle="Downloads one Excel workbook with an Overview sheet plus a dedicated sheet per center for the selected month."
+          onClose={() => setShowAllCentersExport(false)}
+          setToast={showToast}
+          onExport={(month) => exportAllCentersActivitySubmissions({
+            month,
+            filenameHint: `all-centers-${month}.xlsx`
+          })}
+        />
+      )}
 
       {/* ── Header — orange gradient (matches ActivityMonitoringTab amber palette) ── */}
       <div style={{
@@ -2134,6 +2170,9 @@ export default function CenterManagementTab({ setToast }) {
             </p>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setShowAllCentersExport(true)} style={{ ...S.primaryBtn, whiteSpace: "nowrap", background: "rgba(255,255,255,0.15)", border: "1.5px solid rgba(255,255,255,0.35)", color: "white", padding: "14px 22px", fontSize: 13, borderRadius: 14, fontWeight: 700 }}>
+              📊 Export All Centers
+            </button>
             <button onClick={openAdd} style={{ ...S.primaryBtn, whiteSpace: "nowrap", background: "#f59e0b", border: "1.5px solid rgba(255,255,255,0.35)", color: "white", padding: "14px 28px", fontSize: 15, borderRadius: 14, fontWeight: 700 }}>
               + Add Center
             </button>

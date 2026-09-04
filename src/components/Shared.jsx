@@ -1,5 +1,5 @@
 import { t } from "../services/i18n";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import logo from "../assets/logo.png";
 
 /* ── Logo ── */
@@ -162,6 +162,63 @@ export function Modal({ title, onClose, children, width = 520 }) {
         {children}
       </div>
     </div>
+  );
+}
+
+/* ── Export Month Modal (month picker → triggers an async xlsx download) ── */
+export function ExportMonthModal({ title = "Export Monthly Report", subtitle, onClose, onExport, setToast }) {
+  const now = new Date();
+  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const [month, setMonth] = useState(defaultMonth);
+  const [exporting, setExporting] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleExport = async () => {
+    setExporting(true);
+    setError("");
+    try {
+      await onExport(month);
+      if (setToast) setToast({ msg: "Export ready — check your downloads.", type: "success" });
+      onClose();
+    } catch (err) {
+      setError(err.message || "Failed to export report.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return (
+    <Modal title={`📊 ${title}`} onClose={onClose} width={380}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {subtitle && <div style={{ fontSize: 12, color: "#64748b" }}>{subtitle}</div>}
+        {error && (
+          <div style={{ padding: "8px 12px", background: "#fef2f2", color: "#991b1b", borderRadius: 8, fontSize: 12 }}>
+            {error}
+          </div>
+        )}
+        <div>
+          <label style={{ ...S.label, marginBottom: 6, display: "block" }}>Month</label>
+          <input
+            type="month"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            style={{ ...S.input, height: 38, fontSize: 13 }}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={exporting}
+          style={{
+            padding: "10px 16px", borderRadius: 10, border: "none",
+            background: exporting ? "#94a3b8" : "#0f172a", color: "white",
+            fontSize: 13, fontWeight: 800, cursor: exporting ? "not-allowed" : "pointer"
+          }}
+        >
+          {exporting ? "⏳ Generating..." : "📥 Download Excel"}
+        </button>
+      </div>
+    </Modal>
   );
 }
 
