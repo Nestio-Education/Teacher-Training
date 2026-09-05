@@ -231,11 +231,31 @@ Do not include dates; scheduling is handled separately.`;
 
 export async function generateAIActivityPool({ type, level, topic, activitiesPerDay, durationWeeks }) {
   const userPrompt = `Activity type: ${type}\nLevel: ${level}\nStarting topic: ${topic}\nActivities per day: ${activitiesPerDay}\nDuration weeks: ${durationWeeks}`;
-  const raw = await callGroq({ systemPrompt: SCHEDULE_SYSTEM_PROMPT, userPrompt, temperature: 0.5 });
+  const raw = await callGroq({
+    model: process.env.GROQ_SCHEDULE_MODEL || process.env.GROQ_MODEL || "openai/gpt-oss-20b",
+    systemPrompt: SCHEDULE_SYSTEM_PROMPT,
+    userPrompt,
+    temperature: 0.2,
+    responseFormat: { type: "json_object" },
+  });
   const cleaned = stripCodeFences(raw);
-  const parsed = JSON.parse(cleaned);
+  const jsonStart = cleaned.indexOf("{");
+  const jsonEnd = cleaned.lastIndexOf("}");
+  if (jsonStart < 0 || jsonEnd < jsonStart) {
+    throw new Error("Groq returned no JSON object for the activity schedule.");
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1));
+  } catch (error) {
+    const parseError = new Error(`Groq returned invalid activity schedule JSON: ${error.message}`);
+    parseError.status = 502;
+    throw parseError;
+  }
   if (!parsed || !Array.isArray(parsed.activities) || parsed.activities.length === 0) {
-    throw new Error("Invalid activity schedule JSON from Groq.");
+    const shapeError = new Error("Groq returned an activity schedule without activities.");
+    shapeError.status = 502;
+    throw shapeError;
   }
   return parsed.activities;
 }

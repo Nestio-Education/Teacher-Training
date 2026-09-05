@@ -404,11 +404,7 @@ export default function MentorCurriculumTab({ user, setToast }) {
           {/* Header & Title */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", background: "#f1f5f9", color: "#475569", padding: "2px 8px", borderRadius: 4, border: "1px solid #e2e8f0" }}>
-                  Mentor Workspace
-                </span>
-              </div>
+             
               <h1 style={{ fontSize: 24, fontWeight: 800, color: "#0f172a", margin: 0, letterSpacing: "-0.5px" }}>Curriculum Management</h1>
               <p style={{ fontSize: 13, color: "#64748b", margin: "4px 0 0" }}>Build, publish, and assign multi-semester training frameworks for your fellows.</p>
             </div>
