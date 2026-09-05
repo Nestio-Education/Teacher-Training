@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import UniversalActivityReportModal, { ACTIVITY_CATEGORIES } from "../components/UniversalActivityReportModal";
+export { ACTIVITY_CATEGORIES };
 import EditClassAssessmentModal from "../components/EditClassAssessmentModal";
-import { Logo, Toast, Badge, StatusBadge, StatCard, SectionCard, S, globalCSS } from "../components/Shared";
+import { Modal, Logo, Toast, Badge, StatusBadge, StatCard, SectionCard, S, globalCSS } from "../components/Shared";
 import { t, setLanguage, getLanguageList, getCurrentLanguage, LANG_CHANGE_EVENT } from "../services/i18n";
 // Start: Snehal change
 import { updateTeacherNotificationPreference, getParentModules, getParentSessionAssignments, submitParentSessionFeedback } from "../services/api";
@@ -42,7 +43,10 @@ import {
   deleteTeacherTask,
   getTeacherAttendance,
   getFellowAssignedTasks,
-  submitTaskEvidence
+    submitTaskEvidence,
+  getTeacherChecklist,
+  getFellowPDCAProgress,
+  getFellowPDCAMonth
 } from "../services/api";
 // Start: Dnyaneshwari Thorat
 import { downloadCertificatePdf, viewCertificatePdf } from "../services/api";
@@ -295,9 +299,8 @@ function MentorTaskEvidenceModal({ task, onClose, onSubmitSuccess }) {
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200 }}>
-      <div style={{ background: "white", borderRadius: 16, padding: 24, width: 480, maxWidth: "92vw" }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: "#0f172a", marginBottom: 4 }}>👨🏫 {task.title}</div>
+    <Modal title={`👨🏫 ${task.title}`} onClose={onClose} width={480}>
+      <div>
         {task.description && (
           <div style={{ fontSize: 12.5, color: "#64748b", marginBottom: 14, lineHeight: 1.5 }}>{task.description}</div>
         )}
@@ -334,7 +337,7 @@ function MentorTaskEvidenceModal({ task, onClose, onSubmitSuccess }) {
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -345,8 +348,9 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportTask, setReportTask] = useState(null);
+  const [completedOverrideMap, setCompletedOverrideMap] = useState({});
 
-  const HIDDEN_CALENDAR_CATEGORIES = ["pcb_session", "pdca_deliverable"];
+  const HIDDEN_CALENDAR_CATEGORIES = ["pdca_deliverable"];
 
   const storageKey = `teacher_custom_tasks_${user?._id || user?.id || 'default'}`;
   const [customTasks, setCustomTasks] = useState(() => {
@@ -411,6 +415,13 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
   const [taskStartTime, setTaskStartTime] = useState("11:30");
   const [taskEndTime, setTaskEndTime] = useState("12:30");
   const [formError, setFormError] = useState("");
+  // Optional activity detail fields
+  const [showMoreDetails, setShowMoreDetails] = useState(false);
+  const [taskAgeGroup, setTaskAgeGroup] = useState("");
+  const [taskTopic, setTaskTopic] = useState("");
+  const [taskHowToConduct, setTaskHowToConduct] = useState("");
+  const [taskMaterials, setTaskMaterials] = useState("");
+  const [taskObjective, setTaskObjective] = useState("");
 
   const openCreateModal = () => {
     setEditingTaskId(null);
@@ -420,6 +431,8 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
     setTaskStartTime("11:30");
     setTaskEndTime("12:30");
     setFormError("");
+    setShowMoreDetails(false);
+    setTaskAgeGroup(""); setTaskTopic(""); setTaskHowToConduct(""); setTaskMaterials(""); setTaskObjective("");
     setShowAddTaskModal(true);
   };
 
@@ -485,7 +498,13 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
       date: taskDate || getTodayLocalDate(),
       startTime: taskStartTime || "11:30",
       endTime: taskEndTime || "12:30",
-      time: `${taskStartTime || "11:30"} - ${taskEndTime || "12:30"}`
+      time: `${taskStartTime || "11:30"} - ${taskEndTime || "12:30"}`,
+      source: "teacher_created",
+      ageGroup: taskAgeGroup || "",
+      topic: taskTopic || "",
+      howToConduct: taskHowToConduct || "",
+      materials: taskMaterials || "",
+      objective: taskObjective || ""
     };
 
     if (editingTaskId) {
@@ -519,8 +538,17 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
   };
 
   const toggleTaskStatus = (id) => {
+    setCompletedOverrideMap(prev => ({
+      ...prev,
+      [id]: !(prev[id] !== undefined ? prev[id] : combinedTasks.find(t => (t.id || t._id) === id)?.completed)
+    }));
     setCustomTasks(prev => prev.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
-    toggleTeacherTask(id).catch(err => console.warn("[DB Sync] Toggle task failed:", err?.message));
+    toggleTeacherTask(id)
+      .then(() => {
+        try { window.dispatchEvent(new Event("teacher-checklist-refresh")); } catch (_) {}
+      })
+      .catch(err => console.warn("[DB Sync] Toggle task failed:", err?.message));
+    try { window.dispatchEvent(new Event("teacher-checklist-refresh")); } catch (_) {}
   };
 
   const deleteTask = (id) => {
@@ -600,7 +628,13 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
       time: t.time || "11:30 - 12:30",
       category: t.category || "custom_task",
       completed: t.completed,
-      isCustom: true
+      isCustom: true,
+      source: t.source || "",
+      objective: t.objective || "",
+      howToConduct: t.howToConduct || "",
+      materials: t.materials || "",
+      topic: t.topic || "",
+      ageGroup: t.ageGroup || ""
     })),
     ...lessons.map((l, i) => ({
       id: l._id || `lesson-${i}`,
@@ -621,7 +655,8 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
       isCustom: false,
       isMentorTask: true,
       mentorTaskStatus: t.status,
-      description: t.description
+      description: t.description,
+      source: "mentor_assigned"
     })),
     ...featuredAssignmentList
   ];
@@ -694,7 +729,15 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
       time: item.time,
       dayIdx: dayIdx >= 0 ? dayIdx : -1,
       category: item.category || "class",
-      topOffset: getTopOffsetForTime(item.time)
+      topOffset: getTopOffsetForTime(item.time),
+      source: item.source || (item.isMentorTask ? "mentor_assigned" : ""),
+      objective: item.objective || "",
+      howToConduct: item.howToConduct || "",
+      materials: item.materials || "",
+      topic: item.topic || "",
+      ageGroup: item.ageGroup || "",
+      completed: item.completed,
+      originalItem: item
     };
   }).filter(ev => ev.dayIdx >= 0 && !HIDDEN_CALENDAR_CATEGORIES.includes(ev.category));
 
@@ -912,105 +955,140 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
                         const block = categoryBlock[ev.category] || categoryBlock.class_lesson;
                         const topPx = getEventTopPx(ev.time);
                         const heightPx = getEventHeightPx(ev.time);
-                        const originalTask = combinedTasks.find(t => (t.id || t._id) === ev.id);
+                        const originalTask = combinedTasks.find(t => (t.id || t._id) === ev.id) || ev.originalItem;
+                        const isCompleted = completedOverrideMap[ev.id] !== undefined
+                          ? completedOverrideMap[ev.id]
+                          : (originalTask?.completed ?? ev.completed ?? false);
                         const initials = (user?.name || "T").trim().split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase();
 
                         return (
                           <div className="teacher-calendar-event"
                             key={ev.id || evIdx}
-                            onClick={(e) => { e.stopPropagation(); setSelectedDayDate(d.fullDate); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedDayDate(d.fullDate);
+                              if (!isCompleted && originalTask) {
+                                if (originalTask.isMentorTask) {
+                                  setEvidenceTask(originalTask);
+                                } else {
+                                  setReportTask(originalTask);
+                                  setShowReportModal(true);
+                                }
+                              }
+                            }}
                             style={{
                               position: "absolute",
                               top: topPx,
-                              left: 1, right: 1,
+                              left: 2, right: 2,
                               height: heightPx,
-                              background: block.fill,
-                              border: "none",
-                              borderRadius: 14,
-                              padding: "8px 6px",
+                              background: isCompleted ? "#f0fdf4" : block.fill,
+                              border: isCompleted ? "1.5px solid #86efac" : `1px solid ${block.text}25`,
+                              borderRadius: 12,
+                              padding: "6px 7px",
                               cursor: "pointer",
                               zIndex: isSelected ? 20 : 10,
-                              boxShadow: isSelected ? "0 2px 8px rgba(15,23,42,0.12)" : "none",
+                              boxShadow: isSelected ? "0 4px 12px rgba(15,23,42,0.14)" : "0 1px 3px rgba(0,0,0,0.04)",
                               overflow: "hidden",
                               display: "flex",
                               flexDirection: "column",
-                              justifyContent: "space-between"
+                              justifyContent: "space-between",
+                              boxSizing: "border-box"
                             }}
                           >
-                            <div>
-                              <div style={{ fontSize: 11, fontWeight: 700, color: block.text, opacity: 0.8, lineHeight: 1.3 }}>
+                            {/* Top row: Time + Initials avatar badge */}
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4, flexShrink: 0 }}>
+                              <span style={{ fontSize: 10, fontWeight: 700, color: isCompleted ? "#166534" : block.text, opacity: 0.85, lineHeight: 1.2 }}>
                                 {ev.time || ""}
-                              </div>
+                              </span>
                               <div style={{
-                                fontSize: 12, fontWeight: 800, color: block.text,
-                                lineHeight: 1.3, overflow: "hidden",
-                                display: "-webkit-box", WebkitLineClamp: heightPx >= 90 ? 3 : 2,
-                                WebkitBoxOrient: "vertical", marginTop: 3
-                              }}>
-                                {block.icon} {ev.title}
-                              </div>
-                            </div>
-
-                            {heightPx >= 56 && (
-                              <div style={{
-                                width: 24, height: 24, borderRadius: "50%",
-                                background: "white", color: block.text,
-                                fontSize: 10, fontWeight: 800,
+                                width: 19, height: 19, borderRadius: "50%",
+                                background: "rgba(255,255,255,0.95)", color: isCompleted ? "#166534" : block.text,
+                                fontSize: 9, fontWeight: 800,
                                 display: "flex", alignItems: "center", justifyContent: "center",
-                                border: `1.5px solid ${block.text}22`
+                                border: `1px solid ${block.text}33`, flexShrink: 0
                               }}>
                                 {initials}
                               </div>
-                            )}
+                            </div>
 
-                            {isSelected && originalTask && (
-                              <div style={{ display: "flex", gap: 4, marginTop: 2, alignItems: "center" }}>
+                            {/* Middle: Title (clamped 1-2 lines) & badges */}
+                            <div style={{ flex: 1, minHeight: 0, marginTop: 2, overflow: "hidden" }}>
+                              <div style={{
+                                fontSize: 11.5, fontWeight: 800, color: isCompleted ? "#166534" : block.text,
+                                lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis",
+                                display: "-webkit-box", WebkitLineClamp: heightPx >= 85 ? 2 : 1,
+                                WebkitBoxOrient: "vertical"
+                              }}>
+                                {isCompleted ? "✅ " : block.icon ? `${block.icon} ` : ""}{ev.title}
+                              </div>
+                              {/* Source badge if tall enough */}
+                              {(ev.source === "mentor_published" || ev.source === "mentor_assigned") && heightPx >= 85 && (
+                                <div style={{ fontSize: 8, fontWeight: 800, color: "#4f46e5", background: "#eef2ff", padding: "1px 5px", borderRadius: 4, marginTop: 2, display: "inline-block" }}>
+                                  📋 Mentor
+                                </div>
+                              )}
+                              {ev.source === "teacher_created" && heightPx >= 85 && (
+                                <div style={{ fontSize: 8, fontWeight: 800, color: "#059669", background: "#ecfdf5", padding: "1px 5px", borderRadius: 4, marginTop: 2, display: "inline-block" }}>
+                                  🟢 Self
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Bottom row: Pinned Action Button & quick actions (NEVER clipped) */}
+                            <div style={{ display: "flex", gap: 4, alignItems: "center", justifyContent: "space-between", marginTop: 2, flexShrink: 0 }}>
+                              {originalTask && (
                                 <button
+                                  type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     if (originalTask.isMentorTask) {
-                                      if (!originalTask.completed) setEvidenceTask(originalTask);
+                                      if (!isCompleted) setEvidenceTask(originalTask);
                                       return;
                                     }
-                                    if (originalTask.completed) {
+                                    if (isCompleted) {
                                       if (originalTask.isCustom) toggleTaskStatus(originalTask.id);
                                     } else {
                                       setReportTask(originalTask);
                                       setShowReportModal(true);
                                     }
                                   }}
-                                  disabled={!originalTask.completed && !originalTask.isMentorTask && isPastDeadlineIST(originalTask.date)}
+                                  disabled={!isCompleted && !originalTask.isMentorTask && isPastDeadlineIST(originalTask.date)}
                                   style={{
-                                    padding: "2px 7px", borderRadius: 999, border: "none",
-                                    background: originalTask.completed ? "white" : (!originalTask.completed && !originalTask.isMentorTask && isPastDeadlineIST(originalTask.date)) ? "rgba(100,116,139,0.3)" : "rgba(15,23,42,0.85)",
-                                    color: originalTask.completed ? "#059669" : "white",
-                                    fontSize: 8, fontWeight: 800,
-                                    cursor: (!originalTask.completed && !originalTask.isMentorTask && isPastDeadlineIST(originalTask.date)) ? "not-allowed" : "pointer",
-                                    opacity: (!originalTask.completed && !originalTask.isMentorTask && isPastDeadlineIST(originalTask.date)) ? 0.6 : 1
+                                    padding: "2px 8px", borderRadius: 999, border: "none",
+                                    background: isCompleted ? "#16a34a" : (!originalTask.isMentorTask && isPastDeadlineIST(originalTask.date)) ? "rgba(100,116,139,0.3)" : "#0f172a",
+                                    color: "white",
+                                    fontSize: 8.5, fontWeight: 800,
+                                    cursor: (!isCompleted && !originalTask.isMentorTask && isPastDeadlineIST(originalTask.date)) ? "not-allowed" : "pointer",
+                                    opacity: (!isCompleted && !originalTask.isMentorTask && isPastDeadlineIST(originalTask.date)) ? 0.6 : 1,
+                                    display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0
                                   }}
                                 >
-                                  {originalTask.completed
-                                    ? "✓"
+                                  {isCompleted
+                                    ? "✓ Done"
                                     : originalTask.isMentorTask
-                                      ? "📤 Submit Evidence"
+                                      ? "📤 Submit"
                                       : isPastDeadlineIST(originalTask.date)
-                                        ? "⏰ Deadline passed"
+                                        ? "⏰ Expired"
                                         : "📋 Report"}
                                 </button>
-                                {originalTask.isCustom && (
-                                  <>
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); openEditModal(originalTask); }}
-                                      style={{ padding: "2px 6px", borderRadius: 999, border: "none", background: "rgba(255,255,255,0.85)", color: block.text, fontSize: 8, fontWeight: 700, cursor: "pointer" }}
-                                    >✏️</button>
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); deleteTask(originalTask.id); }}
-                                      style={{ padding: "2px 6px", borderRadius: 999, border: "none", background: "rgba(255,255,255,0.85)", color: "#dc2626", fontSize: 8, fontWeight: 700, cursor: "pointer" }}
-                                    >🗑</button>
-                                  </>
-                                )}
-                              </div>
-                            )}
+                              )}
+                              {originalTask?.isCustom && (
+                                <div style={{ display: "flex", gap: 2, alignItems: "center" }}>
+                                  <button
+                                    type="button"
+                                    title="Edit event"
+                                    onClick={(e) => { e.stopPropagation(); openEditModal(originalTask); }}
+                                    style={{ padding: "2px 5px", borderRadius: 6, border: "none", background: "rgba(255,255,255,0.85)", color: block.text, fontSize: 8, fontWeight: 700, cursor: "pointer" }}
+                                  >✏️</button>
+                                  <button
+                                    type="button"
+                                    title="Delete event"
+                                    onClick={(e) => { e.stopPropagation(); deleteTask(originalTask.id); }}
+                                    style={{ padding: "2px 5px", borderRadius: 6, border: "none", background: "rgba(255,255,255,0.85)", color: "#dc2626", fontSize: 8, fontWeight: 700, cursor: "pointer" }}
+                                  >🗑</button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
@@ -1040,161 +1118,171 @@ function WeeklyScheduleTaskPlannerWidget({ user, lessons = [], assignments = [],
         </div>
 
         {showAddTaskModal && (
-          <div style={{
-            position: "fixed", inset: 0, background: "rgba(15,23,42,0.35)",
-            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999
-          }}>
-            <div style={{
-              background: "white", borderRadius: 20, padding: 28, width: "100%", maxWidth: 460,
-              boxShadow: "0 24px 60px rgba(0,0,0,0.25)", maxHeight: "90vh", overflowY: "auto"
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-                <h3 style={{ fontSize: 20, fontWeight: 800, color: "#0f172a", margin: 0 }}>
-                  {editingTaskId ? "Edit task" : "New task"}
-                </h3>
-                <button
-                  onClick={() => setShowAddTaskModal(false)}
-                  style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#94a3b8" }}
-                >✕</button>
+          <Modal title={editingTaskId ? "Edit Task" : "New Task"} onClose={() => setShowAddTaskModal(false)} width={460}>
+            <form onSubmit={handleSaveTask} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {formError && (
+                <div style={{ padding: "10px 14px", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 10, color: "#991b1b", fontSize: 12, fontWeight: 700, lineHeight: 1.4 }}>
+                  {formError}
+                </div>
+              )}
+
+              <input
+                type="text"
+                value={taskTitle}
+                onChange={e => setTaskTitle(e.target.value)}
+                placeholder="Task title"
+                required
+                style={{ width: "100%", padding: "10px 4px", border: "none", borderBottom: "2px solid #e2e8f0", fontSize: 16, fontWeight: 700, outline: "none", boxSizing: "border-box" }}
+              />
+
+              <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#f8fafc", borderRadius: 10 }}>
+                <span style={{ fontSize: 14 }}>📅</span>
+                <input
+                  type="date"
+                  value={taskDate}
+                  onChange={e => setTaskDate(e.target.value)}
+                  style={{ flex: 1, border: "none", background: "transparent", fontSize: 13, fontWeight: 600, outline: "none", color: "#334155" }}
+                />
               </div>
 
-              <form onSubmit={handleSaveTask} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                {formError && (
-                  <div style={{ padding: "10px 14px", background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 10, color: "#991b1b", fontSize: 12, fontWeight: 700, lineHeight: 1.4 }}>
-                    {formError}
-                  </div>
-                )}
-
-                <input
-                  type="text"
-                  value={taskTitle}
-                  onChange={e => setTaskTitle(e.target.value)}
-                  placeholder="Task title"
-                  required
-                  style={{ width: "100%", padding: "10px 4px", border: "none", borderBottom: "2px solid #e2e8f0", fontSize: 16, fontWeight: 700, outline: "none", boxSizing: "border-box" }}
-                />
-
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#f8fafc", borderRadius: 10 }}>
-                  <span style={{ fontSize: 14 }}>📅</span>
+              <div style={{ display: "flex", gap: 10 }}>
+                <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#f8fafc", borderRadius: 10 }}>
+                  <span style={{ fontSize: 14 }}>⏱</span>
                   <input
-                    type="date"
-                    value={taskDate}
-                    onChange={e => setTaskDate(e.target.value)}
+                    type="text"
+                    value={taskStartTime}
+                    onChange={e => setTaskStartTime(e.target.value)}
+                    placeholder="09:30"
                     style={{ flex: 1, border: "none", background: "transparent", fontSize: 13, fontWeight: 600, outline: "none", color: "#334155" }}
                   />
                 </div>
-
-                <div style={{ display: "flex", gap: 10 }}>
-                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#f8fafc", borderRadius: 10 }}>
-                    <span style={{ fontSize: 14 }}>⏱</span>
-                    <input
-                      type="text"
-                      value={taskStartTime}
-                      onChange={e => setTaskStartTime(e.target.value)}
-                      placeholder="09:30"
-                      style={{ flex: 1, border: "none", background: "transparent", fontSize: 13, fontWeight: 600, outline: "none", color: "#334155" }}
-                    />
-                  </div>
-                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#f8fafc", borderRadius: 10 }}>
-                    <span style={{ fontSize: 14 }}>⏱</span>
-                    <input
-                      type="text"
-                      value={taskEndTime}
-                      onChange={e => setTaskEndTime(e.target.value)}
-                      placeholder="11:20"
-                      style={{ flex: 1, border: "none", background: "transparent", fontSize: 13, fontWeight: 600, outline: "none", color: "#334155" }}
-                    />
-                  </div>
+                <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", background: "#f8fafc", borderRadius: 10 }}>
+                  <span style={{ fontSize: 14 }}>⏱</span>
+                  <input
+                    type="text"
+                    value={taskEndTime}
+                    onChange={e => setTaskEndTime(e.target.value)}
+                    placeholder="11:20"
+                    style={{ flex: 1, border: "none", background: "transparent", fontSize: 13, fontWeight: 600, outline: "none", color: "#334155" }}
+                  />
                 </div>
+              </div>
 
-                <div>
-                  <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#94a3b8", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.4px" }}>
-                    Category
-                  </label>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {Object.entries(ACTIVITY_CATEGORIES).map(([key, cat]) => {
-                      const block = categoryBlock[key] || categoryBlock.class_lesson;
-                      const isActive = taskCategory === key;
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => setTaskCategory(key)}
-                          style={{
-                            padding: "7px 14px", borderRadius: 999, cursor: "pointer",
-                            border: isActive ? `1.5px solid ${block.text}` : "1.5px solid transparent",
-                            background: block.fill, color: block.text,
-                            fontSize: 11, fontWeight: 800,
-                            opacity: isActive ? 1 : 0.55,
-                            transition: "opacity 0.15s"
-                          }}
-                        >
-                          {cat.icon} {cat.label}
-                        </button>
-                      );
-                    })}
+              <div>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#94a3b8", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.4px" }}>
+                  Category
+                </label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {Object.entries(ACTIVITY_CATEGORIES)
+                    .filter(([key]) => !HIDDEN_CALENDAR_CATEGORIES.includes(key))
+                    .map(([key, cat]) => {
+                    const block = categoryBlock[key] || categoryBlock.class_lesson;
+                    const isActive = taskCategory === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setTaskCategory(key)}
+                        style={{
+                          padding: "7px 14px", borderRadius: 999, cursor: "pointer",
+                          border: isActive ? `1.5px solid ${block.text}` : "1.5px solid transparent",
+                          background: block.fill, color: block.text,
+                          fontSize: 11, fontWeight: 800,
+                          opacity: isActive ? 1 : 0.55,
+                          transition: "opacity 0.15s"
+                        }}
+                      >
+                        {cat.icon} {cat.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ── Expandable optional details ── */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowMoreDetails(!showMoreDetails)}
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, color: "#64748b", display: "flex", alignItems: "center", gap: 4, padding: 0 }}
+                >
+                  {showMoreDetails ? "▼" : "▶"} More details (optional)
+                </button>
+                {showMoreDetails && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10, padding: 12, background: "#f8fafc", borderRadius: 10 }}>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#94a3b8", marginBottom: 4 }}>Age Group</label>
+                        <select value={taskAgeGroup} onChange={e => setTaskAgeGroup(e.target.value)} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 12, fontWeight: 600, background: "white" }}>
+                          <option value="">Select...</option>
+                          <option value="2-3 years (Playgroup)">2-3 years (Playgroup)</option>
+                          <option value="3-4 years (Nursery)">3-4 years (Nursery)</option>
+                          <option value="4-5 years (LKG)">4-5 years (LKG)</option>
+                          <option value="5-6 years (UKG)">5-6 years (UKG)</option>
+                          <option value="Mixed age group">Mixed age group</option>
+                        </select>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#94a3b8", marginBottom: 4 }}>Topic</label>
+                        <input type="text" value={taskTopic} onChange={e => setTaskTopic(e.target.value)} placeholder="e.g. Motor Skills, Colors" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 12, fontWeight: 600, boxSizing: "border-box" }} />
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#94a3b8", marginBottom: 4 }}>How to Conduct</label>
+                      <textarea value={taskHowToConduct} onChange={e => setTaskHowToConduct(e.target.value)} placeholder="Step-by-step instructions..." rows={2} style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 12, fontWeight: 600, resize: "vertical", boxSizing: "border-box" }} />
+                    </div>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#94a3b8", marginBottom: 4 }}>Materials Required</label>
+                        <input type="text" value={taskMaterials} onChange={e => setTaskMaterials(e.target.value)} placeholder="e.g. Crayons, Paper" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 12, fontWeight: 600, boxSizing: "border-box" }} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#94a3b8", marginBottom: 4 }}>Objective</label>
+                        <input type="text" value={taskObjective} onChange={e => setTaskObjective(e.target.value)} placeholder="Learning outcome" style={{ width: "100%", padding: "8px 10px", border: "1.5px solid #e2e8f0", borderRadius: 8, fontSize: 12, fontWeight: 600, boxSizing: "border-box" }} />
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
+              </div>
 
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 6 }}>
-                  <button
-                    type="button"
-                    onClick={() => setShowAddTaskModal(false)}
-                    style={{ padding: "10px 18px", background: "transparent", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", color: "#64748b" }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveTask}
-                    style={{
-                      flex: 1, padding: "12px 20px", background: "#0f172a", border: "none",
-                      borderRadius: 12, fontSize: 13, fontWeight: 800, color: "white", cursor: "pointer"
-                    }}
-                  >
-                    {editingTaskId ? "Update event" : "Add event"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddTaskModal(false)}
+                  style={{ padding: "10px 18px", background: "transparent", border: "none", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer", color: "#64748b" }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveTask}
+                  style={{
+                    flex: 1, padding: "12px 20px", background: "#0f172a", border: "none",
+                    borderRadius: 12, fontSize: 13, fontWeight: 800, color: "white", cursor: "pointer"
+                  }}
+                >
+                  {editingTaskId ? "Update event" : "Add event"}
+                </button>
+              </div>
+            </form>
+          </Modal>
         )}
 
-        {/* ── Universal Activity Report Modal / Mark Complete ── */}
+        {/* ── Mark Complete Modal — single reporting UI for every calendar task category ── */}
         {showReportModal && reportTask && (
-          (() => {
-            // Use the rich AI modal for class lessons, custom tasks, pdca, etc.
-            // Leave out home/anganwadi visits (pcb_session, field_visit)
-            const useRichModal = !["field_visit", "pcb_session"].includes(reportTask.category);
-
-            if (useRichModal) {
-              return (
-                <MarkCompleteModal
-                  activity={reportTask}
-                  itemType="activity"
-                  user={user}
-                  onSubmit={(payload) => {
-                    toggleTaskStatus(reportTask.id);
-                    setShowReportModal(false);
-                    setReportTask(null);
-                  }}
-                  onClose={() => { setShowReportModal(false); setReportTask(null); }}
-                />
-              );
-            }
-
-            return (
-              <UniversalActivityReportModal
-                task={reportTask}
-                onClose={() => { setShowReportModal(false); setReportTask(null); }}
-                onSubmitSuccess={(taskId, status) => {
-                  if (status === "completed") {
-                    toggleTaskStatus(taskId);
-                  }
-                }}
-              />
-            );
-          })()
+          <MarkCompleteModal
+            activity={reportTask}
+            itemType={["field_visit", "pcb_session"].includes(reportTask.category) ? "task" : "activity"}
+            user={user}
+            onSubmit={(payload) => {
+              setCompletedOverrideMap(prev => ({ ...prev, [reportTask.id]: true }));
+              toggleTaskStatus(reportTask.id);
+              setShowReportModal(false);
+              setReportTask(null);
+              try { window.dispatchEvent(new Event("teacher-checklist-refresh")); } catch (_) {}
+            }}
+            onClose={() => { setShowReportModal(false); setReportTask(null); }}
+          />
         )}
 
         {evidenceTask && (
@@ -1483,6 +1571,186 @@ function MyAttendanceSummaryCard({ attendance = 0, summary = {}, attendanceMap =
   );
 }
 
+/* ── Fellow Dashboard: Compact Sidebar PDCA Checklist Widget ── */
+function FellowPDCAChecklistWidget() {
+  const [deliverables, setDeliverables] = useState([]);
+  const [activeMonth, setActiveMonth] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getFellowPDCAProgress()
+      .then(res => {
+        const months = res?.months || [];
+        const active = months.find(m => m.status !== "approved") || months[0];
+        if (active) {
+          setActiveMonth(active.month);
+          return getFellowPDCAMonth(active.month);
+        }
+      })
+      .then(res => {
+        if (res?.deliverablesStatus) setDeliverables(res.deliverablesStatus);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const metCount = deliverables.filter(d => d.status === "met").length;
+  const total = deliverables.length;
+
+  return (
+    <div style={{
+      background: "white", borderRadius: 14,
+      border: "1.5px solid #e2e8f0",
+      padding: "14px 16px",
+      boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#1e293b", display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ color: metCount === total && total > 0 ? "#16a34a" : "#cbd5e1" }}>✔</span>
+          PDCA Checklist
+        </div>
+        <div style={{
+          background: "#eef2ff", color: "#4f46e5",
+          borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 800
+        }}>
+          {metCount}/{total}
+        </div>
+      </div>
+      <div style={{ fontSize: 10.5, color: "#94a3b8", marginBottom: 10 }}>
+        {activeMonth ? `Month ${activeMonth} deliverables` : "Ticks as you report each activity"}
+      </div>
+
+      {loading ? (
+        <div style={{ fontSize: 11, color: "#94a3b8", textAlign: "center", padding: 10 }}>Loading...</div>
+      ) : deliverables.length === 0 ? (
+        <div style={{ fontSize: 11, color: "#94a3b8", textAlign: "center", padding: 10 }}>No deliverables yet.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {deliverables.map(d => {
+            const met = d.status === "met";
+            const overridden = d.mentorOverride;
+            return (
+              <div key={d.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "6px 4px", borderRadius: 8 }}>
+                <div style={{
+                  width: 15, height: 15, borderRadius: 4, flexShrink: 0, marginTop: 1,
+                  background: met ? (overridden ? "#8b5cf6" : "#10b981") : "white",
+                  border: `1.5px solid ${met ? (overridden ? "#8b5cf6" : "#10b981") : "#cbd5e1"}`,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 9, color: "white", fontWeight: 800
+                }}>
+                  {met ? "✓" : ""}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: met ? "#15803d" : "#334155", lineHeight: 1.3 }}>
+                    {d.label}
+                    {overridden && (
+                      <span style={{ marginLeft: 5, fontSize: 8, fontWeight: 700, color: "#7c3aed", background: "#ede9fe", padding: "1px 4px", borderRadius: 4 }}>MENTOR SET</span>
+                    )}
+                  </div>
+                  {d.count !== undefined && (
+                    <div style={{ fontSize: 9.5, color: "#94a3b8", marginTop: 1 }}>
+                      {d.count}/{d.targetCount || 1} done
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Teacher Sidebar Checklist Panel (compact, matches Fellow style) ── */
+function TeacherMonthChecklistPanel({ user }) {
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year] = useState(now.getFullYear());
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchChecklist = () => {
+    getTeacherChecklist(month, year)
+      .then(res => { if (res?.items) setItems(res.items); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    setLoading(true);
+    fetchChecklist();
+  }, [month, year]);
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      fetchChecklist();
+    };
+    window.addEventListener("teacher-checklist-refresh", handleRefresh);
+    return () => window.removeEventListener("teacher-checklist-refresh", handleRefresh);
+  }, [month, year]);
+
+  const metCount = items.filter(i => i.met).length;
+  const total = items.length;
+
+  const ICONS = { activities:"📚", courses:"🎓", assessments:"📊", pcb_sessions:"🏡" };
+  const COLORS = { activities:"#3b82f6", courses:"#06b6d4", assessments:"#f59e0b", pcb_sessions:"#f97316" };
+
+  return (
+    <div style={{ background: "white", borderRadius: 14, border: "1.5px solid #e2e8f0", padding: "14px 16px", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#1e293b", display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ color: metCount === total && total > 0 ? "#16a34a" : "#cbd5e1" }}>✔</span>
+          Teacher Checklist
+        </div>
+        <div style={{ background: "#eef2ff", color: "#4f46e5", borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 800 }}>
+          {metCount}/{total}
+        </div>
+      </div>
+      <div style={{ fontSize: 10.5, color: "#94a3b8", marginBottom: 10 }}>
+        Ticks as you complete each target
+      </div>
+
+      {loading ? (
+        <div style={{ fontSize: 11, color: "#94a3b8", textAlign: "center", padding: 10 }}>Loading...</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {items.map(item => {
+            const pct = item.target > 0 ? Math.min(100, Math.round((item.count / item.target) * 100)) : 0;
+            const barColor = item.met ? "#10b981" : (COLORS[item.id] || "#3b82f6");
+            return (
+            <div key={item.id} style={{ padding: "6px 4px", borderRadius: 8, opacity: !item.required && !item.met ? 0.75 : 1 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: item.met ? "#15803d" : "#334155", lineHeight: 1.3, display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+                  {ICONS[item.id] || "📌"} {item.label}
+                  {!item.required && (
+                    <span style={{ fontSize: 8, fontWeight: 700, color: "#94a3b8", background: "#f1f5f9", padding: "1px 4px", borderRadius: 4 }}>OPTIONAL</span>
+                  )}
+                  {item.mentorOverride && (
+                    <span style={{ fontSize: 8, fontWeight: 700, color: "#7c3aed", background: "#ede9fe", padding: "1px 4px", borderRadius: 4 }}>MENTOR SET</span>
+                  )}
+                </div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: item.met ? "#10b981" : "#64748b", whiteSpace: "nowrap" }}>
+                  {item.count}/{item.target}
+                </div>
+              </div>
+              {/* Progress bar */}
+              <div style={{ height: 5, borderRadius: 99, background: "#f1f5f9", overflow: "hidden" }}>
+                <div style={{ height: "100%", borderRadius: 99, background: barColor, width: `${pct}%`, transition: "width 0.4s ease" }} />
+              </div>
+              {item.mentorNote && (
+                <div style={{ fontSize: 9, color: "#7c3aed", marginTop: 2, fontStyle: "italic" }}>
+                  💬 {item.mentorNote}
+                </div>
+              )}
+            </div>
+          );})}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── OverviewTab ── */
 function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lessons = [], activities = [], summary = {} }) {
   const attendanceMap = summary.attendanceMap || {};
@@ -1540,58 +1808,61 @@ function OverviewTab({ user, setActiveTab, courses = [], assignments = [], lesso
   // Get full class details for the assigned classes (use only classes array, ignore old class field)
   const allAssignedClasses = user.teacherProfile?.classes || [];
 
-  return (
+    return (
     <div className="teacher-overview" style={{ animation: "fadeIn 0.3s ease" }}>
 
+      {/* ── 2-column layout: left = main dashboard, right = small checklist sidebar ── */}
+      <div className="teacher-overview-grid" style={{ display: "grid", gridTemplateColumns: "1fr 260px", gap: 20, alignItems: "start" }}>
 
-      {/* KPI Cards Section */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 16, marginBottom: 24 }}>
-        <TeacherStatCard icon="👥" label="Total Students" val={studentsCount} accent="#3b82f6" subtitle="Active" />
-        <TeacherStatCard icon="📊" label="Attendance" val={`${attendance}%`} accent={attColor} subtitle={attendance >= 85 ? "Great ✓" : attendance >= 70 ? "Keep it up" : "Needs attention"} />
-        <TeacherStatCard icon="🏆" label="Avg Grade" val={gradedAssignments.length ? `${averageScore}%` : "N/A"} accent="#8b5cf6" subtitle={gradedAssignments.length ? `${gradedAssignments.length} graded` : "No grades yet"} />
-        <TeacherStatCard icon="📜" label="Certificates" val={certificatesCount} accent="#06b6d4" subtitle="Earned" />
-        <TeacherStatCard icon="📋" label="Pending Tasks" val={pendingTasksCount} accent="#ef4444" subtitle={pendingTasksCount === 0 ? "All clear ✓" : "Awaiting submission"} />
+        {/* ── LEFT COLUMN: everything as before ── */}
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(180px,1fr))", gap: 16, marginBottom: 24 }}>
+            <TeacherStatCard icon="👥" label="Total Students" val={studentsCount} accent="#3b82f6" subtitle="Active" />
+            <TeacherStatCard icon="📊" label="Attendance" val={`${attendance}%`} accent={attColor} subtitle={attendance >= 85 ? "Great ✓" : attendance >= 70 ? "Keep it up" : "Needs attention"} />
+            <TeacherStatCard icon="🏆" label="Avg Grade" val={gradedAssignments.length ? `${averageScore}%` : "N/A"} accent="#8b5cf6" subtitle={gradedAssignments.length ? `${gradedAssignments.length} graded` : "No grades yet"} />
+            <TeacherStatCard icon="📜" label="Certificates" val={certificatesCount} accent="#06b6d4" subtitle="Earned" />
+            <TeacherStatCard icon="📋" label="Pending Tasks" val={pendingTasksCount} accent="#ef4444" subtitle={pendingTasksCount === 0 ? "All clear ✓" : "Awaiting submission"} />
+          </div>
+
+          <WeeklyScheduleTaskPlannerWidget user={user} lessons={lessons} assignments={assignments} courses={courses} setActiveTab={setActiveTab} />
+
+          <div className="teacher-support-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+            <MyAttendanceSummaryCard attendance={attendance} summary={summary} attendanceMap={summary.attendanceMap || {}} setActiveTab={setActiveTab} />
+
+            <div className="teacher-course-progress"><SectionCard title="Course Progress">
+              {courses.length === 0 ? (
+                <div style={{ padding: 20, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>No assigned courses yet.</div>
+              ) : (
+                featuredCourseProgress.map((c, i) => {
+                  const progress = c.progressPercent || 0;
+                  return (
+                    <div className="teacher-course-row" key={i} style={{ marginBottom: 14 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{c.course?.title?.split(" ").slice(0, 3).join(" ") || "Course"}...</span>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: "#f59e0b" }}>{progress}%</span>
+                      </div>
+                      <div className="teacher-progress-track" style={{ height: 6, background: "#f3f4f6", borderRadius: 4, overflow: "hidden", marginBottom: 2 }}>
+                        <div className="teacher-progress-fill" style={{ height: "100%", width: `${progress}%`, background: "linear-gradient(90deg,#f59e0b,#d97706)", borderRadius: 4 }} />
+                      </div>
+                      <div style={{ fontSize: 10, color: "#9ca3af" }}>{c.status || "Assigned"} · Due: {c.dueDate ? new Date(c.dueDate).toLocaleDateString() : "No deadline"}</div>
+                    </div>
+                  );
+                })
+              )}
+              <button onClick={() => setActiveTab("courses")} style={{ fontSize: 12, color: "#d97706", fontWeight: 700, background: "none", border: "none", cursor: "pointer", padding: 0, marginTop: 4 }}>View all courses →</button>
+            </SectionCard></div>
+          </div>
+        </div>
+
+        {/* ── RIGHT COLUMN: small sticky checklist sidebar ── */}
+        <div className="teacher-checklist-sidebar" style={{ position: "sticky", top: 16 }}>
+          {user.role === "fellow"
+            ? <FellowPDCAChecklistWidget />
+            : <TeacherMonthChecklistPanel user={user} />
+          }
+        </div>
+
       </div>
-
-      {/* ── Weekly Course Schedule & Task Planner Widget ── */}
-      <WeeklyScheduleTaskPlannerWidget
-        user={user}
-        lessons={lessons}
-        assignments={assignments}
-        courses={courses}
-        setActiveTab={setActiveTab}
-      />
-
-
-      <div className="teacher-support-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
-        <MyAttendanceSummaryCard attendance={attendance} summary={summary} attendanceMap={summary.attendanceMap || {}} setActiveTab={setActiveTab} />
-
-        <div className="teacher-course-progress"><SectionCard title="Course Progress">
-          {courses.length === 0 ? (
-            <div style={{ padding: 20, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>No assigned courses yet.</div>
-          ) : (
-            // Start: Dnyaneshwari Thorat
-            featuredCourseProgress.map((c, i) => {
-              // End: Dnyaneshwari Thorat
-              const progress = c.progressPercent || 0;
-              return (
-                <div className="teacher-course-row" key={i} style={{ marginBottom: 14 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{c.course?.title?.split(" ").slice(0, 3).join(" ") || "Course"}...</span>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: "#f59e0b" }}>{progress}%</span>
-                  </div>
-                  <div className="teacher-progress-track" style={{ height: 6, background: "#f3f4f6", borderRadius: 4, overflow: "hidden", marginBottom: 2 }}>
-                    <div className="teacher-progress-fill" style={{ height: "100%", width: `${progress}%`, background: "linear-gradient(90deg,#f59e0b,#d97706)", borderRadius: 4 }} />
-                  </div>
-                  <div style={{ fontSize: 10, color: "#9ca3af" }}>{c.status || "Assigned"} · Due: {c.dueDate ? new Date(c.dueDate).toLocaleDateString() : "No deadline"}</div>
-                </div>
-              );
-            })
-          )}
-          <button onClick={() => setActiveTab("courses")} style={{ fontSize: 12, color: "#d97706", fontWeight: 700, background: "none", border: "none", cursor: "pointer", padding: 0, marginTop: 4 }}>View all courses →</button>
-        </SectionCard></div>
-      </div>
-
     </div>
   );
 }
@@ -3954,7 +4225,7 @@ const teacherDashboardCSS = `
   .teacher-main::-webkit-scrollbar-thumb:hover, .teacher-sidebar nav::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
   .quick-action-pill { cursor: pointer; transition: transform .2s ease, box-shadow .2s ease; }
   .quick-action-pill:hover { transform: translateY(-2px); box-shadow: 0 8px 16px -4px rgba(15,23,42,.1); }
-  @keyframes td-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes td-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { .teacher-dashboard *, .teacher-dashboard *::before, .teacher-dashboard *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
   @media (max-width: 860px) { .teacher-main { padding: 22px 20px 34px !important; } .teacher-sidebar { width: 204px !important; } .teacher-sidebar-profile { width: 204px !important; } .teacher-support-grid { grid-template-columns: 1fr !important; } }
   @media (max-width: 640px) { .teacher-dashboard { height: auto !important; min-height: 100vh; } .teacher-sidebar { width: 76px !important; } .teacher-sidebar-logo { padding: 18px 6px !important; } .teacher-sidebar nav { padding: 12px 8px !important; } .teacher-nav-item { justify-content: center; padding: 8px !important; } .teacher-nav-item > span:nth-child(2), .teacher-sidebar-logo > div { display: none !important; } .teacher-sidebar-profile { width: 76px !important; padding: 12px !important; } .teacher-sidebar-profile > div:not(:first-of-type), .teacher-sidebar-profile button { display: none !important; } .teacher-main { padding: 18px 14px 30px !important; } .teacher-header { padding: 20px !important; align-items: flex-start !important; flex-direction: column; } .teacher-header-actions { align-self: stretch; justify-content: space-between; } .teacher-heading { font-size: 27px !important; } }

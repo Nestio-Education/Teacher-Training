@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import { LessonPlan } from "../models/LessonPlan.js";
 import { LessonPlanAssignment } from "../models/LessonPlanAssignment.js";
 import { LessonCompletionReport } from "../models/LessonCompletionReport.js";
+import { TeacherTask } from "../models/TeacherTask.js";
 import { User } from "../models/User.js";
 import { Center } from "../models/Center.js";
 import { Notification } from "../models/Notification.js";
@@ -272,7 +273,7 @@ export function createMentorLessonPlansRouter(upload) {
         for (const plan of createdPlans) {
           const existing = await LessonPlanAssignment.findOne({ lessonPlan: plan._id, teacher: teacherId });
           if (!existing) {
-            await LessonPlanAssignment.create({
+            const assignment = await LessonPlanAssignment.create({
               lessonPlan: plan._id,
               teacher: teacherId,
               center: resolvedCenterId || undefined,
@@ -282,6 +283,30 @@ export function createMentorLessonPlansRouter(upload) {
               status: "pending",
             });
             assignedCount++;
+
+            // ── Also create a TeacherTask so it shows on the calendar ──
+            const dateStr = plan.scheduleDate
+              ? new Date(plan.scheduleDate).toISOString().split("T")[0]
+              : new Date().toISOString().split("T")[0];
+            await TeacherTask.create({
+              teacher: teacherId,
+              createdBy: req.user.id,
+              assignedByMentor: true,
+              title: plan.title || "Mentor Activity",
+              category: "class_lesson",
+              date: dateStr,
+              startTime: req.body.defaultStartTime || "11:30",
+              endTime: req.body.defaultEndTime || "12:30",
+              time: `${req.body.defaultStartTime || "11:30"} - ${req.body.defaultEndTime || "12:30"}`,
+              source: "mentor_published",
+              lessonPlanAssignment: assignment._id,
+              objective: plan.objectives || "",
+              howToConduct: plan.instructions || "",
+              materials: plan.resources || "",
+              topic: req.body.topic || "",
+              ageGroup: req.body.ageGroup || "",
+              activityNotes: "",
+            });
           }
         }
       } else {
@@ -299,7 +324,7 @@ export function createMentorLessonPlansRouter(upload) {
           for (const teacher of teachers) {
             const existing = await LessonPlanAssignment.findOne({ lessonPlan: plan._id, teacher: teacher._id });
             if (!existing) {
-              await LessonPlanAssignment.create({
+              const assignment = await LessonPlanAssignment.create({
                 lessonPlan: plan._id,
                 teacher: teacher._id,
                 center: centerId || teacher.teacherProfile?.center,
@@ -308,6 +333,30 @@ export function createMentorLessonPlansRouter(upload) {
                 status: "pending",
               });
               assignedCount++;
+
+              // ── Also create a TeacherTask so it shows on the calendar ──
+              const dateStr = plan.scheduleDate
+                ? new Date(plan.scheduleDate).toISOString().split("T")[0]
+                : new Date().toISOString().split("T")[0];
+              await TeacherTask.create({
+                teacher: teacher._id,
+                createdBy: req.user.id,
+                assignedByMentor: true,
+                title: plan.title || "Mentor Activity",
+                category: "class_lesson",
+                date: dateStr,
+                startTime: req.body.defaultStartTime || "11:30",
+                endTime: req.body.defaultEndTime || "12:30",
+                time: `${req.body.defaultStartTime || "11:30"} - ${req.body.defaultEndTime || "12:30"}`,
+                source: "mentor_published",
+                lessonPlanAssignment: assignment._id,
+                objective: plan.objectives || "",
+                howToConduct: plan.instructions || "",
+                materials: plan.resources || "",
+                topic: req.body.topic || "",
+                ageGroup: req.body.ageGroup || "",
+                activityNotes: "",
+              });
             }
           }
         }

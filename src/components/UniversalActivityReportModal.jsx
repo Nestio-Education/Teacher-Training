@@ -30,7 +30,7 @@ const PDCA_PHASES = [
 
 export default function UniversalActivityReportModal({ task, onClose, onSubmitSuccess, setToast }) {
   const [notes, setNotes] = useState("");
-  const [pdcaPhase, setPdcaPhase] = useState("plan");
+  
   const [completionStatus, setCompletionStatus] = useState("completed"); // completed | partial | skipped
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedFileObj, setSelectedFileObj] = useState(null);
@@ -41,7 +41,7 @@ export default function UniversalActivityReportModal({ task, onClose, onSubmitSu
   if (!task) return null;
 
   const catMeta = ACTIVITY_CATEGORIES[task.category] || ACTIVITY_CATEGORIES.custom_task;
-  const isPDCA = task.category === "pdca_deliverable";
+
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -85,7 +85,6 @@ export default function UniversalActivityReportModal({ task, onClose, onSubmitSu
       const reportPayload = {
         completionStatus,
         notes: notes.trim(),
-        ...(isPDCA ? { pdcaPhase } : {}),
         ...(uploadedFile ? { attachments: [uploadedFile] } : {})
       };
 
@@ -196,38 +195,6 @@ export default function UniversalActivityReportModal({ task, onClose, onSubmitSu
           </div>
         </div>
 
-        {/* ─── PDCA Phase (only for pdca_deliverable) ─── */}
-        {isPDCA && (
-          <div>
-            <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: "#334155", marginBottom: 8 }}>
-              PDCA Cycle Phase
-            </label>
-            <div style={{ display: "flex", gap: 6 }}>
-              {PDCA_PHASES.map(phase => {
-                const isActive = pdcaPhase === phase.key;
-                return (
-                  <button
-                    key={phase.key}
-                    onClick={() => setPdcaPhase(phase.key)}
-                    style={{
-                      flex: 1,
-                      padding: "8px 6px",
-                      borderRadius: 8,
-                      border: isActive ? `2px solid ${phase.color}` : "1.5px solid #e2e8f0",
-                      background: isActive ? phase.bg : "white",
-                      color: isActive ? phase.color : "#94a3b8",
-                      fontSize: 12, fontWeight: isActive ? 800 : 600,
-                      cursor: "pointer",
-                      transition: "all 0.18s"
-                    }}
-                  >
-                    {phase.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         {/* ─── Notes ─── */}
         <div>

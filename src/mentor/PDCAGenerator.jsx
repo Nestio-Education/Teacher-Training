@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   generatePDCADraft,
   approvePDCAReport,
+  unlockPDCAReport,
   getPDCAReport,
   createMentorTask,
   getMentorTasks,
@@ -37,6 +38,7 @@ export default function PDCAGenerator({ mentees = [], setToast, onApproved }) {
   const [deliverables, setDeliverables] = useState([]);
   const [generating, setGenerating] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
   const [aiAvailable, setAiAvailable] = useState(true);
   const [loadingExisting, setLoadingExisting] = useState(false);
   const [showContext, setShowContext] = useState(false);
@@ -162,6 +164,26 @@ export default function PDCAGenerator({ mentees = [], setToast, onApproved }) {
       setToast?.({ msg: err.message || "Failed to approve report.", type: "error" });
     } finally {
       setApproving(false);
+    }
+  };
+
+  const handleUnlock = async () => {
+    if (!selectedFellowId || !report) return;
+    const ok = window.confirm(
+      `Unlock Month ${selectedMonth} for ${selectedFellow?.name || "this fellow"}? ` +
+        `This moves the approved report back to draft — the fellow's checklist and this PDCA text can be edited again until you re-approve it.`
+    );
+    if (!ok) return;
+    setUnlocking(true);
+    try {
+      const res = await unlockPDCAReport(selectedFellowId, selectedMonth);
+      applyReport(res.report);
+      setToast?.({ msg: res.message || `Month ${selectedMonth} unlocked.`, type: "success" });
+      onApproved?.();
+    } catch (err) {
+      setToast?.({ msg: err.message || "Failed to unlock month.", type: "error" });
+    } finally {
+      setUnlocking(false);
     }
   };
 
@@ -550,19 +572,43 @@ export default function PDCAGenerator({ mentees = [], setToast, onApproved }) {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleApprove}
-            disabled={approving}
-            style={{
-              padding: "10px 18px", borderRadius: 6, border: "none",
-              background: report.status === "approved" ? "#059669" : "#4f46e5",
-              color: "#fff", fontWeight: 700, cursor: approving ? "not-allowed" : "pointer",
-              opacity: approving ? 0.7 : 1,
-            }}
-          >
-            {approving ? "Saving…" : report.status === "approved" ? "✓ Approved — Re-save to Growth Cycle" : "Approve & Save Growth Cycle"}
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              onClick={handleApprove}
+              disabled={approving}
+              style={{
+                padding: "10px 18px", borderRadius: 6, border: "none",
+                background: report.status === "approved" ? "#059669" : "#4f46e5",
+                color: "#fff", fontWeight: 700, cursor: approving ? "not-allowed" : "pointer",
+                opacity: approving ? 0.7 : 1,
+              }}
+            >
+              {approving ? "Saving…" : report.status === "approved" ? "✓ Approved — Re-save to Growth Cycle" : "Approve & Save Growth Cycle"}
+            </button>
+
+            {report.status === "approved" && (
+              <button
+                type="button"
+                onClick={handleUnlock}
+                disabled={unlocking}
+                title="Move this month back to draft so the fellow's checklist and this report can be edited again"
+                style={{
+                  padding: "10px 18px", borderRadius: 6, border: "1.5px solid #dc2626",
+                  background: "#fff", color: "#dc2626", fontWeight: 700,
+                  cursor: unlocking ? "not-allowed" : "pointer", opacity: unlocking ? 0.7 : 1,
+                }}
+              >
+                {unlocking ? "Unlocking…" : "🔓 Unlock Month"}
+              </button>
+            )}
+
+            {report.unlockCount > 0 && (
+              <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                Unlocked {report.unlockCount} time{report.unlockCount > 1 ? "s" : ""} so far
+              </span>
+            )}
+          </div>
         </>
       )}
 

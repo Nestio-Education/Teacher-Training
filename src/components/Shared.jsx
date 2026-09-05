@@ -1,5 +1,6 @@
 import { t } from "../services/i18n";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import logo from "../assets/logo.png";
 
 /* ── Logo ── */
@@ -145,23 +146,175 @@ export function SectionCard({ title, children, action }) {
 }
 
 /* ── Modal ── */
-export function Modal({ title, onClose, children, width = 520 }) {
-  return (
-    <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
-      display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999, backdropFilter: "blur(4px)"
-    }}>
-      <div style={{
-        background: "white", borderRadius: 20, padding: "28px", width: "100%",
-        maxWidth: width, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", maxHeight: "90vh", overflowY: "auto"
-      }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <h3 style={{ fontSize: 17, fontWeight: 800, color: "#1c1917", margin: 0 }}>{title}</h3>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9ca3af" }}>✕</button>
+export function Modal({ title, onClose, children, width = 560 }) {
+  const modalContent = (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: "100vw",
+        height: "100vh",
+        background: "rgba(15, 23, 42, 0.65)",
+        backdropFilter: "blur(6px)",
+        WebkitBackdropFilter: "blur(6px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 99999,
+        padding: "16px",
+        boxSizing: "border-box"
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose?.();
+      }}
+    >
+      <div
+        style={{
+          background: "white",
+          borderRadius: 20,
+          width: "100%",
+          maxWidth: width,
+          maxHeight: "min(88vh, 840px)",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 25px 60px -12px rgba(0, 0, 0, 0.35)",
+          boxSizing: "border-box",
+          overflow: "hidden",
+          position: "relative"
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Pinned Sticky Header */}
+        <div
+          style={{
+            padding: "16px 22px",
+            borderBottom: "1px solid #f1f5f9",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexShrink: 0,
+            background: "#ffffff"
+          }}
+        >
+          <h3
+            style={{
+              fontSize: 16,
+              fontWeight: 800,
+              color: "#0f172a",
+              margin: 0,
+              paddingRight: 12,
+              lineHeight: 1.3
+            }}
+          >
+            {title}
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close modal"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: "50%",
+              border: "none",
+              background: "#f1f5f9",
+              color: "#64748b",
+              fontSize: 16,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              transition: "all 0.15s ease"
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "#e2e8f0";
+              e.currentTarget.style.color = "#0f172a";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "#f1f5f9";
+              e.currentTarget.style.color = "#64748b";
+            }}
+          >
+            ✕
+          </button>
         </div>
-        {children}
+
+        {/* Scrollable Body */}
+        <div
+          style={{
+            padding: "20px 22px",
+            overflowY: "auto",
+            flex: 1,
+            boxSizing: "border-box"
+          }}
+        >
+          {children}
+        </div>
       </div>
     </div>
+  );
+
+  return typeof document !== "undefined" ? createPortal(modalContent, document.body) : modalContent;
+}
+
+/* ── Export Month Modal (month picker → triggers an async xlsx download) ── */
+export function ExportMonthModal({ title = "Export Monthly Report", subtitle, onClose, onExport, setToast }) {
+  const now = new Date();
+  const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const [month, setMonth] = useState(defaultMonth);
+  const [exporting, setExporting] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleExport = async () => {
+    setExporting(true);
+    setError("");
+    try {
+      await onExport(month);
+      if (setToast) setToast({ msg: "Export ready — check your downloads.", type: "success" });
+      onClose();
+    } catch (err) {
+      setError(err.message || "Failed to export report.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  return (
+    <Modal title={`📊 ${title}`} onClose={onClose} width={380}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {subtitle && <div style={{ fontSize: 12, color: "#64748b" }}>{subtitle}</div>}
+        {error && (
+          <div style={{ padding: "8px 12px", background: "#fef2f2", color: "#991b1b", borderRadius: 8, fontSize: 12 }}>
+            {error}
+          </div>
+        )}
+        <div>
+          <label style={{ ...S.label, marginBottom: 6, display: "block" }}>Month</label>
+          <input
+            type="month"
+            value={month}
+            onChange={(e) => setMonth(e.target.value)}
+            style={{ ...S.input, height: 38, fontSize: 13 }}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={exporting}
+          style={{
+            padding: "10px 16px", borderRadius: 10, border: "none",
+            background: exporting ? "#94a3b8" : "#0f172a", color: "white",
+            fontSize: 13, fontWeight: 800, cursor: exporting ? "not-allowed" : "pointer"
+          }}
+        >
+          {exporting ? "⏳ Generating..." : "📥 Download Excel"}
+        </button>
+      </div>
+    </Modal>
   );
 }
 

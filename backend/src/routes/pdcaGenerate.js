@@ -10,6 +10,7 @@ import {
   matchDeliverables,
   autoAssessSuccessCheck,
   buildFactsSummary,
+  computeFellowshipMonth,
 } from "../services/pdcaGrounding.js";
 import { generatePDCADraft } from "../services/aiPdcaGenerator.js";
 // Full 24-month curriculum — static, code-based (no database, no upload/
@@ -102,20 +103,98 @@ router.get("/fellow/month/:month", requireRole("fellow", "teacher"), async (req,
       .populate("mentorId", "name email")
       .lean();
 
-    let deliverablesStatus = [];
+    // ── Auto-match deliverables against real logged activities ──
+    // Same grounding logic used by the mentor's "Generate Draft" button,
+    // now wired into the fellow's own checklist view so it self-updates
+    // as soon as a matching activity/submission is reported — no manual
+    // ticking required. Activities are additionally date-scoped to THIS
+    // fellowship month via computeFellowshipMonth(), so one activity
+    // can't "meet" every month's deliverables at once.
+    const fellowUser = await User.findById(req.user.id).select("teacherProfile.fellowshipStartDate createdAt assignedMentor");
+    const anchor = fellowUser?.teacherProfile?.fellowshipStartDate || fellowUser?.createdAt;
+    const [allSubmissions, allTasks] = await Promise.all([
+      ActivitySubmission.find({ teacher: req.user.id }),
+      TeacherTask.find({ teacher: req.user.id }),
+    ]);
+
+    const submissions = allSubmissions.filter(
+      (s) => computeFellowshipMonth(s.activityDate || s.createdAt, anchor) === month
+    );
+    const tasks = allTasks.filter(
+      (t) => computeFellowshipMonth(t.date || t.createdAt, anchor) === month
+    );
+
+    let deliverablesStatus = matchDeliverables(curriculum.deliverables, submissions, tasks);
+
+    const STATUS_RANK = { met: 2, needs_mentor_review: 1, not_met: 0 };
+
     if (report && Array.isArray(report.deliverablesStatus) && report.deliverablesStatus.length > 0) {
-      deliverablesStatus = report.deliverablesStatus;
+      const existingMap = new Map(report.deliverablesStatus.map((d) => [d.id, d]));
+      deliverablesStatus = deliverablesStatus.map((d) => {
+        const prev = existingMap.get(d.id);
+        if (!prev) return { ...d, fellowMarked: false, mentorOverride: false, note: "" };
+
+        // Mentor's manual override always wins — locked, no auto-downgrade.
+        if (prev.mentorOverride) {
+          return {
+            id: d.id,
+            label: d.label,
+            status: prev.status,
+            count: prev.count || 0,
+            targetCount: prev.targetCount || d.targetCount,
+            fellowMarked: prev.fellowMarked || false,
+            mentorOverride: true,
+            note: prev.note || "",
+          };
+        }
+
+        // Otherwise take whichever status is "further along" — a fresh
+        // auto-match can upgrade a stale not_met to met, but a fellow's
+        // already-submitted evidence never gets silently downgraded.
+        const prevRank = STATUS_RANK[prev.status] ?? 0;
+        const autoRank = STATUS_RANK[d.status] ?? 0;
+        const winner = autoRank >= prevRank ? d : prev;
+
+        return {
+          id: d.id,
+          label: d.label,
+          status: winner.status,
+          count: Math.max(prev.count || 0, d.count || 0),
+          targetCount: prev.targetCount || d.targetCount,
+          fellowMarked: prev.fellowMarked || false,
+          mentorOverride: false,
+          note: prev.note || "",
+        };
+      });
     } else {
-      // Initialize default checklist based on curriculum deliverables
-      deliverablesStatus = (curriculum.deliverables || []).map((d) => ({
-        id: d.id,
-        label: d.label,
-        status: "not_met",
-        count: 0,
-        targetCount: d.targetCount || 1,
+      deliverablesStatus = deliverablesStatus.map((d) => ({
+        ...d,
         fellowMarked: false,
+        mentorOverride: false,
         note: "",
       }));
+    }
+
+    // ── Write-through: persist the freshly computed status so the
+    // 24-Month Roadmap overview (GET /fellow/progress) — which reads
+    // straight from the database — always reflects live auto-matched
+    // progress instead of only whatever was last manually saved.
+    // Approved (locked) months are never touched here.
+    if (report?.status !== "approved") {
+      await PDCAReport.findOneAndUpdate(
+        { fellowId: req.user.id, month },
+        {
+          $set: {
+            fellowId: req.user.id,
+            mentorId: fellowUser?.assignedMentor || report?.mentorId || null,
+            month,
+            curriculumVersion: curriculum.curriculumVersion || "v1",
+            deliverablesStatus,
+          },
+          $setOnInsert: { status: "draft" },
+        },
+        { upsert: true, setDefaultsOnInsert: true }
+      );
     }
 
     res.json({
@@ -127,6 +206,33 @@ router.get("/fellow/month/:month", requireRole("fellow", "teacher"), async (req,
       deliverablesStatus,
       report: report || null,
       isApproved: report?.status === "approved",
+      // ── TEMPORARY DEBUG BLOCK — remove once the anganwadi/session-
+      // delivery matching issue is confirmed fixed. Shows exactly which
+      // anchor date is being used and which raw tasks/submissions did
+      // or didn't fall into this month's window, so the "0/4 even
+      // though I marked it Completed" question can be answered by
+      // reading this instead of guessing.
+      _debug: {
+        anchorSource: fellowUser?.teacherProfile?.fellowshipStartDate ? "fellowshipStartDate" : "createdAt (fallback)",
+        anchorDate: anchor,
+        requestedMonth: month,
+        allTasksSeen: allTasks.map((t) => ({
+          title: t.title,
+          category: t.category,
+          date: t.date,
+          completed: t.completed,
+          completionStatus: t.completionStatus,
+          computedMonth: computeFellowshipMonth(t.date || t.createdAt, anchor),
+          includedInThisMonth: computeFellowshipMonth(t.date || t.createdAt, anchor) === month,
+        })),
+        allSubmissionsSeen: allSubmissions.map((s) => ({
+          activityName: s.activityName,
+          type: s.type,
+          activityDate: s.activityDate,
+          computedMonth: computeFellowshipMonth(s.activityDate || s.createdAt, anchor),
+          includedInThisMonth: computeFellowshipMonth(s.activityDate || s.createdAt, anchor) === month,
+        })),
+      },
     });
   } catch (err) {
     next(err);
@@ -198,6 +304,142 @@ router.get("/mentor/reports", requireRole("mentor"), async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+// ── GET /api/pdca/mentor/:fellowId/checklist/:month — Mentor views a
+// fellow's live-computed PDCA deliverables checklist (same auto-match +
+// write-through logic as the fellow's own GET /fellow/month/:month, just
+// scoped to a fellow the mentor is assigned to). Lets the mentor see the
+// checklist without needing to open the full Generate/Approve flow.
+router.get("/mentor/:fellowId/checklist/:month", requireRole("mentor"), async (req, res, next) => {
+  try {
+    const { fellowId } = req.params;
+    const month = Number(req.params.month);
+    if (!mongoose.Types.ObjectId.isValid(fellowId)) {
+      return res.status(400).json({ success: false, message: "Invalid fellowId." });
+    }
+    if (!month || month < 1 || month > 24) {
+      return res.status(400).json({ success: false, message: "Invalid month (expected 1–24)." });
+    }
+
+    const fellow = await ensureFellowBelongsToMentor(req.user.id, fellowId);
+    if (!fellow) {
+      return res.status(404).json({ success: false, message: "Fellow not found or not assigned to you." });
+    }
+
+    const curriculum = MONTH_CURRICULA[month];
+    if (!curriculum) {
+      return res.status(404).json({ success: false, message: "Month curriculum not found." });
+    }
+
+    const report = await PDCAReport.findOne({ fellowId, month }).lean();
+
+    const fellowUser = await User.findById(fellowId).select("teacherProfile.fellowshipStartDate createdAt assignedMentor");
+    const anchor = fellowUser?.teacherProfile?.fellowshipStartDate || fellowUser?.createdAt;
+    const [allSubmissions, allTasks] = await Promise.all([
+      ActivitySubmission.find({ teacher: fellowId }),
+      TeacherTask.find({ teacher: fellowId }),
+    ]);
+    const submissions = allSubmissions.filter(
+      (s) => computeFellowshipMonth(s.activityDate || s.createdAt, anchor) === month
+    );
+    const tasks = allTasks.filter(
+      (t) => computeFellowshipMonth(t.date || t.createdAt, anchor) === month
+    );
+
+    let deliverablesStatus = matchDeliverables(curriculum.deliverables, submissions, tasks);
+    const STATUS_RANK = { met: 2, needs_mentor_review: 1, not_met: 0 };
+
+    if (report && Array.isArray(report.deliverablesStatus) && report.deliverablesStatus.length > 0) {
+      const existingMap = new Map(report.deliverablesStatus.map((d) => [d.id, d]));
+      deliverablesStatus = deliverablesStatus.map((d) => {
+        const prev = existingMap.get(d.id);
+        if (!prev) return { ...d, fellowMarked: false, mentorOverride: false, note: "" };
+        if (prev.mentorOverride) {
+          return {
+            id: d.id, label: d.label, status: prev.status,
+            count: prev.count || 0, targetCount: prev.targetCount || d.targetCount,
+            fellowMarked: prev.fellowMarked || false, mentorOverride: true, note: prev.note || "",
+          };
+        }
+        const prevRank = STATUS_RANK[prev.status] ?? 0;
+        const autoRank = STATUS_RANK[d.status] ?? 0;
+        const winner = autoRank >= prevRank ? d : prev;
+        return {
+          id: d.id, label: d.label, status: winner.status,
+          count: Math.max(prev.count || 0, d.count || 0), targetCount: prev.targetCount || d.targetCount,
+          fellowMarked: prev.fellowMarked || false, mentorOverride: false, note: prev.note || "",
+        };
+      });
+    } else {
+      deliverablesStatus = deliverablesStatus.map((d) => ({ ...d, fellowMarked: false, mentorOverride: false, note: "" }));
+    }
+
+    if (report?.status !== "approved") {
+      await PDCAReport.findOneAndUpdate(
+        { fellowId, month },
+        {
+          $set: {
+            fellowId, mentorId: fellowUser?.assignedMentor || report?.mentorId || req.user.id,
+            month, curriculumVersion: curriculum.curriculumVersion || "v1", deliverablesStatus,
+          },
+          $setOnInsert: { status: "draft" },
+        },
+        { upsert: true, setDefaultsOnInsert: true }
+      );
+    }
+
+    res.json({
+      success: true, month, title: MONTH_TITLES[month] || `Month ${month}`,
+      deliverablesStatus, isApproved: report?.status === "approved",
+    });
+  } catch (err) { next(err); }
+});
+
+// ── PATCH /api/pdca/mentor/:fellowId/checklist/:month — Mentor overrides
+// one or more deliverable items directly (no need to fill Plan/Do/Check/
+// Act text or hit "Approve"). Mirrors the teacher-side
+// PATCH /api/teacher-tasks/checklist/mentor-override pattern.
+router.patch("/mentor/:fellowId/checklist/:month", requireRole("mentor"), async (req, res, next) => {
+  try {
+    const { fellowId } = req.params;
+    const month = Number(req.params.month);
+    const { deliverablesStatus } = req.body;
+    if (!mongoose.Types.ObjectId.isValid(fellowId)) {
+      return res.status(400).json({ success: false, message: "Invalid fellowId." });
+    }
+    if (!month || month < 1 || month > 24 || !Array.isArray(deliverablesStatus)) {
+      return res.status(400).json({ success: false, message: "month and a deliverablesStatus array are required." });
+    }
+
+    const fellow = await ensureFellowBelongsToMentor(req.user.id, fellowId);
+    if (!fellow) {
+      return res.status(404).json({ success: false, message: "Fellow not found or not assigned to you." });
+    }
+
+    const report = await PDCAReport.findOne({ fellowId, month });
+    if (!report) {
+      return res.status(404).json({ success: false, message: "No checklist found for this month yet — open it once first." });
+    }
+    if (report.status === "approved") {
+      return res.status(400).json({ success: false, message: "This month is locked. Unlock it first to change the checklist." });
+    }
+
+    const overrideMap = new Map(deliverablesStatus.map((d) => [d.id, d]));
+    report.deliverablesStatus = report.deliverablesStatus.map((d) => {
+      const override = overrideMap.get(d.id);
+      if (!override) return d;
+      return {
+        ...(d.toObject ? d.toObject() : d),
+        status: override.status,
+        note: override.note !== undefined ? override.note : d.note,
+        mentorOverride: !!override.mentorOverride,
+      };
+    });
+    report.mentorId = report.mentorId || req.user.id;
+    await report.save();
+
+    res.json({ success: true, report });
+  } catch (err) { next(err); }
 });
 
 // ── POST /api/pdca/generate — Mentor clicks "Generate Draft" ──
@@ -419,6 +661,49 @@ router.post("/:fellowId/approve", requireRole("mentor"), async (req, res, next) 
     }
 
     res.json({ success: true, report });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── POST /api/pdca/:fellowId/unlock — Mentor unlocks an approved month ──
+// back to "draft" so it can be edited (checklist + PDCA text) again.
+// This is the deliberate escape hatch for the "approved months are
+// locked forever" rule enforced above (write-through guard + the fellow
+// checklist route's approved-month check): only a mentor can reverse it,
+// and only for their own fellow's report.
+router.post("/:fellowId/unlock", requireRole("mentor"), async (req, res, next) => {
+  try {
+    const { fellowId } = req.params;
+    const month = Number(req.body.month) || 1;
+    if (!mongoose.Types.ObjectId.isValid(fellowId)) {
+      return res.status(400).json({ success: false, message: "Invalid fellowId." });
+    }
+
+    const fellow = await ensureFellowBelongsToMentor(req.user.id, fellowId);
+    if (!fellow) {
+      return res.status(404).json({ success: false, message: "Fellow not found or not assigned to you." });
+    }
+
+    const report = await PDCAReport.findOne({ fellowId, month });
+    if (!report) {
+      return res.status(404).json({ success: false, message: "No report found for this month." });
+    }
+    if (report.status !== "approved") {
+      return res.status(400).json({ success: false, message: "This month is not locked — nothing to unlock." });
+    }
+
+    report.status = "draft";
+    report.unlockedAt = new Date();
+    report.unlockedBy = req.user.id;
+    report.unlockCount = (report.unlockCount || 0) + 1;
+    await report.save();
+
+    res.json({
+      success: true,
+      report,
+      message: `Month ${month} unlocked. The fellow's checklist and your PDCA draft can be edited again.`,
+    });
   } catch (err) {
     next(err);
   }
