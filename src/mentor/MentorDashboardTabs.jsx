@@ -14,23 +14,33 @@ export function MentorTeacherChecklistPanel({ teacherId, setToast }) {
   const fetchChecklist = () => {
     if (!teacherId) return;
     setLoading(true);
-    // Mentor calls teacher's checklist via a teacherId param
-    // We'll piggy-back on the same endpoint by passing the teacherId via query
-    fetch(`${API_BASE_URL}/api/teacher-tasks/checklist?month=${month}&year=${year}&teacherId=${teacherId}`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("spaceece_auth_token")}` }
-    })
-      .then(r => r.json())
+    getTeacherChecklist(month, year, teacherId)
       .then(res => { if (res?.items) setItems(res.items); })
-      .catch(() => {})
+      .catch((err) => {
+        console.warn("[Checklist] Fetch failed:", err?.message);
+      })
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { fetchChecklist(); }, [teacherId, month, year]);
 
+  const updateTarget = (id, val) => {
+    const num = Math.max(0, parseInt(val, 10) || 0);
+    setItems(prev => prev.map(item => item.id === id ? {
+      ...item,
+      target: num,
+      met: item.mentorOverride ? item.met : (item.count >= num)
+    } : item));
+  };
+
+  const toggleRequired = (id) => {
+    setItems(prev => prev.map(item => item.id === id ? { ...item, required: !item.required } : item));
+  };
+
   const toggleOverride = (id) => {
     setItems(prev => prev.map(item =>
       item.id === id
-        ? { ...item, mentorOverride: !item.mentorOverride, met: !item.mentorOverride ? true : item.met }
+        ? { ...item, mentorOverride: !item.mentorOverride, met: !item.mentorOverride ? true : (item.count >= item.target) }
         : item
     ));
   };
@@ -42,22 +52,8 @@ export function MentorTeacherChecklistPanel({ teacherId, setToast }) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const token = localStorage.getItem("spaceece_auth_token");
-      const response = await fetch(`${API_BASE_URL}/api/teacher-tasks/checklist/mentor-override`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ teacherId, month, year, items }),
-      });
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data?.message || `Failed to save checklist (${response.status})`);
-      }
-
-      setToast?.({ msg: "✅ Checklist overrides saved!", type: "success" });
+      await mentorOverrideTeacherChecklist({ teacherId, month, year, items });
+      setToast?.({ msg: "✅ Monthly checklist targets & overrides saved!", type: "success" });
       fetchChecklist();
     } catch (err) {
       setToast?.({ msg: err.message || "Failed to save", type: "error" });
@@ -66,75 +62,130 @@ export function MentorTeacherChecklistPanel({ teacherId, setToast }) {
     }
   };
 
-  const ICONS = { activities:"📚", lesson_plans:"📝", courses:"🎓", assessments:"📊", pcb_sessions:"🏡" };
+  const ICONS = { activities: "📚", courses: "🎓", assessments: "📊", pcb_sessions: "🏡" };
+  const COLORS = { activities: "#3b82f6", courses: "#06b6d4", assessments: "#f59e0b", pcb_sessions: "#f97316" };
   const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
   return (
-    <div style={{ background: "#f8fafc", borderRadius: 12, border: "1.5px solid #e2e8f0", padding: 16, marginTop: 16 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>📋 Task of the Month Checklist</div>
+    <div style={{ background: "#f8fafc", borderRadius: 14, border: "1.5px solid #e2e8f0", padding: 18, marginTop: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "#1e293b", display: "flex", alignItems: "center", gap: 6 }}>
+            📋 Monthly Goals & Checklist
+          </div>
+          <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
+            Set custom targets, required status, or manual overrides for this teacher
+          </div>
+        </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <select
             value={month}
             onChange={e => setMonth(Number(e.target.value))}
-            style={{ fontSize: 11, fontWeight: 700, border: "1.5px solid #e2e8f0", borderRadius: 8, padding: "3px 6px", color: "#334155", background: "white" }}
+            style={{ fontSize: 12, fontWeight: 700, border: "1.5px solid #cbd5e1", borderRadius: 8, padding: "5px 10px", color: "#334155", background: "white" }}
           >
-            {monthNames.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+            {monthNames.map((m, i) => <option key={i} value={i + 1}>{m} {year}</option>)}
           </select>
           <button
             onClick={handleSave}
             disabled={saving}
-            style={{ fontSize: 11, fontWeight: 700, background: "#4f46e5", color: "white", border: "none", borderRadius: 8, padding: "5px 12px", cursor: "pointer", opacity: saving ? 0.6 : 1 }}
+            style={{ fontSize: 12, fontWeight: 800, background: "#4f46e5", color: "white", border: "none", borderRadius: 8, padding: "7px 16px", cursor: "pointer", opacity: saving ? 0.6 : 1, boxShadow: "0 2px 6px rgba(79,70,229,0.3)" }}
           >
-            {saving ? "Saving..." : "💾 Save Overrides"}
+            {saving ? "Saving..." : "💾 Save Goals"}
           </button>
         </div>
       </div>
 
       {loading ? (
-        <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: 12 }}>Loading...</div>
+        <div style={{ fontSize: 12, color: "#94a3b8", textAlign: "center", padding: 16 }}>Loading checklist...</div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {items.map(item => (
-            <div key={item.id} style={{
-              display: "flex", alignItems: "flex-start", gap: 10,
-              padding: "10px 12px", borderRadius: 10,
-              background: item.met ? "#f0fdf4" : "white",
-              border: `1.5px solid ${item.mentorOverride ? "#a78bfa" : item.met ? "#bbf7d0" : "#e2e8f0"}`,
-            }}>
-              <div style={{ paddingTop: 2 }}>
-                {/* Auto status */}
-                <div style={{ fontSize: 11, color: item.met ? "#16a34a" : "#94a3b8", fontWeight: 700 }}>
-                  {item.met ? "✅" : "⬜"} {ICONS[item.id]} {item.label}
-                  {!item.required && <span style={{ fontSize: 9, color: "#94a3b8", marginLeft: 4 }}>(optional)</span>}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {items.map(item => {
+            const pct = item.target > 0 ? Math.min(100, Math.round((item.count / item.target) * 100)) : 0;
+            const barColor = item.met ? "#10b981" : (COLORS[item.id] || "#3b82f6");
+
+            return (
+              <div key={item.id} style={{
+                padding: "12px 14px", borderRadius: 12,
+                background: item.met ? "#f0fdf4" : "white",
+                border: `1.5px solid ${item.mentorOverride ? "#a78bfa" : item.met ? "#bbf7d0" : "#e2e8f0"}`,
+                boxShadow: "0 1px 4px rgba(0,0,0,0.02)"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 16 }}>{ICONS[item.id] || "📌"}</span>
+                    <div>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>{item.label}</span>
+                      <button
+                        type="button"
+                        onClick={() => toggleRequired(item.id)}
+                        title="Click to toggle Required / Optional"
+                        style={{
+                          marginLeft: 8, fontSize: 9, fontWeight: 800,
+                          color: item.required ? "#15803d" : "#64748b",
+                          background: item.required ? "#dcfce7" : "#f1f5f9",
+                          border: `1px solid ${item.required ? "#86efac" : "#cbd5e1"}`,
+                          borderRadius: 6, padding: "2px 7px", cursor: "pointer"
+                        }}
+                      >
+                        {item.required ? "REQUIRED" : "OPTIONAL"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Target input & Count */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <label style={{ fontSize: 11, fontWeight: 700, color: "#64748b" }}>Target:</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="99"
+                        value={item.target ?? 1}
+                        onChange={e => updateTarget(item.id, e.target.value)}
+                        style={{
+                          width: 52, padding: "4px 6px", textAlign: "center",
+                          fontSize: 12, fontWeight: 800, color: "#0f172a",
+                          border: "1.5px solid #cbd5e1", borderRadius: 6, background: "#f8fafc"
+                        }}
+                      />
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: item.met ? "#15803d" : "#475569", minWidth: 65, textAlign: "right" }}>
+                      {item.count}/{item.target} done {item.met ? "✓" : ""}
+                    </div>
+                  </div>
                 </div>
-                <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 1 }}>
-                  Auto: {item.count}/{item.target} done
+
+                {/* Progress bar */}
+                <div style={{ height: 6, borderRadius: 99, background: "#f1f5f9", overflow: "hidden", marginBottom: 8 }}>
+                  <div style={{ height: "100%", borderRadius: 99, background: barColor, width: `${pct}%`, transition: "width 0.4s ease" }} />
                 </div>
-              </div>
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-                {/* Override toggle */}
-                <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, fontWeight: 700, color: "#7c3aed" }}>
-                  <input
-                    type="checkbox"
-                    checked={item.mentorOverride || false}
-                    onChange={() => toggleOverride(item.id)}
-                    style={{ accentColor: "#7c3aed" }}
-                  />
-                  Mentor Override {item.mentorOverride ? "(mark as met)" : ""}
-                </label>
-                {item.mentorOverride && (
+
+                {/* Mentor Override & Note */}
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", paddingTop: 4, borderTop: "1px dashed #f1f5f9" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, fontWeight: 700, color: "#7c3aed" }}>
+                    <input
+                      type="checkbox"
+                      checked={item.mentorOverride || false}
+                      onChange={() => toggleOverride(item.id)}
+                      style={{ accentColor: "#7c3aed" }}
+                    />
+                    Manual Mark as Met
+                  </label>
                   <input
                     type="text"
                     value={item.mentorNote || ""}
                     onChange={e => setNote(item.id, e.target.value)}
-                    placeholder="Add note (optional)..."
-                    style={{ fontSize: 11, border: "1px solid #ddd6fe", borderRadius: 6, padding: "4px 8px", outline: "none", width: "100%", boxSizing: "border-box" }}
+                    placeholder="Add teacher note (e.g. Approved exception, Great effort)..."
+                    style={{
+                      flex: 1, minWidth: 200, fontSize: 11,
+                      border: "1px solid #e2e8f0", borderRadius: 6, padding: "4px 8px",
+                      outline: "none", background: "white"
+                    }}
                   />
-                )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

@@ -1261,6 +1261,52 @@ export async function downloadCertificatePdf(certificateId, filenameHint) {
   window.URL.revokeObjectURL(url);
 }
 
+export async function exportActivitySubmissions({ teacherId, centerId, month, filenameHint }) {
+  const token = localStorage.getItem("spaceece_auth_token");
+  const params = new URLSearchParams();
+  if (teacherId) params.set("teacherId", teacherId);
+  if (centerId) params.set("centerId", centerId);
+  if (month) params.set("month", month);
+  const res = await fetch(`${API_BASE_URL}/api/activity-submissions/export?${params.toString()}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || "Failed to export report.");
+  }
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filenameHint || "activity-report.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function exportAllCentersActivitySubmissions({ month, filenameHint }) {
+  const token = localStorage.getItem("spaceece_auth_token");
+  const params = new URLSearchParams();
+  if (month) params.set("month", month);
+  const res = await fetch(`${API_BASE_URL}/api/admin/activity-submissions/export-all-centers?${params.toString()}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || "Failed to export report.");
+  }
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filenameHint || "all-centers-activity-report.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+}
+
 // Start: Dnyaneshwari Thorat
 export async function viewCertificatePdf(certificateId) {
   const token = localStorage.getItem("spaceece_auth_token");
@@ -1792,14 +1838,22 @@ export function toggleAdminQuizPublish(id) {
 
 
 // ── Teacher Monthly Checklist ──
-export function getTeacherChecklist(month, year) {
-  return request(`/api/teacher-tasks/checklist?month=${month}&year=${year}`);
+export function getTeacherChecklist(month, year, teacherId) {
+  const q = teacherId ? `&teacherId=${teacherId}` : "";
+  return request(`/api/teacher-tasks/checklist?month=${month}&year=${year}${q}`);
 }
 
 export function mentorOverrideTeacherChecklist({ teacherId, month, year, items }) {
   return request("/api/teacher-tasks/checklist/mentor-override", {
     method: "PATCH",
     body: JSON.stringify({ teacherId, month, year, items }),
+  });
+}
+
+export function bulkSetChecklistTargets({ teacherIds, month, year, items }) {
+  return request("/api/teacher-tasks/checklist/bulk-set-targets", {
+    method: "POST",
+    body: JSON.stringify({ teacherIds, month, year, items }),
   });
 }
 

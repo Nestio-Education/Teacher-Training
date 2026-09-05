@@ -189,7 +189,14 @@ router.post("/admin-assign", requireAuth, async (req, res, next) => {
         time:
           time ||
           `${startTime || "11:30"} - ${endTime || "12:30"}`,
-        completed: false
+        completed: false,
+        source: req.body.source || (req.user.role === "mentor" ? "mentor_assigned" : "admin_assigned"),
+        ageGroup: req.body.ageGroup || "",
+        topic: req.body.topic || "",
+        howToConduct: req.body.howToConduct || "",
+        materials: req.body.materials || "",
+        objective: req.body.objective || "",
+        activityNotes: req.body.activityNotes || ""
       });
 
       createdDocs.push(created);
@@ -468,7 +475,7 @@ router.delete("/:id", requireAuth, async (req, res, next) => {
 });
 
 // GET /api/teacher-tasks/checklist?month=9&year=2026
-// Auto-computes teacher's monthly checklist and returns it
+// Auto-computes teacher's monthly checklist (4 items) and returns it
 router.get("/checklist", requireAuth, async (req, res, next) => {
   try {
     const month =
@@ -494,128 +501,130 @@ router.get("/checklist", requireAuth, async (req, res, next) => {
     const endDate =
       `${year}-${String(month).padStart(2, "0")}-31`;
 
-    // Count completed activities by category from TeacherTask
-    const [
-      classTasks,
-      fieldTasks,
-      pcbTasks
-    ] = await Promise.all([
-      TeacherTask.countDocuments({
-        teacher: teacherId,
-        category: "class_lesson",
-        completed: true,
-        completionStatus: "completed",
-        date: {
-          $gte: startDate,
-          $lte: endDate
-        }
-      }),
-
-      TeacherTask.countDocuments({
-        teacher: teacherId,
-        category: "field_visit",
-        completed: true,
-        completionStatus: "completed",
-        date: {
-          $gte: startDate,
-          $lte: endDate
-        }
-      }),
-
-      TeacherTask.countDocuments({
-        teacher: teacherId,
-        category: "pcb_session",
-        completed: true,
-        completionStatus: "completed",
-        date: {
-          $gte: startDate,
-          $lte: endDate
-        }
-      })
-    ]);
-
-    // Count lesson plans, courses, assessments
     const monthStart =
       new Date(year, month - 1, 1);
 
     const monthEnd =
       new Date(year, month, 0, 23, 59, 59);
 
+    // ── Count ALL activities (class_lesson + field_visit + mentor_published + lesson plan completions) ──
     const [
+      classTaskCount,
+      fieldTaskCount,
+      mentorPublishedCount,
       lessonPlanCount,
+      pcbTaskCount,
       courseCount,
       assessmentCount
     ] = await Promise.all([
-      LessonCompletionReport.countDocuments({
+      // Class lessons completed on calendar
+      TeacherTask.countDocuments({
         teacher: teacherId,
-        submittedAt: {
-          $gte: monthStart,
-          $lte: monthEnd
-        }
+        category: "class_lesson",
+        completed: true,
+        date: { $gte: startDate, $lte: endDate }
       }),
 
+      // Field visits completed on calendar
+      TeacherTask.countDocuments({
+        teacher: teacherId,
+        category: "field_visit",
+        completed: true,
+        date: { $gte: startDate, $lte: endDate }
+      }),
+
+      // Mentor-published activities completed on calendar
+      TeacherTask.countDocuments({
+        teacher: teacherId,
+        source: "mentor_published",
+        completed: true,
+        date: { $gte: startDate, $lte: endDate }
+      }),
+
+      // Lesson plan completion reports (Training & Lessons tab "Mark Complete")
+      LessonCompletionReport.countDocuments({
+        teacher: teacherId,
+        submittedAt: { $gte: monthStart, $lte: monthEnd }
+      }),
+
+      // PCB sessions completed
+      TeacherTask.countDocuments({
+        teacher: teacherId,
+        category: "pcb_session",
+        completed: true,
+        date: { $gte: startDate, $lte: endDate }
+      }),
+
+      // Courses completed
       CourseAssignment.countDocuments({
         teacher: teacherId,
         status: "completed",
-        updatedAt: {
-          $gte: monthStart,
-          $lte: monthEnd
-        }
+        updatedAt: { $gte: monthStart, $lte: monthEnd }
       }),
 
+      // Assessments taken
       AssessmentResult.countDocuments({
-        teacher: teacherId,
-        createdAt: {
-          $gte: monthStart,
-          $lte: monthEnd
-        }
+        user: teacherId,
+        createdAt: { $gte: monthStart, $lte: monthEnd }
       })
     ]);
 
-    const activityCount =
-      classTasks + fieldTasks;
+    // Merge all activity sources into one count
+    // Avoid double-counting: mentor_published tasks with class_lesson/field_visit category
+    // are already counted in classTaskCount/fieldTaskCount, so only count mentor_published
+    // tasks that don't have those categories
+    const mentorPublishedOtherCount = await TeacherTask.countDocuments({
+      teacher: teacherId,
+      source: "mentor_published",
+      category: { $nin: ["class_lesson", "field_visit"] },
+      completed: true,
+      date: { $gte: startDate, $lte: endDate }
+    });
 
-    // Auto-computed items
+    const totalActivityCount =
+      classTaskCount + fieldTaskCount + mentorPublishedOtherCount + lessonPlanCount;
+
+    // Default targets
+    const DEFAULT_TARGETS = {
+      activities: 4,
+      courses: 1,
+      assessments: 1,
+      pcb_sessions: 1
+    };
+
+    // Auto-computed items (4 items — Activities merges everything)
     const autoItems = [
       {
         id: "activities",
         label: "Activities",
         required: true,
-        count: activityCount,
-        target: 4,
-        met: activityCount >= 4
-      },
-      {
-        id: "lesson_plans",
-        label: "Lesson Plans",
-        required: true,
-        count: lessonPlanCount,
-        target: 1,
-        met: lessonPlanCount >= 1
+        count: totalActivityCount,
+        target: DEFAULT_TARGETS.activities,
+        met: totalActivityCount >= DEFAULT_TARGETS.activities
       },
       {
         id: "courses",
         label: "Courses",
         required: true,
         count: courseCount,
-        target: 1,
-        met: courseCount >= 1
+        target: DEFAULT_TARGETS.courses,
+        met: courseCount >= DEFAULT_TARGETS.courses
       },
       {
         id: "assessments",
         label: "Assessments",
         required: true,
         count: assessmentCount,
-        target: 1,
-        met: assessmentCount >= 1
+        target: DEFAULT_TARGETS.assessments,
+        met: assessmentCount >= DEFAULT_TARGETS.assessments
       },
       {
         id: "pcb_sessions",
         label: "PCB Sessions",
         required: false,
-        count: pcbTasks,
-        target: 1,
-        met: pcbTasks >= 1
+        count: pcbTaskCount,
+        target: DEFAULT_TARGETS.pcb_sessions,
+        met: pcbTaskCount >= DEFAULT_TARGETS.pcb_sessions
       }
     ];
 
@@ -636,13 +645,18 @@ router.get("/checklist", requireAuth, async (req, res, next) => {
     const items = autoItems.map(item => {
       const override = overrideMap.get(item.id);
 
-      if (override?.mentorOverride) {
+      if (override) {
+        // Use mentor's target if set
+        const effectiveTarget = override.target != null ? override.target : item.target;
+        const effectiveRequired = override.required != null ? override.required : item.required;
+
         return {
           ...item,
-          met: override.met,
-          mentorOverride: true,
-          mentorNote:
-            override.mentorNote || ""
+          target: effectiveTarget,
+          required: effectiveRequired,
+          met: override.mentorOverride ? override.met : (item.count >= effectiveTarget),
+          mentorOverride: !!override.mentorOverride,
+          mentorNote: override.mentorNote || ""
         };
       }
 
@@ -730,6 +744,72 @@ router.patch(
       res.json({
         success: true,
         checklist: updated
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// POST /api/teacher-tasks/checklist/bulk-set-targets
+// Mentor/Admin can set targets for multiple teachers at once
+router.post(
+  "/checklist/bulk-set-targets",
+  requireAuth,
+  async (req, res, next) => {
+    if (
+      !["mentor", "admin", "super_admin"].includes(req.user?.role)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "Only mentors or admins can set checklist targets."
+      });
+    }
+
+    try {
+      const { teacherIds, month, year, items } = req.body;
+
+      if (
+        !Array.isArray(teacherIds) ||
+        teacherIds.length === 0 ||
+        !month ||
+        !year ||
+        !Array.isArray(items)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "teacherIds (array), month, year, items required."
+        });
+      }
+
+      const results = [];
+
+      for (const tid of teacherIds) {
+        // Build items array with target/required overrides only (no met override)
+        const overrideItems = items.map(item => ({
+          id: item.id,
+          label: item.label || item.id,
+          target: item.target,
+          required: item.required,
+          mentorOverride: false,
+          met: false,
+          count: 0,
+          mentorNote: item.mentorNote || ""
+        }));
+
+        const updated = await TeacherMonthChecklist.findOneAndUpdate(
+          { teacherId: tid, month, year },
+          { $set: { items: overrideItems, lastComputedAt: new Date() } },
+          { new: true, upsert: true, setDefaultsOnInsert: true }
+        );
+
+        results.push({ teacherId: tid, success: true });
+      }
+
+      res.json({
+        success: true,
+        updated: results.length,
+        results
       });
     } catch (err) {
       next(err);

@@ -12,6 +12,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import multer from "multer";
 import mongoose from "mongoose";
+import ExcelJS from "exceljs";
+import sharp from "sharp";
 import { connectDb } from "./db.js";
 import { Quiz } from "./models/Quiz.js";
 import { hashPassword, requireAuth, requireRole, signToken, verifyPassword, validatePasswordAgainstPolicy, createPasswordResetToken, verifyPasswordResetToken } from "./auth.js";
@@ -4836,6 +4838,298 @@ app.patch("/api/activities/:id", requireAuth, requireRole("admin"), async (req, 
   }
 });
 
+// ==========================================
+// ACTIVITY SUBMISSIONS — MONTHLY EXCEL EXPORT
+// ==========================================
+const PUBLIC_APP_BASE_URL = (process.env.PUBLIC_APP_BASE_URL || "https://nestio-preschool-website.onrender.com").replace(/\/$/, "");
+
+const TASK_CATEGORY_LABELS = {
+  field_visit: "Field Visit (Home Visit)",
+  pcb_session: "PCB Session (Anganwadi Visit)",
+  pdca_deliverable: "PDCA Deliverable",
+  self_learning: "Self-Learning",
+  custom_task: "Custom Task",
+  class_lesson: "Class Lesson"
+};
+
+const FOLLOWUP_LABELS = {
+  proceed_next: "Proceed to Next Activity",
+  repeat_activity: "Repeat Activity Tomorrow",
+  remediate_subgroup: "Remediate Flagged Subgroup"
+};
+
+const SUBMISSION_COLUMNS = [
+  { header: "Date", key: "date", width: 12 },
+  { header: "Teacher", key: "teacher", width: 20 },
+  { header: "Center", key: "center", width: 18 },
+  { header: "Class", key: "class", width: 14 },
+  { header: "Category", key: "category", width: 22 },
+  { header: "Activity / Task Name", key: "activityName", width: 28 },
+  { header: "Description / Notes", key: "description", width: 45 },
+  { header: "Developmental Domains", key: "domains", width: 24 },
+  { header: "Group Mastery", key: "mastery", width: 14 },
+  { header: "Follow-up Action", key: "followUp", width: 26 },
+  { header: "Flagged Children", key: "flagged", width: 35 },
+  { header: "Visit Type", key: "visitType", width: 18 },
+  { header: "Children Visited", key: "childrenVisited", width: 14 },
+  { header: "Parents Present", key: "parentsPresent", width: 14 },
+  { header: "Photo", key: "photo", width: 16 },
+  { header: "Other Attachments", key: "attachments", width: 32 },
+  { header: "Status", key: "status", width: 12 },
+];
+const PHOTO_COL_INDEX = 14; // 0-based — must match "Photo"'s position in SUBMISSION_COLUMNS above
+const THUMB_MAX_PX = 120;
+
+function getMonthRange(monthStr) {
+  const now = new Date();
+  let year = now.getFullYear();
+  let month = now.getMonth(); // 0-indexed
+  if (monthStr && /^\d{4}-\d{2}$/.test(monthStr)) {
+    const [y, m] = monthStr.split("-").map(Number);
+    year = y;
+    month = m - 1;
+  }
+  const start = new Date(year, month, 1, 0, 0, 0, 0);
+  const end = new Date(year, month + 1, 1, 0, 0, 0, 0);
+  const label = start.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+  return { start, end, label };
+}
+
+function sanitizeSheetName(name) {
+  return String(name || "Sheet").replace(/[\\/?*[\]:]/g, " ").slice(0, 31) || "Sheet";
+}
+
+// ActivitySubmission.files is typed Mixed (not an ObjectId ref), so .populate() silently
+// no-ops on it — resolve the referenced FileAsset docs manually instead.
+async function resolveFileAssetsMap(submissions) {
+  const idSet = new Set();
+  for (const sub of submissions) {
+    for (const f of (sub.files || [])) {
+      const id = typeof f === "string" ? f : (f?._id || f?.id);
+      if (id && mongoose.Types.ObjectId.isValid(id)) idSet.add(String(id));
+    }
+  }
+  if (idSet.size === 0) return new Map();
+  const assets = await FileAsset.find({ _id: { $in: [...idSet] } });
+  return new Map(assets.map(a => [String(a._id), a]));
+}
+
+// Resizes + re-encodes any raster photo to a small JPEG buffer for embedding.
+// Returns null (never throws) if the file is missing, unreadable, or not a photo —
+// callers fall back to showing the filename as text instead.
+async function buildPhotoThumbnailBuffer(asset) {
+  if (!asset?.mimeType?.startsWith("image/")) return null;
+  const filePath = path.join(uploadDir, asset.storageKey);
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    return await sharp(filePath)
+      .resize(THUMB_MAX_PX, THUMB_MAX_PX, { fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 70 })
+      .toBuffer();
+  } catch (err) {
+    console.warn(`[export] Failed to build thumbnail for asset ${asset._id}:`, err.message);
+    return null;
+  }
+}
+
+async function addSubmissionsSheet(workbook, submissions, sheetName) {
+  const sheet = workbook.addWorksheet(sheetName);
+  sheet.columns = SUBMISSION_COLUMNS;
+  sheet.getRow(1).font = { bold: true };
+  sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE2E8F0" } };
+
+  if (submissions.length === 0) {
+    sheet.addRow({ description: "No submissions found for this period." });
+    return sheet;
+  }
+
+  const fileMap = await resolveFileAssetsMap(submissions);
+
+  for (const sub of submissions) {
+    const domainStr = Array.isArray(sub.developmentalDomain) ? sub.developmentalDomain.join(", ") : "";
+    const flaggedStr = Array.isArray(sub.flaggedChildren) && sub.flaggedChildren.length
+      ? sub.flaggedChildren.map(f => `${f.childName} (${f.status === "advanced" ? "Advanced" : "Needs Support"}${f.note ? ": " + f.note : ""})`).join("; ")
+      : "";
+    const categoryLabel = sub.taskCategory
+      ? (TASK_CATEGORY_LABELS[sub.taskCategory] || sub.taskCategory)
+      : (sub.type === "lesson" ? "Lesson" : "Class Activity");
+
+    const assets = (sub.files || [])
+      .map(f => {
+        const id = typeof f === "string" ? f : (f?._id || f?.id);
+        return id ? fileMap.get(String(id)) : null;
+      })
+      .filter(Boolean);
+
+    const photoAsset = assets.find(a => a.mimeType?.startsWith("image/")) || null;
+    const otherAssets = assets.filter(a => a !== photoAsset);
+
+    const rowIndex = sheet.rowCount + 1;
+    const row = sheet.addRow({
+      date: sub.activityDate ? new Date(sub.activityDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "",
+      teacher: sub.teacher?.name || "",
+      center: sub.center?.name || "",
+      class: sub.class?.name || "",
+      category: categoryLabel,
+      activityName: sub.activityName || "",
+      description: sub.description || "",
+      domains: domainStr,
+      mastery: sub.groupMastery || "",
+      followUp: FOLLOWUP_LABELS[sub.followUpAction] || sub.followUpAction || "",
+      flagged: flaggedStr,
+      visitType: sub.externalBeneficiaries?.[0]?.visitType || "",
+      childrenVisited: sub.visitMetrics?.totalChildrenCount ?? "",
+      parentsPresent: sub.visitMetrics?.parentsPresent ?? "",
+      photo: "—",
+      attachments: "—",
+      status: sub.status || "pending"
+    });
+    row.alignment = { vertical: "middle", wrapText: true };
+
+    if (photoAsset) {
+      const buffer = await buildPhotoThumbnailBuffer(photoAsset);
+      if (buffer) {
+        row.getCell("photo").value = "";
+        const imageId = workbook.addImage({ buffer, extension: "jpeg" });
+        sheet.addImage(imageId, {
+          tl: { col: PHOTO_COL_INDEX, row: rowIndex - 1 },
+          ext: { width: 70, height: 70 }
+        });
+        row.height = 56;
+      } else {
+        row.getCell("photo").value = photoAsset.originalName || "Photo unavailable";
+      }
+    }
+
+    if (otherAssets.length > 0) {
+      const names = otherAssets.map(a => a.originalName).join(", ");
+      const firstUrl = otherAssets[0].publicUrl ? `${PUBLIC_APP_BASE_URL}${otherAssets[0].publicUrl}` : null;
+      row.getCell("attachments").value = firstUrl ? { text: names, hyperlink: firstUrl } : names;
+      if (firstUrl) row.getCell("attachments").font = { color: { argb: "FF2563EB" }, underline: true };
+    }
+  }
+
+  return sheet;
+}
+
+// GET /api/activity-submissions/export?teacherId=&centerId=&month=YYYY-MM
+app.get("/api/activity-submissions/export", requireAuth, requireRole("mentor", "admin"), async (req, res) => {
+  try {
+    const { teacherId, centerId, month } = req.query;
+    if (!teacherId && !centerId) {
+      return res.status(400).json({ message: "Provide either teacherId or centerId to export." });
+    }
+
+    const { start, end, label } = getMonthRange(month);
+    const filter = { activityDate: { $gte: start, $lt: end } };
+    let fileLabel = "Report";
+
+    if (teacherId) {
+      if (!mongoose.Types.ObjectId.isValid(teacherId)) {
+        return res.status(400).json({ message: "Invalid teacherId." });
+      }
+      const teacherDoc = await User.findById(teacherId);
+      if (!teacherDoc) return res.status(404).json({ message: "Teacher not found." });
+      if (req.user.role === "mentor" && String(teacherDoc.assignedMentor || "") !== req.user.id) {
+        return res.status(403).json({ message: "You can only export data for teachers assigned to you." });
+      }
+      fileLabel = teacherDoc.name;
+      filter.teacher = teacherId;
+    } else {
+      if (!mongoose.Types.ObjectId.isValid(centerId)) {
+        return res.status(400).json({ message: "Invalid centerId." });
+      }
+      const centerDoc = await Center.findById(centerId);
+      if (!centerDoc) return res.status(404).json({ message: "Center not found." });
+      if (req.user.role === "mentor" && String(centerDoc.mentor || "") !== req.user.id) {
+        return res.status(403).json({ message: "You can only export data for centers assigned to you." });
+      }
+      fileLabel = centerDoc.name;
+      filter.center = centerId;
+    }
+
+    const submissions = await ActivitySubmission.find(filter)
+      .populate("teacher", "name email")
+      .populate("center", "name")
+      .populate("class", "name")
+      .sort({ activityDate: 1 });
+
+    const workbook = new ExcelJS.Workbook();
+    await addSubmissionsSheet(workbook, submissions, "Submissions");
+    const buffer = await workbook.xlsx.writeBuffer();
+
+    const safeLabel = String(fileLabel).replace(/[^a-z0-9]+/gi, "-");
+    const filename = `${safeLabel}-${label.replace(" ", "-")}.xlsx`;
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(Buffer.from(buffer));
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+// GET /api/admin/activity-submissions/export-all-centers?month=YYYY-MM
+app.get("/api/admin/activity-submissions/export-all-centers", requireAuth, requireRole("admin"), async (req, res) => {
+  try {
+    const { month } = req.query;
+    const { start, end, label } = getMonthRange(month);
+    const filter = { activityDate: { $gte: start, $lt: end } };
+
+    const [centers, submissions] = await Promise.all([
+      Center.find().sort({ name: 1 }),
+      ActivitySubmission.find(filter)
+        .populate("teacher", "name email")
+        .populate("center", "name")
+        .populate("class", "name")
+        .sort({ activityDate: 1 })
+    ]);
+
+    const workbook = new ExcelJS.Workbook();
+
+    const overviewSheet = workbook.addWorksheet("Overview");
+    overviewSheet.columns = [
+      { header: "Center", key: "center", width: 24 },
+      { header: "City", key: "city", width: 16 },
+      { header: "Total Submissions", key: "total", width: 16 },
+      { header: "Approved", key: "approved", width: 12 },
+      { header: "Pending", key: "pending", width: 12 },
+      { header: "Flagged / Rejected", key: "flaggedRejected", width: 16 },
+    ];
+    overviewSheet.getRow(1).font = { bold: true };
+    for (const c of centers) {
+      const centerSubs = submissions.filter(s => String(s.center?._id || s.center) === String(c._id));
+      overviewSheet.addRow({
+        center: c.name,
+        city: c.city || "",
+        total: centerSubs.length,
+        approved: centerSubs.filter(s => s.status === "approved").length,
+        pending: centerSubs.filter(s => s.status === "pending").length,
+        flaggedRejected: centerSubs.filter(s => ["flagged", "rejected"].includes(s.status)).length
+      });
+    }
+
+    const usedNames = new Set(["Overview"]);
+    for (const c of centers) {
+      const centerSubs = submissions.filter(s => String(s.center?._id || s.center) === String(c._id));
+      if (centerSubs.length === 0) continue;
+      let sheetName = sanitizeSheetName(c.name);
+      let suffix = 1;
+      while (usedNames.has(sheetName)) sheetName = sanitizeSheetName(`${c.name} (${++suffix})`);
+      usedNames.add(sheetName);
+      await addSubmissionsSheet(workbook, centerSubs, sheetName);
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const filename = `All-Centers-${label.replace(" ", "-")}.xlsx`;
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(Buffer.from(buffer));
+  } catch (error) {
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
 
 // ==========================================
 // AI ACTIVITIES (Lesson Planner)

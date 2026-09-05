@@ -86,7 +86,22 @@ const teacherTaskSchema = new mongoose.Schema(
     },
     reportSubmittedAt: {
       type: Date
-    }
+    },
+    // ── Unified Activity Detail Fields (optional — filled by rich sources) ──
+    ageGroup: { type: String, default: "" },
+    topic: { type: String, default: "" },
+    howToConduct: { type: String, default: "" },
+    materials: { type: String, default: "" },
+    objective: { type: String, default: "" },
+    activityNotes: { type: String, default: "" },
+    // Where this task was created from
+    source: {
+      type: String,
+      enum: ["teacher_created", "mentor_assigned", "mentor_published", "ai_generated", "admin_assigned", ""],
+      default: ""
+    },
+    // Link back to LessonPlanAssignment if created from auto-publish
+    lessonPlanAssignment: { type: mongoose.Schema.Types.ObjectId, ref: "LessonPlanAssignment" }
   },
   { timestamps: true }
 );

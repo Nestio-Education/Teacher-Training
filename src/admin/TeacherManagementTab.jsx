@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { AttendanceBar, Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
-import { getAdminTeachers, updateTeacherStatus, updateTeacherProfile, registerTeacher, getCenters, getClasses, sendDirectMessageToTeacher, blockTeacher, unblockTeacher, deleteTeacher, assignTeacherTaskByAdmin, getMentorFellows, claimFellow, unclaimFellow, updateFellowStatus, deleteMentorFellow } from "../services/api";
+import { AttendanceBar, ExportMonthModal, Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
+import { getAdminTeachers, updateTeacherStatus, updateTeacherProfile, registerTeacher, getCenters, getClasses, sendDirectMessageToTeacher, blockTeacher, unblockTeacher, deleteTeacher, assignTeacherTaskByAdmin, getMentorFellows, claimFellow, unclaimFellow, updateFellowStatus, deleteMentorFellow, bulkSetChecklistTargets, exportActivitySubmissions } from "../services/api";
 import { t } from "../services/i18n";
 import MentorManagementTab from "../mentor/MentorManagementTab";
 import { MentorTeacherChecklistPanel, MentorFellowPDCAChecklistPanel } from "../mentor/MentorDashboardTabs";
@@ -443,12 +443,14 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
       .catch(err => setToast({ msg: err.message, type: "error" }));
 
   const [showAssignTask, setShowAssignTask] = useState(false);
+  const [showExport, setShowExport] = useState(false);
 
   const quickActions = [
     { icon: "📌", label: "Assign Task", onClick: () => setShowAssignTask(true), color: "#059669", bg: "#d1fae5" },
     { icon: "💬", label: "Send Message", onClick: () => setShowMsg(true), color: "#8b5cf6", bg: "#ede9fe" },
     { icon: "🏫", label: "Change Center", onClick: () => setShowCourses(true), color: "#f59e0b", bg: "#fef3c7" },
     { icon: "✏️", label: "Edit Profile", onClick: () => setShowEdit(true), color: "#2563eb", bg: "#dbeafe" },
+    { icon: "📊", label: "Export Report", onClick: () => setShowExport(true), color: "#0891b2", bg: "#cffafe" },
   ];
 
   return (
@@ -458,7 +460,20 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
       {showMsg && <DirectMessageModal teacher={teacher} onClose={() => setShowMsg(false)} setToast={setToast} />}
       {showCourses && <ChangeCenterModal teacher={teacher} centers={centers} classes={classes} onClose={() => setShowCourses(false)} onSave={doChangeCenter} />}
       {showEdit && <EditTeacherModal teacher={teacher} onClose={() => setShowEdit(false)} onSave={() => { onUpdate(); }} setToast={setToast} />}
-      {showAssignTask && <AssignTaskModal teacher={teacher} onClose={() => setShowAssignTask(false)} setToast={setToast} />}
+      {showAssignTask && <AssignTaskModal teacher={teacher} onClose={() => setShowAssignTask(false)} setToast={setToast} isMentorView={isMentorView} />}
+      {showExport && (
+        <ExportMonthModal
+          title={`Export — ${teacher.name}`}
+          subtitle="Downloads every activity, lesson, field visit, and PCB session this teacher reported for the selected month."
+          onClose={() => setShowExport(false)}
+          setToast={setToast}
+          onExport={(month) => exportActivitySubmissions({
+            teacherId: teacher.id,
+            month,
+            filenameHint: `${teacher.name.replace(/[^a-z0-9]+/gi, "-")}-${month}.xlsx`
+          })}
+        />
+      )}
 
       {/* NEW: full-size photo lightbox */}
       {photoLightbox && teacher.photoUrl && (
@@ -699,6 +714,7 @@ export function TeacherManagementList({ setToast, role = "admin", user = null, o
   const [assignmentFilter, setAssignmentFilter] = useState("all");
   const [selected, setSelected]   = useState(null);
   const [addModal, setAddModal]   = useState(false);
+  const [showBulkGoalsModal, setShowBulkGoalsModal] = useState(false);
   const [assigningTaskTeacher, setAssigningTaskTeacher] = useState(null);
   const [loading, setLoading]     = useState(true);
   const [toast, setLocalToast]    = useState({ msg: "", type: "" });
@@ -821,7 +837,24 @@ export function TeacherManagementList({ setToast, role = "admin", user = null, o
               {`${teachers.filter(t=>t.status==="approved").length} approved · ${pending} pending · ${teachers.length} total`}
             </p>
           </div>
-          <button onClick={() => setAddModal(true)} style={S.primaryBtn}>+ {t("Add Teacher")}</button>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <button
+              onClick={() => setShowBulkGoalsModal(true)}
+              style={{
+                ...S.primaryBtn,
+                background: "rgba(255,255,255,0.22)",
+                backdropFilter: "blur(8px)",
+                border: "1.5px solid rgba(255,255,255,0.5)",
+                color: "white",
+                display: "flex",
+                alignItems: "center",
+                gap: 6
+              }}
+            >
+              🎯 {t("Bulk Set Monthly Goals")}
+            </button>
+            <button onClick={() => setAddModal(true)} style={S.primaryBtn}>+ {t("Add Teacher")}</button>
+          </div>
         </div>
       </div>
 
@@ -1062,7 +1095,14 @@ export function TeacherManagementList({ setToast, role = "admin", user = null, o
         />
       )}
 
-      {/* Add Teacher Modal */}
+      {/* Bulk Set Monthly Goals Modal */}
+      {showBulkGoalsModal && (
+        <BulkSetChecklistModal
+          teachers={teachers}
+          onClose={() => setShowBulkGoalsModal(false)}
+          setToast={showToast}
+        />
+      )}
       {addModal && (
         <Modal title="👩‍🏫 Add New Teacher" onClose={() => setAddModal(false)}>
           <form onSubmit={handleAdd}>
@@ -1172,9 +1212,10 @@ export function TeacherManagementList({ setToast, role = "admin", user = null, o
 }
 
 /* ── AssignTaskModal ── */
+/* ── AssignTaskModal ── */
 function AssignTaskModal({ teacher, onClose, setToast, isMentorView = false }) {
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState(isMentorView ? "mentor_task" : "admin_assigned");
+  const [category, setCategory] = useState(isMentorView ? "mentor_task" : "class_lesson");
   const [taskMode, setTaskMode] = useState(isMentorView ? "single" : "single");
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [startDate, setStartDate] = useState(() => new Date().toISOString().split("T")[0]);
@@ -1184,6 +1225,15 @@ function AssignTaskModal({ teacher, onClose, setToast, isMentorView = false }) {
   const [startTime, setStartTime] = useState("11:30");
   const [endTime, setEndTime] = useState("12:30");
   const [submitting, setSubmitting] = useState(false);
+
+  // ── Unified Activity Detail Fields ──
+  const [showMoreDetails, setShowMoreDetails] = useState(false);
+  const [ageGroup, setAgeGroup] = useState("");
+  const [topic, setTopic] = useState("");
+  const [howToConduct, setHowToConduct] = useState("");
+  const [materials, setMaterials] = useState("");
+  const [objective, setObjective] = useState("");
+
   const isDaily = taskMode === "daily";
 
   const handleSubmit = async (e) => {
@@ -1216,7 +1266,13 @@ function AssignTaskModal({ teacher, onClose, setToast, isMentorView = false }) {
         holidayDates: holidayDates
           .split(",")
           .map(d => d.trim())
-          .filter(Boolean)
+          .filter(Boolean),
+        source: isMentorView ? "mentor_assigned" : "admin_assigned",
+        ageGroup,
+        topic,
+        howToConduct,
+        materials,
+        objective
       };
       const res = await assignTeacherTaskByAdmin(teacher.id, payload);
       const createdCount = res?.createdCount || 0;
@@ -1247,7 +1303,7 @@ function AssignTaskModal({ teacher, onClose, setToast, isMentorView = false }) {
               <label style={S.label}>Task Title *</label>
               <input
                 style={{ ...S.input, background: "#fbfdff" }}
-                placeholder="e.g. Conduct Parent-Teacher Review Session"
+                placeholder="e.g. Conduct Sensory Play Activity"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 required
@@ -1268,12 +1324,16 @@ function AssignTaskModal({ teacher, onClose, setToast, isMentorView = false }) {
               <div>
                 <label style={S.label}>Category</label>
                 <select style={{ ...S.input, background: "#fbfdff" }} value={category} onChange={(e) => setCategory(e.target.value)}>
-                  <option value={isMentorView ? "mentor_task" : "admin_assigned"}>{isMentorView ? "Mentor Assigned" : "Admin Assigned"}</option>
-                  <option value="homework">Homework</option>
-                  <option value="class">Class</option>
-                  <option value="exam">Exam / Assessment</option>
-                  <option value="workshop">Workshop</option>
-                  <option value="tech">Technology</option>
+                  <option value="class_lesson">📚 Activity / Classroom Lesson</option>
+                  <option value={isMentorView ? "mentor_task" : "admin_assigned"}>
+                    {isMentorView ? "📋 Mentor Assigned Task" : "📌 Admin Assigned Task"}
+                  </option>
+                  <option value="field_visit">🏡 Field Visit</option>
+                  <option value="pcb_session">👨‍👩‍👧 Parent Capacity Building (PCB)</option>
+                  <option value="exam">📊 Assessment / Exam</option>
+                  <option value="homework">📝 Homework / Assignment</option>
+                  <option value="workshop">🎓 Course / Workshop</option>
+                  <option value="tech">💻 Technology Training</option>
                 </select>
               </div>
               {!isDaily && (
@@ -1290,6 +1350,54 @@ function AssignTaskModal({ teacher, onClose, setToast, isMentorView = false }) {
               )}
             </div>
           </div>
+        </div>
+
+        {/* ── Expandable optional details ── */}
+        <div style={{ background: "#ffffff", border: "1px solid #f1f5f9", borderRadius: 16, padding: 14, boxShadow: "0 4px 14px rgba(15, 23, 42, 0.04)" }}>
+          <button
+            type="button"
+            onClick={() => setShowMoreDetails(!showMoreDetails)}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 800, color: "#4f46e5", display: "flex", alignItems: "center", gap: 6, padding: 0 }}
+          >
+            {showMoreDetails ? "▼" : "▶"} Activity Details & Instructions (optional)
+          </button>
+          {showMoreDetails && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12, padding: 12, background: "#f8fafc", borderRadius: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
+                <div>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", marginBottom: 4 }}>Age Group</label>
+                  <select value={ageGroup} onChange={e => setAgeGroup(e.target.value)} style={{ ...S.input, padding: "8px 10px", fontSize: 12, background: "white", marginBottom: 0 }}>
+                    <option value="">Select age group...</option>
+                    <option value="2-3 years (Playgroup)">2-3 years (Playgroup)</option>
+                    <option value="3-4 years (Nursery)">3-4 years (Nursery)</option>
+                    <option value="4-5 years (LKG)">4-5 years (LKG)</option>
+                    <option value="5-6 years (UKG)">5-6 years (UKG)</option>
+                    <option value="Mixed age group">Mixed age group</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", marginBottom: 4 }}>Topic</label>
+                  <input type="text" value={topic} onChange={e => setTopic(e.target.value)} placeholder="e.g. Motor Skills, Colors, Counting" style={{ ...S.input, padding: "8px 10px", fontSize: 12, background: "white", marginBottom: 0 }} />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", marginBottom: 4 }}>How to Conduct (Step-by-step instructions)</label>
+                <textarea value={howToConduct} onChange={e => setHowToConduct(e.target.value)} placeholder="Step 1: Gather children in a circle... Step 2: Introduce the activity..." rows={2} style={{ ...S.input, padding: "8px 10px", fontSize: 12, background: "white", resize: "vertical", marginBottom: 0 }} />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
+                <div>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", marginBottom: 4 }}>Materials Required</label>
+                  <input type="text" value={materials} onChange={e => setMaterials(e.target.value)} placeholder="e.g. Crayons, Chart Paper, Blocks" style={{ ...S.input, padding: "8px 10px", fontSize: 12, background: "white", marginBottom: 0 }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", marginBottom: 4 }}>Objective</label>
+                  <input type="text" value={objective} onChange={e => setObjective(e.target.value)} placeholder="e.g. Develop fine motor coordination" style={{ ...S.input, padding: "8px 10px", fontSize: 12, background: "white", marginBottom: 0 }} />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {isDaily && (
@@ -1350,6 +1458,239 @@ function AssignTaskModal({ teacher, onClose, setToast, isMentorView = false }) {
           <button type="button" onClick={onClose} style={{ ...S.exportBtn, padding: "9px 16px", borderRadius: 10 }}>Cancel</button>
           <button type="submit" disabled={submitting} style={{ ...S.primaryBtn, padding: "11px 18px", borderRadius: 10 }}>
             {submitting ? "Assigning..." : isDaily ? "Assign Daily Tasks →" : "Assign Task →"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/* ── BulkSetChecklistModal ── */
+function BulkSetChecklistModal({ teachers = [], onClose, setToast }) {
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year] = useState(now.getFullYear());
+  const [selectedTeacherIds, setSelectedTeacherIds] = useState(() => teachers.map(t => t.id));
+  const [teacherSearch, setTeacherSearch] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const [targets, setTargets] = useState({
+    activities: 4,
+    courses: 1,
+    assessments: 1,
+    pcb_sessions: 1
+  });
+
+  const [requiredFlags, setRequiredFlags] = useState({
+    activities: true,
+    courses: true,
+    assessments: true,
+    pcb_sessions: false
+  });
+
+  const [mentorNote, setMentorNote] = useState("");
+
+  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+  const CHECKLIST_ITEMS_META = [
+    { id: "activities", label: "Activities", icon: "📚" },
+    { id: "courses", label: "Courses", icon: "🎓" },
+    { id: "assessments", label: "Assessments", icon: "📊" },
+    { id: "pcb_sessions", label: "PCB Sessions", icon: "🏡" }
+  ];
+
+  const handleSelectAll = (checked) => {
+    if (checked) {
+      setSelectedTeacherIds(teachers.map(t => t.id));
+    } else {
+      setSelectedTeacherIds([]);
+    }
+  };
+
+  const toggleTeacher = (id) => {
+    setSelectedTeacherIds(prev =>
+      prev.includes(id) ? prev.filter(tId => tId !== id) : [...prev, id]
+    );
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (selectedTeacherIds.length === 0) {
+      setToast({ msg: "Please select at least one teacher.", type: "error" });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const items = CHECKLIST_ITEMS_META.map(item => ({
+        id: item.id,
+        label: item.label,
+        target: Math.max(0, parseInt(targets[item.id], 10) || 0),
+        required: !!requiredFlags[item.id],
+        mentorNote: mentorNote.trim()
+      }));
+
+      const res = await bulkSetChecklistTargets({
+        teacherIds: selectedTeacherIds,
+        month,
+        year,
+        items
+      });
+
+      setToast({
+        msg: `🎯 Monthly goals updated for ${res?.updated || selectedTeacherIds.length} teachers!`,
+        type: "success"
+      });
+      onClose();
+    } catch (err) {
+      setToast({ msg: err.message || "Failed to bulk set monthly goals.", type: "error" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const filteredTeachers = teachers.filter(t =>
+    t.name.toLowerCase().includes(teacherSearch.toLowerCase()) ||
+    (t.email && t.email.toLowerCase().includes(teacherSearch.toLowerCase()))
+  );
+
+  return (
+    <Modal title="🎯 Bulk Set Monthly Goals" onClose={onClose}>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {/* Month & Year Bar */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#f8fafc", padding: "12px 14px", borderRadius: 12, border: "1px solid #e2e8f0" }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#1e293b" }}>Target Month</div>
+            <div style={{ fontSize: 11, color: "#64748b" }}>Choose the month to apply these targets to</div>
+          </div>
+          <select
+            value={month}
+            onChange={e => setMonth(Number(e.target.value))}
+            style={{ ...S.input, width: 140, marginBottom: 0, background: "white", fontWeight: 700 }}
+          >
+            {monthNames.map((m, i) => <option key={i} value={i + 1}>{m} {year}</option>)}
+          </select>
+        </div>
+
+        {/* Goal items definition */}
+        <div style={{ background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: 14, padding: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: "#334155", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 10 }}>
+            Set Monthly Targets & Requirements
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {CHECKLIST_ITEMS_META.map(item => (
+              <div key={item.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", borderRadius: 10, background: "#f8fafc", border: "1px solid #f1f5f9" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>{item.icon}</span>
+                  <div>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: "#1e293b" }}>{item.label}</span>
+                    <button
+                      type="button"
+                      onClick={() => setRequiredFlags(prev => ({ ...prev, [item.id]: !prev[item.id] }))}
+                      style={{
+                        marginLeft: 8, fontSize: 8, fontWeight: 800,
+                        color: requiredFlags[item.id] ? "#15803d" : "#64748b",
+                        background: requiredFlags[item.id] ? "#dcfce7" : "#f1f5f9",
+                        border: `1px solid ${requiredFlags[item.id] ? "#86efac" : "#cbd5e1"}`,
+                        borderRadius: 6, padding: "1px 6px", cursor: "pointer"
+                      }}
+                    >
+                      {requiredFlags[item.id] ? "REQUIRED" : "OPTIONAL"}
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "#64748b" }}>Target:</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="99"
+                    value={targets[item.id]}
+                    onChange={e => setTargets(prev => ({ ...prev, [item.id]: e.target.value }))}
+                    style={{
+                      width: 50, padding: "4px 6px", textAlign: "center",
+                      fontSize: 12, fontWeight: 800, color: "#0f172a",
+                      border: "1.5px solid #cbd5e1", borderRadius: 8, background: "white"
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 10 }}>
+            <label style={{ display: "block", fontSize: 10, fontWeight: 700, color: "#64748b", marginBottom: 4 }}>Note / Guideline for Teachers (optional)</label>
+            <input
+              type="text"
+              value={mentorNote}
+              onChange={e => setMentorNote(e.target.value)}
+              placeholder="e.g. Focus on motor skills activities this month"
+              style={{ ...S.input, padding: "8px 10px", fontSize: 12, marginBottom: 0, background: "#f8fafc" }}
+            />
+          </div>
+        </div>
+
+        {/* Teacher Selection */}
+        <div style={{ background: "#ffffff", border: "1.5px solid #e2e8f0", borderRadius: 14, padding: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: "#334155", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              Select Teachers ({selectedTeacherIds.length}/{teachers.length})
+            </span>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, fontWeight: 700, color: "#4f46e5" }}>
+              <input
+                type="checkbox"
+                checked={selectedTeacherIds.length === teachers.length && teachers.length > 0}
+                onChange={e => handleSelectAll(e.target.checked)}
+                style={{ accentColor: "#4f46e5" }}
+              />
+              Select All
+            </label>
+          </div>
+
+          <input
+            type="text"
+            value={teacherSearch}
+            onChange={e => setTeacherSearch(e.target.value)}
+            placeholder="Search teachers..."
+            style={{ ...S.input, padding: "6px 10px", fontSize: 11, marginBottom: 8, background: "#f8fafc" }}
+          />
+
+          <div style={{ maxHeight: 140, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, paddingRight: 4 }}>
+            {filteredTeachers.map(t => {
+              const isChecked = selectedTeacherIds.includes(t.id);
+              return (
+                <label key={t.id} style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "5px 8px", borderRadius: 8, cursor: "pointer",
+                  background: isChecked ? "#f0fdf4" : "#f8fafc",
+                  border: `1px solid ${isChecked ? "#86efac" : "#f1f5f9"}`
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => toggleTeacher(t.id)}
+                      style={{ accentColor: "#10b981" }}
+                    />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#1e293b" }}>{t.name}</span>
+                  </div>
+                  <span style={{ fontSize: 10, color: "#64748b" }}>{t.centerName || t.phone || ""}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Buttons */}
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 4 }}>
+          <button type="button" onClick={onClose} style={{ ...S.exportBtn, padding: "9px 16px", borderRadius: 10 }}>Cancel</button>
+          <button
+            type="submit"
+            disabled={submitting || selectedTeacherIds.length === 0}
+            style={{ ...S.primaryBtn, background: "linear-gradient(135deg, #4f46e5, #7c3aed)", padding: "10px 18px", borderRadius: 10, opacity: (submitting || selectedTeacherIds.length === 0) ? 0.6 : 1 }}
+          >
+            {submitting ? "Applying..." : `Apply Goals to ${selectedTeacherIds.length} Teachers →`}
           </button>
         </div>
       </form>

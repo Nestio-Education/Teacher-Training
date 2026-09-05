@@ -420,7 +420,7 @@ export function MarkCompleteModal({ activity, itemType = "activity", user, onSub
   const autocompleteRef = useRef(null);
 
   // Field Visit Mode State
-  const [isFieldVisit, setIsFieldVisit] = useState(false);
+  const [isFieldVisit, setIsFieldVisit] = useState(activity?.category === "field_visit");
   const [visitType, setVisitType] = useState("home_visit");
   const [externalBeneficiaries, setExternalBeneficiaries] = useState([]);
   const [extChild, setExtChild] = useState({ childName: "", age: "", gender: "", parentName: "", contactNumber: "", notes: "" });
@@ -641,6 +641,9 @@ export function MarkCompleteModal({ activity, itemType = "activity", user, onSub
         activityDate: new Date().toISOString(),
         activityBank: itemType === "activity" ? (activity._id || activity.id) : undefined,
         lessonPlan: itemType === "lesson" ? (activity.lessonPlan?._id || activity.lessonPlan?.id) : undefined,
+        itemType,
+        taskCategory: itemType === "task" ? activity.category : undefined,
+        sourceTeacherTask: itemType === "task" ? (activity._id || activity.id) : undefined,
         activityName: activity.activityName || activity.title || activity.lessonPlan?.title,
         duration: activity.duration || activity.lessonPlan?.duration,
         level: activity.level,
@@ -681,6 +684,10 @@ export function MarkCompleteModal({ activity, itemType = "activity", user, onSub
         );
       }
 
+      try {
+        window.dispatchEvent(new Event("teacher-checklist-refresh"));
+      } catch (_) {}
+
       onSubmit?.(res?.submission || {
         _id: Date.now().toString(),
         activityBank: itemType === "activity" ? (activity._id || activity.id) : undefined,
@@ -696,7 +703,7 @@ export function MarkCompleteModal({ activity, itemType = "activity", user, onSub
   };
 
   return (
-    <Modal title={`✅ Mark Complete: ${activity.activityName || activity.title || activity.lessonPlan?.title}`} onClose={onClose}>
+    <Modal title={`✅ Mark Complete: ${activity.activityName || activity.title || activity.lessonPlan?.title}`} onClose={onClose} width={620}>
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {error && (
           <div style={{ padding: "8px 12px", background: "#fef2f2", color: "#991b1b", borderRadius: 8, fontSize: 12 }}>
