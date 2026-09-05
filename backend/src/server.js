@@ -81,7 +81,7 @@ function localizeLessonPlan(lpDoc, lang) {
 
 import { autoSeed } from "./auto-seed.js";
 import { generateAICourse } from "./services/aiCourseGenerator.js";
-import { generateAILessonPlan } from "./services/aiLessonPlanner.js";
+import { generateAILessonPlan, generateAIActivitySchedule } from "./services/aiLessonPlanner.js";
 import dailyTaskAutomationRoutes from "./routes/dailyTaskAutomationRoutes.js";
 import teacherTasksRouter from "./routes/teacherTasks.js";
 import haalsRouter from "./routes/haals.js";
@@ -4329,6 +4329,16 @@ app.post("/api/ai/generate-lesson-plan", requireAuth, requireRole("teacher", "ad
   try {
     const result = await generateAILessonPlan(req.body || {});
     res.json({ lessonPlan: result });
+  } catch (error) {
+    if (error.status) return res.status(error.status).json({ message: error.message });
+    res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+app.post("/api/ai/generate-activity-schedule", requireAuth, requireRole("mentor", "admin"), async (req, res, next) => {
+  try {
+    const result = await generateAIActivitySchedule(req.body || {});
+    res.json(result);
   } catch (error) {
     if (error.status) return res.status(error.status).json({ message: error.message });
     res.status(500).json({ message: error.message, stack: error.stack });

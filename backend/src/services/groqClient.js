@@ -16,11 +16,11 @@ async function sleep(ms) {
 
 /**
  * Call Groq chat completions with basic 429-aware retry/backoff.
- * @param {{ systemPrompt: string, userPrompt: string, temperature?: number, maxRetries?: number }} args
+ * @param {{ systemPrompt: string, userPrompt: string, model?: string, temperature?: number, maxRetries?: number, responseFormat?: object }} args
  * @returns {Promise<string>} raw text content from the model
  */
-export async function callGroq({ systemPrompt, userPrompt, temperature = 0.4, maxRetries = 3 }) {
-  const apiKey = process.env.GROQ_API_KEY;
+export async function callGroq({ systemPrompt, userPrompt, model, temperature = 0.4, maxRetries = 3, responseFormat }) {
+  const apiKey = process.env.GROQ_API_KEY?.trim();
   if (!isUsableKey(apiKey)) {
     throw new Error("GROQ_API_KEY is not configured.");
   }
@@ -36,12 +36,13 @@ export async function callGroq({ systemPrompt, userPrompt, temperature = 0.4, ma
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: process.env.GROQ_MODEL || "openai/gpt-oss-20b",
+        model: model || process.env.GROQ_MODEL || "openai/gpt-oss-20b",
         temperature,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
+        ...(responseFormat ? { response_format: responseFormat } : {}),
       }),
     });
 
@@ -59,6 +60,7 @@ export async function callGroq({ systemPrompt, userPrompt, temperature = 0.4, ma
 
     const detail = await response.text();
     lastError = new Error(`Groq API failed (${response.status}): ${detail.slice(0, 300)}`);
+    lastError.status = response.status;
     break;
   }
 
