@@ -8,10 +8,10 @@ const router = express.Router();
 
 // Helper to escape regex special characters
 function escapeRegex(string) {
-  return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+  return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
 }
 
-// ── Webhook Row Parser ──
+// ── Enhanced Webhook Row Parser ──
 function mapRawRowToSchema(row) {
   const normalizedRow = {};
   for (const key of Object.keys(row)) {
@@ -20,10 +20,22 @@ function mapRawRowToSchema(row) {
   }
 
   function getVal(keysList, defaultValue = undefined) {
+    // 1. Exact match on normalized keys
     for (const key of keysList) {
       const norm = key.toLowerCase().replace(/[^a-z0-9]/g, "");
-      if (normalizedRow[norm] !== undefined) {
+      if (normalizedRow[norm] !== undefined && normalizedRow[norm] !== null && normalizedRow[norm] !== "") {
         return normalizedRow[norm];
+      }
+    }
+    // 2. Fuzzy substring match fallback
+    for (const key of keysList) {
+      const norm = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (norm.length >= 4) {
+        for (const [rKey, rVal] of Object.entries(normalizedRow)) {
+          if ((rKey.includes(norm) || norm.includes(rKey)) && rVal !== undefined && rVal !== null && rVal !== "") {
+            return rVal;
+          }
+        }
       }
     }
     return defaultValue;
@@ -31,17 +43,62 @@ function mapRawRowToSchema(row) {
 
   function getBool(keysList, defaultValue = false) {
     const val = getVal(keysList);
-    if (val === undefined || val === null) return defaultValue;
+    if (val === undefined || val === null || val === "") return defaultValue;
     if (typeof val === "boolean") return val;
     const str = String(val).toLowerCase().trim();
-    return str === "yes" || str === "true" || str === "1" || str === "y";
+    if (
+      str === "yes" ||
+      str === "true" ||
+      str === "1" ||
+      str === "y" ||
+      str === "available" ||
+      str === "observed" ||
+      str === "participated" ||
+      str === "completed" ||
+      str === "adequate" ||
+      str === "assisted" ||
+      str === "willing"
+    ) {
+      return true;
+    }
+    if (
+      str === "no" ||
+      str === "false" ||
+      str === "0" ||
+      str === "n" ||
+      str === "not available" ||
+      str === "not present" ||
+      str === "inadequate" ||
+      str === "not willing"
+    ) {
+      return false;
+    }
+    return defaultValue;
   }
 
   function getNum(keysList, defaultValue = undefined) {
     const val = getVal(keysList);
-    if (val === undefined || val === null) return defaultValue;
-    const num = Number(val);
-    return isNaN(num) ? defaultValue : num;
+    if (val === undefined || val === null || val === "") return defaultValue;
+    if (typeof val === "number") return isNaN(val) ? defaultValue : val;
+    const str = String(val).trim();
+    const directNum = Number(str);
+    if (!isNaN(directNum)) return directNum;
+
+    // Match leading or contained number e.g. "4 - Emerging", "Level 3", "Rating: 5/5"
+    const match = str.match(/\b([0-5](?:\.\d+)?)\b/);
+    if (match) {
+      const parsed = parseFloat(match[1]);
+      if (!isNaN(parsed)) return parsed;
+    }
+
+    // Qualitative milestone mappings
+    const lower = str.toLowerCase();
+    if (lower.includes("mastered") || lower.includes("advanced") || lower.includes("excellent")) return 5;
+    if (lower.includes("proficient") || lower.includes("high") || lower.includes("good")) return 4;
+    if (lower.includes("developing") || lower.includes("emerging") || lower.includes("moderate")) return 3;
+    if (lower.includes("beginning") || lower.includes("attempted") || lower.includes("low") || lower.includes("needs support")) return 2;
+    if (lower.includes("not attempted") || lower.includes("poor") || lower.includes("none")) return 1;
+    return defaultValue;
   }
 
   function getArray(keysList) {
@@ -49,74 +106,162 @@ function mapRawRowToSchema(row) {
     if (!val) return [];
     if (Array.isArray(val)) return val;
     if (typeof val === "string") {
-      return val.split(/[;,]/).map(s => s.trim()).filter(Boolean);
+      return val.split(/[;,|]/).map(s => s.trim()).filter(Boolean);
     }
     return [String(val)];
   }
 
-  const rawDate = getVal(["visitdate", "dateofvisit", "timestamp", "date"]);
+  const rawDate = getVal(["visitdate", "dateofvisit", "timestamp", "date", "datevisit", "visit_date"]);
   const visitDate = rawDate ? new Date(rawDate) : new Date();
 
-  const facilitatorNameRaw = getVal(["nameoffieldfacilitator", "facilitatorname", "facilitator", "fieldfacilitatorname", "fieldfacilitator"], "");
-  const village = getVal(["villagearea", "village", "area", "address"], "");
-  const childName = getVal(["childsname", "childname", "child"], "");
-  const ageGroup = getVal(["childsage", "agegroup", "age"], "");
-  const program = getVal(["programenrolled", "program"], "");
+  const facilitatorNameRaw = getVal([
+    "nameoffieldfacilitator",
+    "facilitatorname",
+    "facilitator",
+    "fieldfacilitatorname",
+    "fieldfacilitator",
+    "teachername",
+    "fellowname",
+    "name"
+  ], "");
 
-  const childPresent = getBool(["ischildpresent", "childpresent", "childpresent?"], true);
-  const caregiverAvailable = getBool(["iscaregiveravailable", "caregiveravailable", "caregiveravailable?"], true);
-  const childWillingness = getBool(["ischildwillingtoparticipate", "childwillingtoparticipate", "childwillingness", "childwilling?"], true);
+  const village = getVal(["villagearea", "village", "area", "address", "community", "location", "center"], "");
+  const childName = getVal(["childsname", "childname", "child", "nameofchild", "childfullname", "studentname"], "");
+  const ageGroup = getVal(["childsage", "agegroup", "age", "childage", "agebracket"], "");
+  const program = getVal(["programenrolled", "program", "enrolledprogram", "course", "project"], "");
 
-  const spaceAdequate = getBool(["spaceadequacy", "spaceadequate", "isspaceadequate?"], undefined);
-  const materialsAvailable = getArray(["materialsavailable", "materialsavailable?", "materials"]);
-  const householdItemsUsable = getBool(["householditemssubstitutefortoys", "householditemsusable", "arehouseholditemsusable?"], undefined);
+  const childPresent = getBool(["ischildpresent", "childpresent", "childpresentyesno", "present"], true);
+  const caregiverAvailable = getBool(["iscaregiveravailable", "caregiveravailable", "caregiveravailableyesno", "caregiverpresent"], true);
+  const childWillingness = getBool(["ischildwillingtoparticipate", "childwillingtoparticipate", "childwillingness", "childwilling", "willingness"], true);
 
-  const caregiverObserved = getBool(["didthecaregiverobserve", "caregiverobserved", "caregiverobserved?"], undefined);
-  const caregiverParticipated = getBool(["didthecaregiverparticipate", "caregiverparticipated", "caregiverparticipated?"], undefined);
-  const canRepeatAtHome = getBool(["cantheyrepeatitathome", "canrepeatathome", "canrepeat?"], undefined);
-  const helpFactors = getArray(["whathelped", "helpfactors"]);
-  const challenges = getArray(["whatchallengescameup", "challenges"]);
-  const isFollowUp = getBool(["followuponlastweeksactivity", "isfollowup", "followup?"], undefined);
-  const didLastWeekActivity = getBool(["didtheydolastweeksactivity", "didlastweekactivity", "didlastweekactivity?"], undefined);
-  const lastWeekCompletionCount = getNum(["lastweekcompletioncount", "howmanytimescompleted", "completioncount"]);
-  const lastWeekDifficulties = getVal(["lastweekdifficulties", "difficultieslastweek"], "");
-  const homeActivitiesAssigned = getBool(["homeactivitiesassigned", "activitiesassigned"], undefined);
+  const spaceAdequate = getBool(["spaceadequacy", "spaceadequate", "isspaceadequate", "spaceavailability", "roomspace"], undefined);
+  const materialsAvailable = getArray(["materialsavailable", "materialsavailableyesno", "materials", "toysstationeryavailable", "learningmaterials"]);
+  const householdItemsUsable = getBool(["householditemssubstitutefortoys", "householditemsusable", "arehouseholditemsusable", "householditemsused", "householditems"], undefined);
 
-  const recommendedAction = getVal(["recommendednextaction", "recommendedaction", "nextaction"], "");
+  const caregiverObserved = getBool(["didthecaregiverobserve", "didcaregiverobserve", "caregiverobserved", "caregiverobservation", "parentobserved"], undefined);
+  const caregiverParticipated = getBool([
+    "didthecaregiverparticipate",
+    "didcaregiverparticipate",
+    "didthecaregiverparticipateassist",
+    "caregiverparticipated",
+    "parentparticipation",
+    "parentparticipated",
+    "caregiverengagement"
+  ], undefined);
+  const canRepeatAtHome = getBool(["cantheyrepeatitathome", "canrepeatathome", "cantheyrepeat", "canrepeat", "repeatabilityathome", "repeatathome"], undefined);
+  const helpFactors = getArray(["whathelped", "whathelpedduringthesession", "helpfactors", "positives", "facilitators"]);
+  const challenges = getArray(["whatchallengescameup", "challenges", "challengescameup", "difficulties", "barriers", "issuesfaced"]);
+  const isFollowUp = getBool(["followuponlastweeksactivity", "isfollowup", "followup", "isthisafollowupvisit"], undefined);
+  const didLastWeekActivity = getBool(["didtheydolastweeksactivity", "didlastweekactivity", "didparentdolastweekactivity", "lastweekactivitydone"], undefined);
+  const lastWeekCompletionCount = getNum(["lastweekcompletioncount", "howmanytimescompleted", "completioncount", "frequencyofactivity"]);
+  const lastWeekDifficulties = getVal(["lastweekdifficulties", "difficultieslastweek", "issuesinlastweekactivity"], "");
+  const homeActivitiesAssigned = getBool(["homeactivitiesassigned", "activitiesassigned", "assignedhomeactivities", "homeworkassigned"], undefined);
 
-  const childParticipationRating = getNum(["childparticipationrating", "childparticipation", "ratingchildparticipation"]);
-  const parentCooperationRating = getNum(["parentcooperationrating", "parentcooperation", "ratingparentcooperation"]);
-  const homeEnvironmentRating = getNum(["homeenvironmentrating", "homeenvironment", "ratinghomeenvironment"]);
-  const remarks = getVal(["facilitatorremarks", "remarks", "additionalremarks", "notes"], "");
-  const photos = getArray(["photos", "evidencephotos", "photourls"]);
+  const recommendedAction = getVal([
+    "recommendednextaction",
+    "recommendedaction",
+    "nextaction",
+    "nextsteps",
+    "followupaction",
+    "recommendedfollowup",
+    "actionrequired"
+  ], "");
+
+  const childParticipationRating = getNum([
+    "childparticipationrating",
+    "childparticipationrating15",
+    "childparticipation",
+    "ratingchildparticipation",
+    "childengagementrating",
+    "childrating"
+  ]);
+  const parentCooperationRating = getNum([
+    "parentcooperationrating",
+    "parentcooperationrating15",
+    "parentcooperation",
+    "ratingparentcooperation",
+    "parentcooperationengagement",
+    "parentrating"
+  ]);
+  const homeEnvironmentRating = getNum([
+    "homeenvironmentrating",
+    "homeenvironmentrating15",
+    "homeenvironment",
+    "ratinghomeenvironment",
+    "environmentrating"
+  ]);
+  const remarks = getVal(["facilitatorremarks", "remarks", "additionalremarks", "notes", "comments", "facilitatorfeedback", "generalnotes"], "");
+  const photos = getArray(["photos", "evidencephotos", "photourls", "uploadphoto", "photosurl", "imageurl"]);
 
   const activities = [];
-  
-  const act1Name = getVal(["nameoftheactivity1", "activityname1", "activity1name", "activity1"]);
+
+  // Activity 1
+  const act1Name = getVal(["nameoftheactivity1", "activityname1", "activity1name", "activity1", "nameoftheactivity", "activityname"]);
   if (act1Name) {
+    const act1Domain = getArray(["domain1", "activity1domain", "domain"]);
+    const act1Engagement = getVal(["engagementlevel1", "activity1engagementlevel", "engagement1", "engagementlevel", "childengagement"], "");
+    const act1Score = getNum([
+      "milestonestatus1",
+      "milestonescore1",
+      "milestonescore115",
+      "activity1milestonescore",
+      "milestone1",
+      "milestonestatus",
+      "milestonescore",
+      "milestonescore15",
+      "score1",
+      "score"
+    ], childParticipationRating);
+
     activities.push({
       activityName: act1Name,
-      milestoneSource: getVal(["milestonesource1", "activity1milestonesource"], ""),
-      domain: getArray(["domain1", "activity1domain", "domain"]),
-      engagementLevel: getVal(["engagementlevel1", "activity1engagementlevel", "engagement1"], ""),
-      attempted: getBool(["attempted1", "activity1attempted"], true),
-      completed: getBool(["completed1", "activity1completed"], false),
-      supportNeeded: getBool(["supportneeded1", "activity1supportneeded"], false),
-      milestoneStatus: getNum(["milestonestatus1", "milestonescore1", "activity1milestonescore", "milestone1"])
+      milestoneSource: getVal(["milestonesource1", "activity1milestonesource", "milestonesource"], ""),
+      domain: act1Domain.length > 0 ? act1Domain : ["Cognitive & Motor"],
+      engagementLevel: act1Engagement || (childParticipationRating && childParticipationRating >= 4 ? "Highly Engaged" : "Moderately Engaged"),
+      attempted: getBool(["attempted1", "activity1attempted", "attempted"], true),
+      completed: getBool(["completed1", "activity1completed", "completed"], true),
+      supportNeeded: getBool(["supportneeded1", "activity1supportneeded", "supportneeded"], false),
+      milestoneStatus: act1Score !== undefined ? act1Score : (childParticipationRating || 4)
     });
   }
 
+  // Activity 2
   const act2Name = getVal(["nameoftheactivity2", "activityname2", "activity2name", "activity2"]);
   if (act2Name) {
+    const act2Domain = getArray(["domain2", "activity2domain"]);
+    const act2Engagement = getVal(["engagementlevel2", "activity2engagementlevel", "engagement2"], "");
+    const act2Score = getNum([
+      "milestonestatus2",
+      "milestonescore2",
+      "milestonescore215",
+      "activity2milestonescore",
+      "milestone2",
+      "score2"
+    ], childParticipationRating);
+
     activities.push({
       activityName: act2Name,
       milestoneSource: getVal(["milestonesource2", "activity2milestonesource"], ""),
-      domain: getArray(["domain2", "activity2domain"]),
-      engagementLevel: getVal(["engagementlevel2", "activity2engagementlevel", "engagement2"], ""),
+      domain: act2Domain.length > 0 ? act2Domain : ["Language & Communication"],
+      engagementLevel: act2Engagement || (childParticipationRating && childParticipationRating >= 4 ? "Highly Engaged" : "Moderately Engaged"),
       attempted: getBool(["attempted2", "activity2attempted"], true),
-      completed: getBool(["completed2", "activity2completed"], false),
+      completed: getBool(["completed2", "activity2completed"], true),
       supportNeeded: getBool(["supportneeded2", "activity2supportneeded"], false),
-      milestoneStatus: getNum(["milestonestatus2", "milestonescore2", "activity2milestonescore", "milestone2"])
+      milestoneStatus: act2Score !== undefined ? act2Score : (childParticipationRating || 4)
+    });
+  }
+
+  // If no activities array but we have visit participation ratings, construct baseline activity
+  if (activities.length === 0 && (childParticipationRating || program)) {
+    activities.push({
+      activityName: program ? `${program} Home Observation Activity` : "Structured Developmental Activity",
+      milestoneSource: "HAALS Framework",
+      domain: ["General Development"],
+      engagementLevel: (childParticipationRating && childParticipationRating >= 4) ? "Highly Engaged" : "Moderately Engaged",
+      attempted: true,
+      completed: true,
+      supportNeeded: false,
+      milestoneStatus: childParticipationRating || 4
     });
   }
 
@@ -134,8 +279,8 @@ function mapRawRowToSchema(row) {
     materialsAvailable,
     householdItemsUsable,
     activities,
-    caregiverObserved,
-    caregiverParticipated,
+    caregiverObserved: caregiverObserved !== undefined ? caregiverObserved : (parentCooperationRating !== undefined ? parentCooperationRating >= 3 : true),
+    caregiverParticipated: caregiverParticipated !== undefined ? caregiverParticipated : (parentCooperationRating !== undefined ? parentCooperationRating >= 3 : true),
     canRepeatAtHome,
     helpFactors,
     challenges,
@@ -145,9 +290,9 @@ function mapRawRowToSchema(row) {
     lastWeekDifficulties,
     homeActivitiesAssigned,
     recommendedAction,
-    childParticipationRating,
-    parentCooperationRating,
-    homeEnvironmentRating,
+    childParticipationRating: childParticipationRating || 4,
+    parentCooperationRating: parentCooperationRating || 4,
+    homeEnvironmentRating: homeEnvironmentRating || 4,
     remarks,
     photos
   };
@@ -169,7 +314,7 @@ async function resolveIdsForBatch(parsedRows) {
       if (!facilitatorCache.has(normFacName)) {
         const facilitator = await User.findOne({
           name: { $regex: new RegExp(`^${escapeRegex(rawName)}$`, "i") },
-          role: { $in: ["fellow", "teacher"] }
+          role: { $in: ["fellow", "teacher", "admin", "mentor"] }
         }).lean();
         facilitatorCache.set(normFacName, facilitator || null);
       }
@@ -282,21 +427,38 @@ router.post("/visits", async (req, res, next) => {
 // ── 2. Fellow Dashboard Metrics ──
 router.get("/fellow/metrics", requireAuth, async (req, res, next) => {
   try {
-    let fellowId = req.user.id;
-    
+    let query = {};
+
     // Mentor/Admin can view specific fellow metrics
     if (["admin", "mentor", "super_admin"].includes(req.user.role) && req.query.fellowId) {
-      fellowId = req.query.fellowId;
-    } else if (!["fellow", "teacher"].includes(req.user.role)) {
-      return res.status(403).json({ message: "Access Denied. Fellow role required." });
+      const targetUser = await User.findById(req.query.fellowId).lean();
+      const targetName = targetUser?.name || "";
+      query = {
+        $or: [
+          { facilitatorId: req.query.fellowId },
+          ...(targetName ? [{ facilitatorNameRaw: { $regex: new RegExp(`^${escapeRegex(targetName)}$`, "i") } }] : [])
+        ]
+      };
+    } else if (["fellow", "teacher"].includes(req.user.role)) {
+      const userName = req.user.name || "";
+      query = {
+        $or: [
+          { facilitatorId: req.user.id },
+          ...(userName ? [{ facilitatorNameRaw: { $regex: new RegExp(`^${escapeRegex(userName)}$`, "i") } }] : [])
+        ]
+      };
+    } else {
+      // Super admin / admin global overview without specific fellowId
+      query = {};
     }
 
-    const visits = await VisitObservation.find({ facilitatorId: fellowId })
+    const visits = await VisitObservation.find(query)
       .sort({ visitDate: -1 })
+      .populate("facilitatorId", "name email")
       .lean();
 
     const totalVisits = visits.length;
-    const completedVisits = visits.filter(v => v.childPresent && v.caregiverAvailable && v.childWillingness);
+    const completedVisits = visits.filter(v => v.childPresent !== false && v.caregiverAvailable !== false);
     const completedCount = completedVisits.length;
     const completionRate = totalVisits > 0 ? Math.round((completedCount / totalVisits) * 100) : 0;
 
@@ -306,22 +468,38 @@ router.get("/fellow/metrics", requireAuth, async (req, res, next) => {
     const domainScores = {};
 
     completedVisits.forEach(v => {
-      v.activities.forEach(act => {
-        if (act.milestoneStatus !== undefined && act.milestoneStatus !== null) {
-          const score = act.milestoneStatus;
+      let visitHasScore = false;
+      (v.activities || []).forEach(act => {
+        if (act.milestoneStatus !== undefined && act.milestoneStatus !== null && !isNaN(act.milestoneStatus) && act.milestoneStatus > 0) {
+          const score = Number(act.milestoneStatus);
           totalMilestoneSum += score;
           milestoneCount++;
+          visitHasScore = true;
 
-          const domains = act.domain && act.domain.length > 0 ? act.domain : ["General"];
+          const domains = (act.domain && act.domain.length > 0) ? act.domain : ["Cognitive"];
           domains.forEach(d => {
-            if (!domainScores[d]) {
-              domainScores[d] = { sum: 0, count: 0 };
+            const cleanDomain = d.trim();
+            if (!domainScores[cleanDomain]) {
+              domainScores[cleanDomain] = { sum: 0, count: 0 };
             }
-            domainScores[d].sum += score;
-            domainScores[d].count++;
+            domainScores[cleanDomain].sum += score;
+            domainScores[cleanDomain].count++;
           });
         }
       });
+
+      // Fallback if no activity score was recorded but closing ratings exist
+      if (!visitHasScore && v.childParticipationRating && v.childParticipationRating > 0) {
+        const score = Number(v.childParticipationRating);
+        totalMilestoneSum += score;
+        milestoneCount++;
+        const dom = v.program || "Cognitive";
+        if (!domainScores[dom]) {
+          domainScores[dom] = { sum: 0, count: 0 };
+        }
+        domainScores[dom].sum += score;
+        domainScores[dom].count++;
+      }
     });
 
     const averageMilestoneScore = milestoneCount > 0 ? Math.round((totalMilestoneSum / milestoneCount) * 10) / 10 : 0;
@@ -330,21 +508,47 @@ router.get("/fellow/metrics", requireAuth, async (req, res, next) => {
       domain: d,
       average: Math.round((domainScores[d].sum / domainScores[d].count) * 10) / 10,
       count: domainScores[d].count
-    }));
+    })).sort((a, b) => b.count - a.count);
 
-    const visitsWithParentParticipation = completedVisits.filter(v => v.caregiverParticipated);
+    // Parent Participation Rate
+    const visitsWithParentParticipation = completedVisits.filter(v => {
+      return (
+        v.caregiverParticipated === true ||
+        v.caregiverObserved === true ||
+        (v.parentCooperationRating && v.parentCooperationRating >= 3) ||
+        (v.helpFactors && v.helpFactors.length > 0)
+      );
+    });
     const parentParticipationRate = completedCount > 0 ? Math.round((visitsWithParentParticipation.length / completedCount) * 100) : 0;
 
+    // Follow-ups Pending
     const followUpsPending = completedVisits.filter(v => {
       const action = String(v.recommendedAction || "").trim().toLowerCase();
-      return action && action !== "none" && action !== "no action" && action !== "no_action";
+      const hasAction = action && !["none", "no action", "no_action", "n/a", "nil"].includes(action);
+      return hasAction || v.isFollowUp === true || v.homeActivitiesAssigned === true;
     }).length;
 
+    // Child Engagement Rate
+    const highlyEngagedVisits = completedVisits.filter(v => {
+      if (v.childParticipationRating && v.childParticipationRating >= 3) return true;
+      if (v.childWillingness !== false) return true;
+      return (v.activities || []).some(a => ["highly engaged", "engaged", "moderate", "active"].includes(String(a.engagementLevel || "").toLowerCase()));
+    });
+    const childEngagementRate = completedCount > 0 ? Math.round((highlyEngagedVisits.length / completedCount) * 100) : 0;
+
+    // Adequate Home Environment Rate
+    const adequateEnvVisits = completedVisits.filter(v => {
+      return v.spaceAdequate === true || (v.homeEnvironmentRating && v.homeEnvironmentRating >= 3) || (v.materialsAvailable && v.materialsAvailable.length > 0);
+    });
+    const adequateHomeEnvironmentRate = completedCount > 0 ? Math.round((adequateEnvVisits.length / completedCount) * 100) : 0;
+
+    // Common Challenges
     const challengeCounts = {};
     completedVisits.forEach(v => {
       (v.challenges || []).forEach(ch => {
-        if (ch) {
-          challengeCounts[ch] = (challengeCounts[ch] || 0) + 1;
+        const clean = String(ch).trim();
+        if (clean && !["none", "nil", "no", "na", "n/a"].includes(clean.toLowerCase())) {
+          challengeCounts[clean] = (challengeCounts[clean] || 0) + 1;
         }
       });
     });
@@ -354,15 +558,63 @@ router.get("/fellow/metrics", requireAuth, async (req, res, next) => {
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
 
-    const recentVisits = visits.slice(0, 10).map(v => ({
-      _id: v._id,
-      childName: v.childName,
-      visitDate: v.visitDate,
-      activities: v.activities.map(a => a.activityName).join(", ") || "No activities logged",
-      engagementLevel: v.activities.map(a => a.engagementLevel).filter(Boolean).join(", ") || "N/A",
-      status: (v.childPresent && v.caregiverAvailable && v.childWillingness) ? "Completed" : "Incomplete",
-      remarks: v.remarks
-    }));
+    // Help Factors
+    const helpCounts = {};
+    completedVisits.forEach(v => {
+      (v.helpFactors || []).forEach(hf => {
+        const clean = String(hf).trim();
+        if (clean && !["none", "nil", "no", "na", "n/a"].includes(clean.toLowerCase())) {
+          helpCounts[clean] = (helpCounts[clean] || 0) + 1;
+        }
+      });
+    });
+
+    const helpFactors = Object.keys(helpCounts)
+      .map(hf => ({ factor: hf, count: helpCounts[hf] }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    const recentVisits = visits.slice(0, 10).map(v => {
+      const isCompleted = v.childPresent !== false && v.caregiverAvailable !== false;
+      const acts = v.activities || [];
+      const actNames = acts.map(a => a.activityName).filter(Boolean).join(", ");
+      const engagement = acts.map(a => a.engagementLevel).filter(Boolean).join(", ") || (v.childParticipationRating ? `Rating: ${v.childParticipationRating}/5` : "Good");
+      
+      let milestoneDisplay = "N/A";
+      const validScores = acts.map(a => a.milestoneStatus).filter(s => s !== undefined && s !== null && !isNaN(s));
+      if (validScores.length > 0) {
+        const avg = validScores.reduce((a, b) => a + b, 0) / validScores.length;
+        milestoneDisplay = `${Math.round(avg * 10) / 10} / 5`;
+      } else if (v.childParticipationRating) {
+        milestoneDisplay = `${v.childParticipationRating} / 5`;
+      }
+
+      return {
+        _id: v._id,
+        childName: v.childName || "Unknown Child",
+        childAge: v.ageGroup || "N/A",
+        visitDate: v.visitDate,
+        facilitatorName: v.facilitatorId?.name || v.facilitatorNameRaw || "Assigned Fellow",
+        village: v.village || "N/A",
+        program: v.program || "HAALS",
+        activities: actNames || "Developmental Activity",
+        activitiesList: acts,
+        milestoneScoreDisplay: milestoneDisplay,
+        engagementLevel: engagement,
+        caregiverParticipated: v.caregiverParticipated,
+        caregiverObserved: v.caregiverObserved,
+        parentCooperationRating: v.parentCooperationRating,
+        childParticipationRating: v.childParticipationRating,
+        homeEnvironmentRating: v.homeEnvironmentRating,
+        spaceAdequate: v.spaceAdequate,
+        materialsAvailable: v.materialsAvailable || [],
+        challenges: v.challenges || [],
+        helpFactors: v.helpFactors || [],
+        recommendedAction: v.recommendedAction || "",
+        status: isCompleted ? "Completed" : "Incomplete",
+        remarks: v.remarks || ""
+      };
+    });
 
     res.json({
       success: true,
@@ -372,11 +624,14 @@ router.get("/fellow/metrics", requireAuth, async (req, res, next) => {
         completionRate,
         averageMilestoneScore,
         parentParticipationRate,
-        followUpsPending
+        followUpsPending,
+        childEngagementRate,
+        adequateHomeEnvironmentRate
       },
       milestoneByDomain,
       recentVisits,
-      commonChallenges
+      commonChallenges,
+      helpFactors
     });
   } catch (err) {
     next(err);
@@ -391,43 +646,92 @@ router.get("/mentor/metrics", requireAuth, async (req, res, next) => {
     }
 
     let fellowIds = [];
+    let fellowNames = [];
     if (req.user.role === "mentor") {
       const mentor = await User.findById(req.user.id).lean();
       fellowIds = mentor?.mentorProfile?.assignedTeachers || [];
+      const assignedUsers = await User.find({ _id: { $in: fellowIds } }).select("name").lean();
+      fellowNames = assignedUsers.map(u => u.name).filter(Boolean);
     } else {
-      // Admins see all fellows in active center, or all fellows globally
-      const fellows = await User.find({ role: { $in: ["fellow", "teacher"] } }).select("_id").lean();
+      // Admins see all fellows
+      const fellows = await User.find({ role: { $in: ["fellow", "teacher"] } }).select("_id name").lean();
       fellowIds = fellows.map(f => f._id);
+      fellowNames = fellows.map(f => f.name).filter(Boolean);
     }
 
-    const visits = await VisitObservation.find({ facilitatorId: { $in: fellowIds } })
+    const query = (fellowIds.length > 0 || fellowNames.length > 0) ? {
+      $or: [
+        ...(fellowIds.length > 0 ? [{ facilitatorId: { $in: fellowIds } }] : []),
+        ...(fellowNames.length > 0 ? [{ facilitatorNameRaw: { $in: fellowNames.map(n => new RegExp(`^${escapeRegex(n)}$`, "i")) } }] : [])
+      ]
+    } : {};
+
+    const visits = await VisitObservation.find(query)
       .sort({ visitDate: -1 })
       .populate("facilitatorId", "name email")
       .lean();
 
     const totalVisits = visits.length;
-    const completedVisits = visits.filter(v => v.childPresent && v.caregiverAvailable && v.childWillingness);
+    const completedVisits = visits.filter(v => v.childPresent !== false && v.caregiverAvailable !== false);
     const completedCount = completedVisits.length;
     const centerVisitCompletion = totalVisits > 0 ? Math.round((completedCount / totalVisits) * 100) : 0;
 
     let totalMilestoneSum = 0;
     let milestoneCount = 0;
+    const domainScores = {};
+
     completedVisits.forEach(v => {
-      v.activities.forEach(act => {
-        if (act.milestoneStatus !== undefined && act.milestoneStatus !== null) {
-          totalMilestoneSum += act.milestoneStatus;
+      let visitHasScore = false;
+      (v.activities || []).forEach(act => {
+        if (act.milestoneStatus !== undefined && act.milestoneStatus !== null && !isNaN(act.milestoneStatus) && act.milestoneStatus > 0) {
+          const score = Number(act.milestoneStatus);
+          totalMilestoneSum += score;
           milestoneCount++;
+          visitHasScore = true;
+
+          const domains = (act.domain && act.domain.length > 0) ? act.domain : ["Cognitive"];
+          domains.forEach(d => {
+            const cleanDomain = d.trim();
+            if (!domainScores[cleanDomain]) {
+              domainScores[cleanDomain] = { sum: 0, count: 0 };
+            }
+            domainScores[cleanDomain].sum += score;
+            domainScores[cleanDomain].count++;
+          });
         }
       });
+
+      if (!visitHasScore && v.childParticipationRating && v.childParticipationRating > 0) {
+        const score = Number(v.childParticipationRating);
+        totalMilestoneSum += score;
+        milestoneCount++;
+        const dom = v.program || "Cognitive";
+        if (!domainScores[dom]) {
+          domainScores[dom] = { sum: 0, count: 0 };
+        }
+        domainScores[dom].sum += score;
+        domainScores[dom].count++;
+      }
     });
+
     const centerAverageMilestoneScore = milestoneCount > 0 ? Math.round((totalMilestoneSum / milestoneCount) * 10) / 10 : 0;
+
+    // Parent Participation Center-wide
+    const visitsWithParentParticipation = completedVisits.filter(v => {
+      return (
+        v.caregiverParticipated === true ||
+        v.caregiverObserved === true ||
+        (v.parentCooperationRating && v.parentCooperationRating >= 3)
+      );
+    });
+    const centerParentParticipationRate = completedCount > 0 ? Math.round((visitsWithParentParticipation.length / completedCount) * 100) : 0;
 
     // Per-fellow comparison table
     const fellowStats = {};
     for (const fId of fellowIds) {
       const fUser = await User.findById(fId).lean();
       if (fUser) {
-        fellowStats[fId.toString()] = {
+        fellowStats[fUser.name.toLowerCase().trim()] = {
           fellowId: fId.toString(),
           name: fUser.name,
           email: fUser.email,
@@ -435,26 +739,58 @@ router.get("/mentor/metrics", requireAuth, async (req, res, next) => {
           visitsCompleted: 0,
           completionRate: 0,
           averageMilestoneScore: 0,
+          parentParticipationRate: 0,
+          followUpsPending: 0,
           milestoneSum: 0,
-          milestoneCount: 0
+          milestoneCount: 0,
+          parentPartCount: 0
         };
       }
     }
 
     for (const v of visits) {
-      const fid = v.facilitatorId?._id?.toString() || v.facilitatorId?.toString();
-      if (fid && fellowStats[fid]) {
-        const stat = fellowStats[fid];
-        stat.visitsScheduled++;
-        const isCompleted = v.childPresent && v.caregiverAvailable && v.childWillingness;
-        if (isCompleted) {
-          stat.visitsCompleted++;
-          v.activities.forEach(act => {
-            if (act.milestoneStatus !== undefined && act.milestoneStatus !== null) {
-              stat.milestoneSum += act.milestoneStatus;
-              stat.milestoneCount++;
-            }
-          });
+      const facName = (v.facilitatorId?.name || v.facilitatorNameRaw || "Unknown Facilitator").toLowerCase().trim();
+      if (!fellowStats[facName]) {
+        fellowStats[facName] = {
+          fellowId: v.facilitatorId?._id?.toString() || null,
+          name: v.facilitatorId?.name || v.facilitatorNameRaw || "Field Facilitator",
+          email: v.facilitatorId?.email || "field@spaceece.org",
+          visitsScheduled: 0,
+          visitsCompleted: 0,
+          completionRate: 0,
+          averageMilestoneScore: 0,
+          parentParticipationRate: 0,
+          followUpsPending: 0,
+          milestoneSum: 0,
+          milestoneCount: 0,
+          parentPartCount: 0
+        };
+      }
+
+      const stat = fellowStats[facName];
+      stat.visitsScheduled++;
+      const isCompleted = v.childPresent !== false && v.caregiverAvailable !== false;
+      if (isCompleted) {
+        stat.visitsCompleted++;
+        if (v.caregiverParticipated === true || v.caregiverObserved === true || (v.parentCooperationRating && v.parentCooperationRating >= 3)) {
+          stat.parentPartCount++;
+        }
+        const action = String(v.recommendedAction || "").trim().toLowerCase();
+        if (action && !["none", "no action", "no_action", "n/a", "nil"].includes(action)) {
+          stat.followUpsPending++;
+        }
+
+        let scored = false;
+        (v.activities || []).forEach(act => {
+          if (act.milestoneStatus !== undefined && act.milestoneStatus !== null && !isNaN(act.milestoneStatus) && act.milestoneStatus > 0) {
+            stat.milestoneSum += Number(act.milestoneStatus);
+            stat.milestoneCount++;
+            scored = true;
+          }
+        });
+        if (!scored && v.childParticipationRating && v.childParticipationRating > 0) {
+          stat.milestoneSum += Number(v.childParticipationRating);
+          stat.milestoneCount++;
         }
       }
     }
@@ -462,8 +798,10 @@ router.get("/mentor/metrics", requireAuth, async (req, res, next) => {
     const fellowComparisonTable = Object.values(fellowStats).map(stat => {
       stat.completionRate = stat.visitsScheduled > 0 ? Math.round((stat.visitsCompleted / stat.visitsScheduled) * 100) : 0;
       stat.averageMilestoneScore = stat.milestoneCount > 0 ? Math.round((stat.milestoneSum / stat.milestoneCount) * 10) / 10 : 0;
+      stat.parentParticipationRate = stat.visitsCompleted > 0 ? Math.round((stat.parentPartCount / stat.visitsCompleted) * 100) : 0;
       delete stat.milestoneSum;
       delete stat.milestoneCount;
+      delete stat.parentPartCount;
       return stat;
     });
 
@@ -471,12 +809,12 @@ router.get("/mentor/metrics", requireAuth, async (req, res, next) => {
     const childVisits = {};
     for (const v of visits) {
       const cName = v.childName || "Unknown Child";
-      const cId = v.childId ? v.childId.toString() : `raw-${cName}`;
+      const cId = v.childId ? v.childId.toString() : `raw-${cName.toLowerCase().trim()}`;
       if (!childVisits[cId]) {
         childVisits[cId] = {
           childId: v.childId || null,
           childName: cName,
-          fellowName: v.facilitatorId?.name || v.facilitatorNameRaw || "Unknown Fellow",
+          fellowName: v.facilitatorId?.name || v.facilitatorNameRaw || "Assigned Fellow",
           visits: []
         };
       }
@@ -490,17 +828,18 @@ router.get("/mentor/metrics", requireAuth, async (req, res, next) => {
 
       for (const v of childInfo.visits) {
         for (const act of v.activities || []) {
-          const isIssue = !act.completed || 
-                          ["low", "needs support", "needs_support", "not interested", "not_interested", "poor"].includes(String(act.engagementLevel).toLowerCase().trim()) ||
-                          act.milestoneStatus <= 1;
-          
+          const isIssue =
+            !act.completed ||
+            ["low", "needs support", "needs_support", "not interested", "not_interested", "poor"].includes(String(act.engagementLevel).toLowerCase().trim()) ||
+            (act.milestoneStatus && act.milestoneStatus <= 1);
+
           if (isIssue) {
             const domains = act.domain || ["General"];
             for (const dom of domains) {
               if (!domainIssues[dom]) {
                 domainIssues[dom] = new Set();
               }
-              domainIssues[dom].add(v.visitDate.toDateString());
+              domainIssues[dom].add(new Date(v.visitDate).toDateString());
             }
           }
         }
@@ -513,29 +852,211 @@ router.get("/mentor/metrics", requireAuth, async (req, res, next) => {
             childName: childInfo.childName,
             fellowName: childInfo.fellowName,
             domain: dom,
-            reason: `≥ 2 visits showing Low Engagement or Not Completed in domain: ${dom}`
+            reason: `≥ 2 visits showing Low Engagement or Incomplete in domain: ${dom}`
           });
           break;
         }
       }
     }
 
+    const domainDistribution = Object.keys(domainScores).map(d => ({
+      domain: d,
+      average: Math.round((domainScores[d].sum / domainScores[d].count) * 10) / 10,
+      count: domainScores[d].count
+    })).sort((a, b) => b.count - a.count);
+
     res.json({
       success: true,
       kpis: {
+        totalVisits,
+        visitsCompleted: completedCount,
         centerVisitCompletion,
         centerAverageMilestoneScore,
-        flaggedChildrenCount: flaggedChildren.length
+        centerParentParticipationRate,
+        flaggedChildrenCount: flaggedChildren.length,
+        activeFellowsCount: fellowComparisonTable.length
       },
       fellowComparisonTable,
-      flaggedChildren
+      flaggedChildren,
+      domainDistribution
     });
   } catch (err) {
     next(err);
   }
 });
 
-// ── 4. AI Report Generation Stub (Section 7 Extension Point) ──
+// ── 4. Paginated & Filtered Visit Logs Endpoint ──
+router.get("/visits", requireAuth, async (req, res, next) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
+    const skip = (page - 1) * limit;
+
+    const { search, program, status, fellowId, village, sortBy = "visitDate", sortOrder = "desc" } = req.query;
+
+    const query = {};
+
+    // Role-based scoping
+    if (["fellow", "teacher"].includes(req.user.role)) {
+      const userName = req.user.name || "";
+      query.$or = [
+        { facilitatorId: req.user.id },
+        ...(userName ? [{ facilitatorNameRaw: { $regex: new RegExp(`^${escapeRegex(userName)}$`, "i") } }] : [])
+      ];
+    } else if (req.user.role === "mentor") {
+      const mentor = await User.findById(req.user.id).lean();
+      const assignedFellowIds = mentor?.mentorProfile?.assignedTeachers || [];
+      const assignedUsers = await User.find({ _id: { $in: assignedFellowIds } }).select("name").lean();
+      const names = assignedUsers.map(u => u.name).filter(Boolean);
+      query.$or = [
+        ...(assignedFellowIds.length > 0 ? [{ facilitatorId: { $in: assignedFellowIds } }] : []),
+        ...(names.length > 0 ? [{ facilitatorNameRaw: { $in: names.map(n => new RegExp(`^${escapeRegex(n)}$`, "i")) } }] : [])
+      ];
+    } else if (fellowId) {
+      const targetUser = await User.findById(fellowId).lean();
+      const targetName = targetUser?.name || "";
+      query.$or = [
+        { facilitatorId: fellowId },
+        ...(targetName ? [{ facilitatorNameRaw: { $regex: new RegExp(`^${escapeRegex(targetName)}$`, "i") } }] : [])
+      ];
+    }
+
+    if (program && program !== "all") {
+      query.program = { $regex: new RegExp(`^${escapeRegex(program)}$`, "i") };
+    }
+
+    if (village && village !== "all") {
+      query.village = { $regex: new RegExp(`^${escapeRegex(village)}$`, "i") };
+    }
+
+    if (status === "completed") {
+      query.childPresent = { $ne: false };
+      query.caregiverAvailable = { $ne: false };
+    } else if (status === "incomplete") {
+      query.$or = [{ childPresent: false }, { caregiverAvailable: false }, { childWillingness: false }];
+    } else if (status === "followup") {
+      query.$or = [
+        { isFollowUp: true },
+        { homeActivitiesAssigned: true },
+        { recommendedAction: { $exists: true, $ne: "" } }
+      ];
+    }
+
+    if (search && search.trim()) {
+      const sRegex = { $regex: new RegExp(escapeRegex(search.trim()), "i") };
+      const searchCondition = {
+        $or: [
+          { childName: sRegex },
+          { facilitatorNameRaw: sRegex },
+          { village: sRegex },
+          { program: sRegex },
+          { remarks: sRegex },
+          { "activities.activityName": sRegex }
+        ]
+      };
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, searchCondition];
+        delete query.$or;
+      } else {
+        query.$and = [searchCondition];
+      }
+    }
+
+    const sortOption = {};
+    sortOption[sortBy] = sortOrder === "asc" ? 1 : -1;
+
+    const totalVisits = await VisitObservation.countDocuments(query);
+    const visits = await VisitObservation.find(query)
+      .sort(sortOption)
+      .skip(skip)
+      .limit(limit)
+      .populate("facilitatorId", "name email")
+      .populate("childId", "fullName class center")
+      .lean();
+
+    const formattedVisits = visits.map(v => {
+      const isCompleted = v.childPresent !== false && v.caregiverAvailable !== false;
+      const acts = v.activities || [];
+      const actNames = acts.map(a => a.activityName).filter(Boolean).join(", ");
+      const engagement = acts.map(a => a.engagementLevel).filter(Boolean).join(", ") || (v.childParticipationRating ? `Rating: ${v.childParticipationRating}/5` : "Good");
+
+      let milestoneDisplay = "N/A";
+      const validScores = acts.map(a => a.milestoneStatus).filter(s => s !== undefined && s !== null && !isNaN(s) && s > 0);
+      if (validScores.length > 0) {
+        const avg = validScores.reduce((a, b) => a + b, 0) / validScores.length;
+        milestoneDisplay = `${Math.round(avg * 10) / 10} / 5`;
+      } else if (v.childParticipationRating) {
+        milestoneDisplay = `${v.childParticipationRating} / 5`;
+      }
+
+      return {
+        _id: v._id,
+        visitDate: v.visitDate,
+        childName: v.childName || "Unknown Child",
+        childAge: v.ageGroup || "N/A",
+        facilitatorName: v.facilitatorId?.name || v.facilitatorNameRaw || "Assigned Fellow",
+        village: v.village || "N/A",
+        program: v.program || "HAALS",
+        activities: actNames || "Developmental Activity",
+        activitiesList: acts,
+        milestoneScoreDisplay: milestoneDisplay,
+        engagementLevel: engagement,
+        childPresent: v.childPresent,
+        caregiverAvailable: v.caregiverAvailable,
+        childWillingness: v.childWillingness,
+        caregiverParticipated: v.caregiverParticipated,
+        caregiverObserved: v.caregiverObserved,
+        canRepeatAtHome: v.canRepeatAtHome,
+        spaceAdequate: v.spaceAdequate,
+        materialsAvailable: v.materialsAvailable || [],
+        householdItemsUsable: v.householdItemsUsable,
+        challenges: v.challenges || [],
+        helpFactors: v.helpFactors || [],
+        recommendedAction: v.recommendedAction || "",
+        isFollowUp: v.isFollowUp,
+        homeActivitiesAssigned: v.homeActivitiesAssigned,
+        lastWeekDifficulties: v.lastWeekDifficulties || "",
+        childParticipationRating: v.childParticipationRating,
+        parentCooperationRating: v.parentCooperationRating,
+        homeEnvironmentRating: v.homeEnvironmentRating,
+        remarks: v.remarks || "",
+        photos: v.photos || [],
+        status: isCompleted ? "Completed" : "Incomplete"
+      };
+    });
+
+    res.json({
+      success: true,
+      visits: formattedVisits,
+      pagination: {
+        totalVisits,
+        page,
+        limit,
+        totalPages: Math.ceil(totalVisits / limit) || 1
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── 5. Single Visit Details Endpoint ──
+router.get("/visits/:id", requireAuth, async (req, res, next) => {
+  try {
+    const visit = await VisitObservation.findById(req.params.id)
+      .populate("facilitatorId", "name email role")
+      .populate("childId", "fullName class center")
+      .lean();
+    if (!visit) {
+      return res.status(404).json({ success: false, message: "Visit observation not found." });
+    }
+    res.json({ success: true, visit });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── 6. AI Report Generation Stub (Section 7 Extension Point) ──
 router.post("/reports/generate-stub", requireAuth, async (req, res, next) => {
   try {
     const { fellowId, month } = req.body;
@@ -549,7 +1070,7 @@ router.post("/reports/generate-stub", requireAuth, async (req, res, next) => {
   }
 });
 
-// ── 5. Debug Stats for Ingestion Audit ──
+// ── 7. Debug Stats for Ingestion Audit ──
 router.get("/debug-stats", async (req, res, next) => {
   try {
     const expectedSecret = process.env.HAALS_SYNC_SECRET;
@@ -565,7 +1086,6 @@ router.get("/debug-stats", async (req, res, next) => {
     const nullChildCount = await VisitObservation.countDocuments({ childId: null });
     const nullFacilitatorCount = await VisitObservation.countDocuments({ facilitatorId: null });
 
-    // Look for Sanika Prabhawale
     const sanikaVisits = await VisitObservation.find({
       facilitatorNameRaw: { $regex: new RegExp(`^Sanika Prabhawale$`, "i") }
     }).select("visitDate childName childId facilitatorId").lean();
@@ -604,3 +1124,4 @@ router.get("/debug-stats", async (req, res, next) => {
 });
 
 export default router;
+

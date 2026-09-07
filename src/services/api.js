@@ -1787,12 +1787,28 @@ export function getMentorHaalsMetrics() {
   return request("/api/haals/mentor/metrics");
 }
 
+export function getHaalsVisits(params = {}) {
+  const searchParams = new URLSearchParams();
+  Object.keys(params).forEach(k => {
+    if (params[k] !== undefined && params[k] !== null && params[k] !== "") {
+      searchParams.append(k, params[k]);
+    }
+  });
+  const query = searchParams.toString();
+  return request(query ? `/api/haals/visits?${query}` : "/api/haals/visits");
+}
+
+export function getHaalsVisitDetails(visitId) {
+  return request(`/api/haals/visits/${visitId}`);
+}
+
 export function triggerHaalsAiReportStub(fellowId, month) {
   return request("/api/haals/reports/generate-stub", {
     method: "POST",
     body: JSON.stringify({ fellowId, month })
   });
 }
+
 
 // ── Admin Quiz APIs ──
 export function getAdminQuizzes() {
