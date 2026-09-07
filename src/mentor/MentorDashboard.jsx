@@ -35,7 +35,7 @@ const getMentorPhotoUrl = (user) => {
   return url || null;
 };
 
-/* â”€â”€ Placeholder for tabs â”€â”€ */
+/*  Placeholder for tabs */
 function UnderConstructionTab({ label = "This page", icon = "ðŸš§" }) {
   return (
     <div style={{ animation: "fadeIn 0.3s ease", display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
@@ -150,7 +150,7 @@ function OverviewTab({ user, workingCenter }) {
 
   if (loading) return (
     <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "50vh" }}>
-      <div style={{ fontSize: 16, fontWeight: "bold", color: "#64748b" }}>â³ Loading Overview...</div>
+      <div style={{ fontSize: 16, fontWeight: "bold", color: "#64748b" }}>Loading Overview...</div>
     </div>
   );
 
@@ -488,10 +488,10 @@ export default function MentorDashboard({ user, onLogout }) {
         </div>
       </div>
 
-      {/* â”€â”€ Main Content Area â”€â”€ */}
+      {/* Main Content Area  */}
       <div style={{ flex: 1, width: "0px", minWidth: "0px", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
-        {/* â”€â”€ Top Header Bar â”€â”€ */}
+        {/* Top Header Bar*/}
         <div style={{
           background: "white", borderBottom: "1px solid #e5e7eb", padding: "0 28px",
           height: 64, display: "flex", alignItems: "center", justifyContent: "space-between",
