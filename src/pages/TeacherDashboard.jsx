@@ -2372,7 +2372,7 @@ function ProfileTab({ user, onWorkingCenterChange, onUserUpdate }) {
           experience: form.expBio
         }
       };
-      console.log("Profile save payload:", payload);
+      // Profile save payload
 
       const res = await updateTeacherMe(payload);
 
@@ -2495,7 +2495,7 @@ function ProfileTab({ user, onWorkingCenterChange, onUserUpdate }) {
                   setImageLoadError(true);
                 }}
                 onLoad={() => {
-                  console.log("Image loaded successfully:", profilePhoto);
+                  // Image loaded successfully
                   setImageLoadError(false);
                 }}
               />
