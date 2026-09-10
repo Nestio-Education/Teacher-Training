@@ -85,6 +85,16 @@ const TEMPLATES = {
       body: "{{message}}",
     },
   },
+  daily_task_digest: {
+    en: {
+      title: "Today's Tasks",
+      body: "Good morning {{teacherName}}! You have {{count}} task(s) due today:\n{{message}}\n\nPlease complete these tasks before EOD.\nOpen the portal for full details.",
+    },
+    hi: {
+      title: "आज के कार्य",
+      body: "सुप्रभात {{teacherName}}! आज आपके पास {{count}} कार्य हैं:\n{{message}}\n\nकृपया इन कार्यों को EOD से पहले पूरा करें।\nपूरी जानकारी के लिए पोर्टल खोलें।",
+    },
+  },
   curriculum_assigned: {
     en: {
       title: "New Curriculum Assigned",
@@ -136,6 +146,7 @@ const TEMPLATE_CATEGORY_MAP = {
   assignment_reviewed: "assignment",
   password_reset_otp: "system",
   new_notification: "system",
+  daily_task_digest: "reminder",
   daily_task_assigned: "reminder",
   curriculum_assigned: "assignment",
   task_assigned: "assignment",
@@ -233,6 +244,30 @@ async function sendSms(phone, message) {
     } catch (err) {
       return { success: false, error: err.message };
     }
+  } else if (conf.provider === "httpsms") {
+    if (!conf.httpsmsApiKey) return { success: false, error: "httpSMS not configured" };
+    try {
+      const payload = {
+        content: message,
+        to: cleanPhone
+      };
+      if (conf.httpsmsPhone) {
+        payload.from = conf.httpsmsPhone;
+      }
+      const resp = await fetch("https://api.httpsms.com/v1/messages/send", {
+        method: "POST",
+        headers: {
+          "x-api-key": conf.httpsmsApiKey,
+          "Accept": "application/json",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await resp.json();
+      return resp.ok ? { success: true, sid: data.data?.id } : { success: false, error: data.message || "httpSMS error" };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
   }
 
   return { success: false, error: "No messaging provider configured" };
@@ -310,7 +345,11 @@ async function sendNotification({ recipientId, templateKey, channel = "in_app", 
   const { title, body } = getTemplate(templateKey, lang, replacements);
 
   const results = { inApp: null, email: null, sms: null, whatsapp: null };
-  const shouldSend = (ch) => channel === "all" || channel === ch;
+  const shouldSend = (ch) => {
+    if (channel === CHANNELS.ALL) return true;
+    if (Array.isArray(channel)) return channel.includes(ch);
+    return channel === ch;
+  };
 
   // ── In-App Notification ──
   if (shouldSend(CHANNELS.IN_APP)) {
@@ -343,7 +382,7 @@ async function sendNotification({ recipientId, templateKey, channel = "in_app", 
             </div>
             <div style="background:white;border-radius:12px;padding:24px;border:1px solid #e5e7eb;">
               <h3 style="color:#1c1917;margin:0 0 12px;">${title}</h3>
-              <p style="color:#374151;font-size:14px;line-height:1.6;">${body}</p>
+              <div style="color:#374151;font-size:14px;line-height:1.6;">${body.replace(/\n/g, "<br>")}</div>
               <div style="margin-top:20px;text-align:center;">
                 <a href="${process.env.FRONTEND_URL || "http://localhost:5173"}" 
                    style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#f59e0b,#d97706);color:white;text-decoration:none;border-radius:8px;font-weight:700;">
@@ -379,7 +418,10 @@ async function sendNotification({ recipientId, templateKey, channel = "in_app", 
   // ── SMS Notification ──
   if (shouldSend(CHANNELS.SMS) && recipient.phone) {
     try {
-      const smsResult = await sendSms(recipient.phone, `${title}\n\n${body}`);
+      // Combined digests can be long — keep well under carrier concatenation limits.
+      const SMS_MAX_CHARS = 300;
+      const smsMessage = `${title}\n\n${body}`.slice(0, SMS_MAX_CHARS);
+      const smsResult = await sendSms(recipient.phone, smsMessage);
 
       await Notification.create({
         recipient: recipientId,

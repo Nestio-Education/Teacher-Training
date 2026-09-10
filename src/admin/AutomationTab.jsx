@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Logo, Toast, Badge, StatusBadge, StatCard, SectionCard, S, globalCSS } from "../components/Shared";
 import { t, setLanguage, getLanguageList, getCurrentLanguage } from "../services/i18n";
-import { getAutomationStatus, sendAttendanceReminders, autoAssignCourse, getAdminDashboard, getCourses, getReminderRiskReport, sendDueReminders } from "../services/api";
+import { getAutomationStatus, sendAttendanceReminders, autoAssignCourse, getAdminDashboard, getCourses, getReminderRiskReport, sendDueReminders, sendDailyDigest } from "../services/api";
 
 export default function AutomationTab({ user }) {
   const [automationStatus, setAutomationStatus] = useState(null);
@@ -16,6 +16,8 @@ export default function AutomationTab({ user }) {
   const [loadingRisk, setLoadingRisk] = useState(true);
   const [sendingDueReminders, setSendingDueReminders] = useState(false);
   const [lastSentDetails, setLastSentDetails] = useState(null);
+  const [sendingDigest, setSendingDigest] = useState(false);
+  const [lastDigestDetails, setLastDigestDetails] = useState(null);
   const [lastAttendanceReminderNames, setLastAttendanceReminderNames] = useState(null);
   const [lastAutoAssignNames, setLastAutoAssignNames] = useState(null);
 
@@ -71,6 +73,24 @@ export default function AutomationTab({ user }) {
       setToast({ msg: err.message || "Failed to send reminders.", type: "error" });
     } finally {
       setSendingDueReminders(false);
+    }
+  };
+
+  const handleSendDigestNow = async () => {
+    setSendingDigest(true);
+    try {
+      const result = await sendDailyDigest();
+      setToast({
+        msg: `Digest sent to ${result.teachersNotified} teacher(s)` +
+          (result.failedCount ? `, ${result.failedCount} failed` : "") +
+          ".",
+        type: "success",
+      });
+      setLastDigestDetails(result.sentDetails || []);
+    } catch (err) {
+      setToast({ msg: err.message || "Failed to send daily digest.", type: "error" });
+    } finally {
+      setSendingDigest(false);
     }
   };
 
@@ -186,6 +206,13 @@ export default function AutomationTab({ user }) {
           </div>
         </div>
 
+        <div style={{ padding: "10px 14px", background: "#f0f9ff", borderRadius: 8, border: "1px solid #bae6fd", marginBottom: 16 }}>
+          <div style={{ fontSize: 12, color: "#0369a1", fontWeight: 600 }}>
+            📧 A separate start-of-day digest (email + SMS + in-app) runs automatically at 8:00 AM,
+            combining everything each teacher has due that day into one message.
+          </div>
+        </div>
+
         <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
           <StatCard icon="🔴" label="High Risk" val={riskReport?.highRiskCount ?? "-"} sub="Likely to miss deadline" color="#ef4444" bg="#fee2e2" />
           <StatCard icon="🟡" label="Medium Risk" val={riskReport?.mediumRiskCount ?? "-"} sub="Needs a nudge" color="#f59e0b" bg="#fef3c7" />
@@ -201,6 +228,36 @@ export default function AutomationTab({ user }) {
             {sendingDueReminders ? "Sending..." : "📤 Send Reminders Now"}
           </button>
         </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12, marginTop: -4 }}>
+          <button
+            onClick={handleSendDigestNow}
+            disabled={sendingDigest}
+            style={{ ...S.primaryBtn, background: "linear-gradient(135deg,#0ea5e9,#0369a1)", opacity: sendingDigest ? 0.6 : 1 }}
+          >
+            {sendingDigest ? "Sending..." : "📧📱 Send Daily Digest Now"}
+          </button>
+        </div>
+
+        {lastDigestDetails !== null && (
+          <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 10, padding: 14, marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1d4ed8", marginBottom: 8 }}>
+              📋 Last digest — {lastDigestDetails.length} teacher(s) notified (email + SMS + in-app):
+            </div>
+            {lastDigestDetails.length === 0 ? (
+              <div style={{ fontSize: 12, color: "#6b7280" }}>No one had anything due today at the time of this run.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {lastDigestDetails.map((d, i) => (
+                  <div key={i} style={{ fontSize: 12, color: "#374151" }}>
+                    <span style={{ fontWeight: 700 }}>{d.teacherName}</span>
+                    {" — "}{d.itemCount} task(s), {d.channelsSucceeded}/{d.channelsAttempted} channel(s) delivered
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {lastSentDetails !== null && (
           <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10, padding: 14, marginBottom: 16 }}>

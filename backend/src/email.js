@@ -173,7 +173,7 @@ export async function getMessagingConfig() {
     "messagingProvider",
     "twilioSid", "twilioToken", "twilioFrom",
     "vonageApiKey", "vonageApiSecret", "vonageFrom",
-    "fast2smsKey"
+    "fast2smsKey", "httpsmsApiKey", "httpsmsPhone"
   ];
   const docs = await PortalSetting.find({ key: { $in: keys } });
   const map = {};
@@ -188,6 +188,8 @@ export async function getMessagingConfig() {
     vonageApiSecret: String(map.vonageApiSecret || process.env.VONAGE_API_SECRET || ""),
     vonageFrom: String(map.vonageFrom || process.env.VONAGE_FROM || "SpacECE"),
     fast2smsKey: String(map.fast2smsKey || process.env.FAST2SMS_KEY || ""),
+    httpsmsApiKey: String(map.httpsmsApiKey || process.env.HTTPSMS_API_KEY || ""),
+    httpsmsPhone: String(map.httpsmsPhone || process.env.HTTPSMS_PHONE || ""),
   };
 }
 
