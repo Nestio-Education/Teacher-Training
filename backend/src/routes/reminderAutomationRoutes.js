@@ -2,6 +2,7 @@ import express from "express";
 import { requireAuth, requireRole } from "../auth.js";
 import { getRiskReport, getUpcomingReminders } from "../services/reminderPredictionService.js";
 import { dispatchDueReminders } from "../services/reminderDispatchService.js";
+import { sendDailyDigests } from "../services/dailyDigestService.js";
 
 const router = express.Router();
 
@@ -45,6 +46,22 @@ router.get("/upcoming", requireAuth, requireRole("admin"), async (_req, res) => 
 router.post("/send-reminders", requireAuth, requireRole("admin"), async (_req, res) => {
   try {
     const result = await dispatchDueReminders();
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * POST /api/reminder-automation/send-daily-digest
+ * Manually trigger the start-of-day digest right now (admin on-demand
+ * trigger / testing). The cron job (dailyDigestCron.js) calls the same
+ * sendDailyDigests() automatically every morning.
+ * Admin only.
+ */
+router.post("/send-daily-digest", requireAuth, requireRole("admin"), async (_req, res) => {
+  try {
+    const result = await sendDailyDigests();
     res.json({ success: true, ...result });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

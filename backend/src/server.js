@@ -5151,7 +5151,6 @@ app.get("/api/admin/activity-submissions/export-all-centers", requireAuth, requi
   }
 });
 
-// ==========================================
 // AI ACTIVITIES (Lesson Planner)
 // ==========================================
 app.get("/api/ai-activities", requireAuth, async (req, res, next) => {
@@ -5946,7 +5945,7 @@ app.put("/api/admin/settings", requireAuth, requireRole("admin"), async (req, re
 });
 
 // ==========================================
-// ADMIN SETTINGS Ã¢â‚¬â€ TEST EMAIL
+// ADMIN SETTINGS — TEST EMAIL
 // ==========================================
 app.post("/api/admin/settings/test-email", requireAuth, requireRole("admin"), async (req, res, next) => {
   try {
@@ -5957,14 +5956,14 @@ app.post("/api/admin/settings/test-email", requireAuth, requireRole("admin"), as
 
     const result = await sendEmail({
       to,
-      subject: "Ã¢Å“â€¦ SpacECE Portal Ã¢â‚¬â€ Test Email",
+      subject: "✅ SpacECE Portal — Test Email",
       html: `
         <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:32px;">
-          <h2 style="color:#f59e0b;">Ã°Å¸Å½â€° Test Email Successful!</h2>
+          <h2 style="color:#f59e0b;">🎉 Test Email Successful!</h2>
           <p>This is a test email sent from the <strong>SpacECE Teacher Training Portal</strong>.</p>
           <p>If you received this message, your SMTP configuration is working correctly.</p>
           <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
-          <p style="font-size:12px;color:#9ca3af;">Sent at ${new Date().toISOString()} Ã‚Â· SpacECE Admin Panel</p>
+          <p style="font-size:12px;color:#9ca3af;">Sent at ${new Date().toISOString()} · SpacECE Admin Panel</p>
         </div>
       `,
     });
@@ -5989,16 +5988,16 @@ app.post("/api/admin/settings/test-sms", requireAuth, requireRole("admin"), asyn
     if (!to) {
       return res.status(400).json({ success: false, message: "Phone number is required." });
     }
-    const twilioConf = await getTwilioConfig();
-    if (!twilioConf) {
-      return res.status(500).json({ success: false, message: "Twilio credentials are not configured." });
+    const messagingConf = await getMessagingConfig();
+    if (!messagingConf || !messagingConf.provider) {
+      return res.status(500).json({ success: false, message: "Messaging provider is not configured." });
     }
     const cleanPhone = normalizePhoneE164(to);
-    const result = await sendSms(cleanPhone, "SpacECE Portal — Test SMS successful! Your Twilio SMS configuration is working.");
+    const result = await sendSms(cleanPhone, `SpacECE Portal — Test SMS successful! Your ${messagingConf.provider} configuration is working.`);
     if (result.success) {
       return res.json({ success: true, message: `Test SMS sent to ${cleanPhone}.`, sid: result.sid || null });
     }
-    return res.status(500).json({ success: false, message: result.error || "Twilio SMS failed." });
+    return res.status(500).json({ success: false, message: result.error || "SMS delivery failed." });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
   }

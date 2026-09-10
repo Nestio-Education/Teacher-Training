@@ -1640,7 +1640,7 @@ export default function TrainingAndClassroomManager({ user }) {
       return;
     }
     try {
-      console.log("Deleting activity:", id, activity);
+      // Deleting activity
       await deleteActivity(id);
       setToast({ msg: `"${name}" deleted successfully.`, type: "success" });
       loadData();

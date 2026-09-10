@@ -1,6 +1,6 @@
-﻿import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Modal, S, SectionCard, StatCard, StatusBadge } from "../components/Shared";
-import { getAdminDashboard, getAdminTeachers, getCourses, getAdminUsers, getPortalSettings, updatePortalSettings, testSmtpEmail, updateAdminLanguage, testWhatsAppNotification } from "../services/api";
+import { getAdminDashboard, getAdminTeachers, getCourses, getAdminUsers, getPortalSettings, updatePortalSettings, testSmtpEmail, updateAdminLanguage, testWhatsAppNotification, testSmsNotification } from "../services/api";
 import { t, setLanguage, getCurrentLanguage, getLanguageList } from "../services/i18n";
 import NotificationsTab from "./NotificationsTab";
 
@@ -56,6 +56,8 @@ export default function SettingsTab({ setToast, teachers }) {
   const [testEmailResult, setTestEmailResult] = useState(null);
   const [testWhatsAppTo, setTestWhatsAppTo] = useState("");
   const [testWhatsAppSending, setTestWhatsAppSending] = useState(false);
+  const [testSmsTo, setTestSmsTo] = useState("");
+  const [testSmsSending, setTestSmsSending] = useState(false);
   const [roleUsers, setRoleUsers] = useState([]);
   const [showUserModal, setShowUserModal] = useState(false);
   const [selectedRole, setSelectedRole] = useState("");
@@ -214,6 +216,8 @@ export default function SettingsTab({ setToast, teachers }) {
         vonageApiSecret: twilioConfig.vonageApiSecret,
         vonageFrom: twilioConfig.vonageFrom,
         fast2smsKey: twilioConfig.fast2smsKey,
+        httpsmsApiKey: twilioConfig.httpsmsApiKey,
+        httpsmsPhone: twilioConfig.httpsmsPhone,
         gradeAPlus: gradingConfig.gradeAPlus,
         gradeA: gradingConfig.gradeA,
         gradeBPlus: gradingConfig.gradeBPlus,
@@ -284,6 +288,26 @@ export default function SettingsTab({ setToast, teachers }) {
       setTestWhatsAppSending(false);
     }
   }, [testWhatsAppTo, twilioConfig, setToast]);
+
+  const handleTestSms = useCallback(async () => {
+    if (!testSmsTo.trim()) {
+      setToast?.({ msg: "Please enter a phone number to test.", type: "error" });
+      return;
+    }
+    setTestSmsSending(true);
+    try {
+      const data = await testSmsNotification(testSmsTo.trim());
+      if (data.success) {
+        setToast?.({ msg: `✅ Test SMS sent! SID: ${data.sid || data.messageId || 'Success'}`, type: "success" });
+      } else {
+        setToast?.({ msg: data.message || "Test SMS failed.", type: "error" });
+      }
+    } catch (error) {
+      setToast?.({ msg: error.message || "Failed to send test SMS.", type: "error" });
+    } finally {
+      setTestSmsSending(false);
+    }
+  }, [testSmsTo, setToast]);
 
   const roleMeta = {
       admin: { access: "Full access to all modules including financial and role management", color: "#ef4444", bg: "#fee2e2" },
@@ -591,6 +615,7 @@ export default function SettingsTab({ setToast, teachers }) {
                   <option value="twilio">Twilio (SMS & WhatsApp)</option>
                   <option value="vonage">Vonage / Nexmo (SMS)</option>
                   <option value="fast2sms">Fast2SMS (SMS — Ideal for India)</option>
+                  <option value="httpsms">httpSMS (Android Gateway)</option>
                 </select>
               </div>
 
@@ -640,10 +665,56 @@ export default function SettingsTab({ setToast, teachers }) {
                 </div>
               )}
 
+              {/* httpSMS Options */}
+              {twilioConfig.messagingProvider === "httpsms" && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label style={S.label}>httpSMS API Key</label>
+                    <input type="password" style={S.input} placeholder="x-api-key..." value={twilioConfig.httpsmsApiKey || ""} onChange={(e) => { setTwilioConfig((p) => ({ ...p, httpsmsApiKey: e.target.value })); markDirty(); }} />
+                  </div>
+                  <div>
+                    <label style={S.label}>Gateway Phone Number (Optional)</label>
+                    <input type="text" style={S.input} placeholder="+919876543210" value={twilioConfig.httpsmsPhone || ""} onChange={(e) => { setTwilioConfig((p) => ({ ...p, httpsmsPhone: e.target.value })); markDirty(); }} />
+                  </div>
+                </div>
+              )}
+
               <div style={{ background: "#fef3c7", padding: "12px 16px", borderRadius: 10, border: "1px solid #fbbf24", fontSize: 12, color: "#92400e" }}>
                 {twilioConfig.messagingProvider === "twilio" && "Get Twilio credentials from Twilio Console. For WhatsApp, ensure sandbox is enabled."}
                 {twilioConfig.messagingProvider === "vonage" && "Configure Vonage API Key/Secret. SMS will be delivered internationally."}
                 {twilioConfig.messagingProvider === "fast2sms" && "Configure Fast2SMS API key. High delivery rates for Indian mobile numbers."}
+                {twilioConfig.messagingProvider === "httpsms" && "Configure httpSMS to use your paired Android device for sending SMS. Ensure the app is running."}
+              </div>
+
+              {/* ─── Test SMS ─── */}
+              <div style={{ borderTop: "1px solid #f3f4f6", paddingTop: 18, marginTop: 20 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#1c1917", marginBottom: 4 }}>💬 Test SMS Delivery</div>
+                <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 12, lineHeight: 1.5 }}>
+                  Enter a phone number to test the configured SMS gateway (Twilio, Vonage, Fast2SMS, or httpSMS). Ensure settings are saved first.
+                </div>
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <div style={{ flex: 1 }}>
+                    <input
+                      type="text"
+                      style={{ ...S.input, marginBottom: 0 }}
+                      placeholder="Enter phone number (e.g. 9876543210)"
+                      value={testSmsTo}
+                      onChange={(e) => setTestSmsTo(e.target.value)}
+                    />
+                  </div>
+                  <button
+                    onClick={handleTestSms}
+                    disabled={testSmsSending}
+                    style={{
+                      ...S.primaryBtn,
+                      whiteSpace: "nowrap",
+                      opacity: testSmsSending ? 0.7 : 1,
+                      minWidth: 160,
+                    }}
+                  >
+                    {testSmsSending ? "Sending..." : "📱 Send Test SMS"}
+                  </button>
+                </div>
               </div>
 
               {/* ─── Test WhatsApp ─── */}
