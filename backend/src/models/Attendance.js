@@ -43,6 +43,25 @@ const teacherAttendanceRecordSchema = new mongoose.Schema(
     snapshot: String,
     snapshotOut: String,
     
+    // Photo & Geo Verification / Risk Scoring Fields
+    verificationStatus: { type: String, enum: ["VALID", "NEEDS_REVIEW", "APPROVED", "REJECTED", "FOLLOW_UP"], default: "VALID" },
+    riskScore: { type: Number, default: 0 },
+    reviewReason: { type: String, default: "" },
+    pHash: { type: String, default: "" },
+    blurScore: { type: Number, default: null },
+    brightnessScore: { type: Number, default: null },
+    qualityResult: { type: String, enum: ["PASS", "FAIL", "N/A"], default: "N/A" },
+    locationResult: { type: String, enum: ["PASS", "FAIL", "N/A"], default: "N/A" },
+    timeResult: { type: String, enum: ["PASS", "LATE", "FAIL", "N/A"], default: "N/A" },
+    exifStatus: { type: String, enum: ["VALID", "MISSING", "TAMPERED", "N/A"], default: "N/A" },
+    exifTimestamp: { type: Date, default: null },
+    
+    // Staff Review Workflow
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    reviewedAt: { type: Date },
+    rejectionReason: { type: String, default: "" },
+    followUpNote: { type: String, default: "" },
+
     markedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }

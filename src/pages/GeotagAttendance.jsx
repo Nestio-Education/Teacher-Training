@@ -71,7 +71,11 @@ export default function GeotagAttendance({ user }) {
             try { if (record.note) parsedNote = JSON.parse(record.note); }
             catch (e) { parsedNote = { noteText: record.note }; }
             map[dateKey] = {
-              checkedIn: record.checkedIn ?? (parsedNote.checkedIn || (record.status === "present")),
+              status: record.status || "present",
+              verificationStatus: record.verificationStatus || "APPROVED",
+              rejectionReason: record.rejectionReason || "",
+              reviewReason: record.reviewReason || "",
+              checkedIn: record.checkedIn ?? (parsedNote.checkedIn || (record.status === "present" || record.status === "pending_review")),
               checkedOut: record.checkedOut ?? (parsedNote.checkedOut || false),
               checkInTime: record.checkInTime || parsedNote.checkInTime || (record.status === "present" ? "09:00 AM" : ""),
               checkOutTime: record.checkOutTime || parsedNote.checkOutTime || "",
@@ -80,13 +84,13 @@ export default function GeotagAttendance({ user }) {
             };
             const dateStr = dateObj.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
             if (map[dateKey].checkInTime) {
-              logs.push({ id: `GEO-${record._id}-in`, type: "checkin", date: dateStr, time: map[dateKey].checkInTime, coords: parsedNote.coords || `${record.latitude || CAMPUS_LAT}, ${record.longitude || CAMPUS_LNG}`, snapshot: map[dateKey].snapshot, distanceOffset: map[dateKey].distanceOffset });
+              logs.push({ id: `GEO-${record._id}-in`, type: "checkin", date: dateStr, time: map[dateKey].checkInTime, coords: parsedNote.coords || `${record.latitude || CAMPUS_LAT}, ${record.longitude || CAMPUS_LNG}`, snapshot: map[dateKey].snapshot, distanceOffset: map[dateKey].distanceOffset, status: record.status, rejectionReason: record.rejectionReason });
             }
             if (map[dateKey].checkOutTime) {
-              logs.push({ id: `GEO-${record._id}-out`, type: "checkout", date: dateStr, time: map[dateKey].checkOutTime, coords: parsedNote.coords || `${record.latitude || CAMPUS_LAT}, ${record.longitude || CAMPUS_LNG}`, snapshot: record.snapshotOut || parsedNote.snapshotOut || map[dateKey].snapshot, distanceOffset: record.distanceOffsetOut ?? (parsedNote.distanceOffsetOut || map[dateKey].distanceOffset) });
+              logs.push({ id: `GEO-${record._id}-out`, type: "checkout", date: dateStr, time: map[dateKey].checkOutTime, coords: parsedNote.coords || `${record.latitude || CAMPUS_LAT}, ${record.longitude || CAMPUS_LNG}`, snapshot: record.snapshotOut || parsedNote.snapshotOut || map[dateKey].snapshot, distanceOffset: record.distanceOffsetOut ?? (parsedNote.distanceOffsetOut || map[dateKey].distanceOffset), status: record.status });
             }
             if (!map[dateKey].checkInTime && record.status === "present") {
-              logs.push({ id: `GEO-${record._id}`, type: "checkin", date: dateStr, time: "09:00 AM", coords: `${record.latitude || CAMPUS_LAT}, ${record.longitude || CAMPUS_LNG}`, snapshot: null, distanceOffset: 0 });
+              logs.push({ id: `GEO-${record._id}`, type: "checkin", date: dateStr, time: "09:00 AM", coords: `${record.latitude || CAMPUS_LAT}, ${record.longitude || CAMPUS_LNG}`, snapshot: null, distanceOffset: 0, status: record.status });
             }
           });
           setAttendanceMap(map);
@@ -177,8 +181,9 @@ export default function GeotagAttendance({ user }) {
   const processAttendance = async (type, lat, lng) => {
     try {
       const center = isMentor ? user?.mentorProfile?.center : user?.teacherProfile?.center;
-      const targetLat = (center && center.latitude) ? center.latitude : CAMPUS_LAT;
-      const targetLng = (center && center.longitude) ? center.longitude : CAMPUS_LNG;
+      const policy = user?.teacherProfile?.attendancePolicy || {};
+      const targetLat = (!isMentor && policy.latitude != null) ? policy.latitude : ((center && center.latitude) ? center.latitude : CAMPUS_LAT);
+      const targetLng = (!isMentor && policy.longitude != null) ? policy.longitude : ((center && center.longitude) ? center.longitude : CAMPUS_LNG);
       const dist = calcDistance(lat, lng, targetLat, targetLng);
       const snapshot = captureSnapshot();
       const now = new Date();
@@ -209,18 +214,28 @@ export default function GeotagAttendance({ user }) {
   };
 
   const getViewDayKey = (day) => `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  const isPresent = (rec) => !!(rec?.checkedIn || rec?.status === "present");
+  const isPresent = (rec) => rec && (rec.status === "present" || rec.status === "late" || (rec.checkedIn && rec.status !== "absent" && rec.status !== "pending_review"));
+  const isPendingReview = (rec) => rec && (rec.status === "pending_review" || rec.verificationStatus === "NEEDS_REVIEW");
+  const isAbsent = (rec) => rec && (rec.status === "absent" || rec.verificationStatus === "REJECTED");
+
   const isViewWeekend = (day) => {
     const d = new Date(viewYear, viewMonth, day).getDay();
     return d === 0 || d === 6;
   };
+
   const getDayStatus = (day) => {
-    if (isViewWeekend(day)) { const rec = attendanceMap[getViewDayKey(day)]; return isPresent(rec) ? "extra" : "holiday"; }
-    // Future days in current month, or any day in a future month
+    const rec = attendanceMap[getViewDayKey(day)];
+    if (isViewWeekend(day)) {
+      if (isAbsent(rec)) return "absent";
+      if (isPendingReview(rec)) return "review";
+      return isPresent(rec) ? "extra" : "holiday";
+    }
     const cellDate = new Date(viewYear, viewMonth, day);
     const todayMidnight = new Date(currentYear, currentMonth, todayDate);
     if (cellDate > todayMidnight) return "upcoming";
-    const rec = attendanceMap[getViewDayKey(day)];
+
+    if (isAbsent(rec)) return "absent";
+    if (isPendingReview(rec)) return "review";
     if (isPresent(rec)) return "present";
     if (isViewingCurrentMonth && day === todayDate) return "today";
     return "absent";
@@ -229,6 +244,7 @@ export default function GeotagAttendance({ user }) {
   const getTileStyle = (status) => {
     switch (status) {
       case "present":  return { background: "#f0fdf4", border: "1.5px solid #86efac", color: "#166534" };
+      case "review":   return { background: "#fffbeb", border: "1.5px solid #fde68a", color: "#92400e" };
       case "extra":    return { background: "#f5f3ff", border: "1.5px solid #c4b5fd", color: "#5b21b6" };
       case "absent":   return { background: "#fef2f2", border: "1.5px solid #fca5a5", color: "#991b1b" };
       case "today":    return { background: "#eff6ff", border: "2px solid #60a5fa",   color: "#1d4ed8", fontWeight: "800" };
@@ -303,16 +319,64 @@ export default function GeotagAttendance({ user }) {
 
             <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
 
-              {/* Campus info — teachers only */}
+              {/* Campus & Timing Policy info — teachers only */}
               {!isMentor && (
-              <div style={{ background: "#f8fafc", borderRadius: 9, padding: "10px 12px", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ fontSize: 16, flexShrink: 0 }}>🏫</span>
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 1 }}>Assigned Campus</div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>{centerName}</div>
-                  <div style={{ fontSize: 10, color: "#cbd5e1", fontFamily: "monospace" }}>{CAMPUS_LAT} · {CAMPUS_LNG}</div>
+              <div style={{ background: "#f8fafc", borderRadius: 10, padding: "12px", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 18 }}>🏫</span>
+                    <div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.4px" }}>Assigned Location</div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b" }}>
+                        {user?.teacherProfile?.attendancePolicy?.assignedLocationName || centerName}
+                      </div>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: "#2563eb", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 6, padding: "2px 6px" }}>
+                    ≤ {user?.teacherProfile?.attendancePolicy?.geofenceRadius || 200}m
+                  </span>
                 </div>
+
+                {user?.teacherProfile?.attendancePolicy?.expectedTimeStart && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 6, borderTop: "1px dashed #e2e8f0" }}>
+                    <span style={{ fontSize: 16 }}>⏰</span>
+                    <div style={{ fontSize: 11, color: "#475569" }}>
+                      <span style={{ fontWeight: 700, color: "#0f172a" }}>Allowed Hours: </span>
+                      {user.teacherProfile.attendancePolicy.expectedTimeStart} – {user.teacherProfile.attendancePolicy.expectedTimeEnd || "05:00 PM"}
+                    </div>
+                  </div>
+                )}
               </div>
+              )}
+
+              {/* Status Banner for Today */}
+              {todayRecord.checkedIn && (
+                todayRecord.status === "absent" || todayRecord.verificationStatus === "REJECTED" ? (
+                  <div style={{ padding: "12px 14px", background: "#fef2f2", border: "1.5px solid #fca5a5", borderRadius: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: "#991b1b", display: "flex", alignItems: "center", gap: 6 }}>
+                      <span>❌</span> Attendance Status: Absent (Rejected by Admin)
+                    </div>
+                    <div style={{ fontSize: 12, color: "#b91c1c", marginTop: 4, lineHeight: 1.4 }}>
+                      <strong>Reason:</strong> {todayRecord.rejectionReason || todayRecord.reviewReason || "Check-in rejected by administrator"}
+                    </div>
+                  </div>
+                ) : todayRecord.status === "pending_review" || todayRecord.verificationStatus === "NEEDS_REVIEW" ? (
+                  <div style={{ padding: "12px 14px", background: "#fffbeb", border: "1.5px solid #fde68a", borderRadius: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: "#92400e", display: "flex", alignItems: "center", gap: 6 }}>
+                      <span>⏳</span> Attendance Under Review
+                    </div>
+                    <div style={{ fontSize: 11, color: "#a16207", marginTop: 3, lineHeight: 1.4 }}>
+                      {todayRecord.reviewReason ? `Flagged: ${todayRecord.reviewReason}. ` : ""}
+                      Your attendance is awaiting admin/mentor review.
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ padding: "10px 14px", background: "#f0fdf4", border: "1.5px solid #86efac", borderRadius: 10 }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "#166534", display: "flex", alignItems: "center", gap: 6 }}>
+                      <span>✅</span> Attendance Verified: {todayRecord.status === "late" ? "Late" : "Present"}
+                    </div>
+                  </div>
+                )
               )}
 
               {/* Alerts */}
@@ -485,6 +549,7 @@ export default function GeotagAttendance({ user }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px 12px" }}>
               {[
                 { bg: "#f0fdf4", border: "#86efac", label: "Present" },
+                { bg: "#fffbeb", border: "#fde68a", label: "Under Review" },
                 { bg: "#fef2f2", border: "#fca5a5", label: "Absent" },
                 { bg: "#eff6ff", border: "#93c5fd", label: "Today", bold: true },
                 { bg: "#fefce8", border: "#fde68a", label: "Weekend" },
@@ -516,6 +581,7 @@ export default function GeotagAttendance({ user }) {
                   <div key={day} style={{ ...tile, height: 46, borderRadius: 8, display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "5px", boxSizing: "border-box", outline: isToday ? "2px solid #60a5fa" : "none", outlineOffset: 1 }}>
                     <span style={{ fontSize: 11, fontWeight: isToday ? 800 : 600 }}>{day}</span>
                     {status === "present"  && <span style={{ alignSelf: "flex-end", fontSize: 7, background: "#16a34a", color: "white", padding: "1px 3px", borderRadius: 2, fontWeight: 800 }}>✓</span>}
+                    {status === "review"   && <span style={{ alignSelf: "flex-end", fontSize: 7, background: "#d97706", color: "white", padding: "1px 3px", borderRadius: 2, fontWeight: 800 }}>⏳</span>}
                     {status === "extra"    && <span style={{ alignSelf: "flex-end", fontSize: 7, background: "#7c3aed", color: "white", padding: "1px 3px", borderRadius: 2, fontWeight: 800 }}>✓</span>}
                     {status === "absent"   && <span style={{ alignSelf: "flex-end", fontSize: 7, background: "#dc2626", color: "white", padding: "1px 3px", borderRadius: 2, fontWeight: 800 }}>✗</span>}
                     {status === "today"    && <span style={{ alignSelf: "flex-end", fontSize: 6, background: "#3b82f6", color: "white", padding: "1px 3px", borderRadius: 2, fontWeight: 800 }}>NOW</span>}
