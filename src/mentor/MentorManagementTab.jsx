@@ -4,7 +4,7 @@ import { getAdminMentors, updateMentorStatus, updateMentorProfile, registerMento
 import { t } from "../services/i18n";
 
 // Reuse same base URL pattern as ActivityMonitoringTab
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 
 // Returns the mentor's real photo URL if available, otherwise DiceBear initials avatar
 const avatarSrc = (mentor) =>

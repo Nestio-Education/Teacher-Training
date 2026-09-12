@@ -3,9 +3,9 @@ import { Modal, S, SearchBar, StatCard, StatusBadge, Toast } from "../components
 import { getActivities, reviewActivity, getCenters, sendAdminNotification } from "../services/api";
 import { t } from "../services/i18n";
 
-// BUG FIX: was hardcoded to http://localhost:5000, which breaks in any
+// BUG FIX: was hardcoded to http://localhost:5001, which breaks in any
 // non-local environment. Now reuses the same base URL the API layer uses.
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 
 const REJECT_REASONS = [
   "Incomplete documentation",
