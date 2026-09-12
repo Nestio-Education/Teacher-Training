@@ -19,18 +19,18 @@ http://localhost:5173
 
 6. Check backend health:
 
-http://localhost:5000/health
+http://localhost:5001/health
 
 7. Test daily automation APIs with Postman or Thunder Client:
 
 Generate 20 dummy automation teachers:
-POST http://localhost:5000/api/daily-task-automation/teachers/generate-dummy
+POST http://localhost:5001/api/daily-task-automation/teachers/generate-dummy
 
 Import included FinalT2.xlsx sample activity dataset:
-POST http://localhost:5000/api/daily-task-automation/activities/import-sample
+POST http://localhost:5001/api/daily-task-automation/activities/import-sample
 
 Generate today's daily task allocation:
-POST http://localhost:5000/api/daily-task-automation/generate-daily
+POST http://localhost:5001/api/daily-task-automation/generate-daily
 Body:
 {
   "activityCount": 4,
@@ -38,13 +38,13 @@ Body:
 }
 
 Check today's assignments:
-GET http://localhost:5000/api/daily-task-automation/today
+GET http://localhost:5001/api/daily-task-automation/today
 
 Check teacher T001 dashboard tasks:
-GET http://localhost:5000/api/daily-task-automation/teacher/T001/today
+GET http://localhost:5001/api/daily-task-automation/teacher/T001/today
 
 Check teacher T001 notifications:
-GET http://localhost:5000/api/daily-task-automation/teacher/T001/notifications
+GET http://localhost:5001/api/daily-task-automation/teacher/T001/notifications
 
 Note:
 - The activity count is flexible. Change DAILY_ACTIVITY_COUNT in backend/.env or send activityCount in API body.

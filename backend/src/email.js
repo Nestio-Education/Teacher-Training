@@ -62,9 +62,6 @@ export async function sendEmail({ to, subject, html }) {
       },
     };
 
-    if (config.host && config.host.toLowerCase().includes("gmail")) {
-      transportOpts.service = "gmail";
-    }
 
     const transporter = nodemailer.createTransport(transportOpts);
 

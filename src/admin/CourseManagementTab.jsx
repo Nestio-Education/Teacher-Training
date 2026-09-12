@@ -39,7 +39,7 @@ const AI_LEVELS = ["Beginner", "Intermediate", "Advanced", "All Levels"];
 const AI_DURATIONS = ["2 Weeks", "4 Weeks", "6 Weeks", "8 Weeks", "3 Months", "6 Months"];
 
 // Backend base URL — point this at your Express server.
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5001";
 const getCourseId = (course) => course?._id || course?.id;
 
 /* ══════════════════════════════════════════
@@ -1041,7 +1041,7 @@ export default function CourseManagementTab({ courses, setCourses, categories, s
       const formData = new FormData();
       formData.append("file", file);
       const token = localStorage.getItem("spaceece_auth_token");
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:5000"}/api/admin/upload-material`, {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:5001"}/api/admin/upload-material`, {
         method: "POST",
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
