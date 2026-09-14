@@ -1,5 +1,6 @@
 import cron from "node-cron";
 import { dispatchDueReminders } from "../services/reminderDispatchService.js";
+import { PortalSetting } from "../models/PortalSetting.js";
 
 /**
  * Runs once a day and sends reminders for anything due within the next
@@ -14,6 +15,12 @@ export const startReminderAutomationCron = () => {
 
   cron.schedule(schedule, async () => {
     try {
+      const setting = await PortalSetting.findOne({ key: "enableReminders" });
+      if (setting && setting.value === false) {
+        console.log("Reminder automation skipped (disabled in Portal Settings).");
+        return;
+      }
+
       const result = await dispatchDueReminders();
       console.log(
         `Reminder automation completed: ${result.sentCount} teacher reminder(s) sent, ` +
