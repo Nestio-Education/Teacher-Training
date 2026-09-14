@@ -1,6 +1,52 @@
 import nodemailer from "nodemailer";
 import { PortalSetting } from "./models/PortalSetting.js";
 import mongoose from "mongoose";
+import { Resend } from "resend";
+
+/**
+ * Load the active email provider ("smtp" default, or "resend") plus
+ * whichever provider's config, from PortalSetting with env var fallback.
+ */
+async function getEmailProviderConfig() {
+  const keys = ["emailProvider", "resendApiKey", "fromEmail", "fromName"];
+  const docs = await PortalSetting.find({ key: { $in: keys } });
+  const map = {};
+  docs.forEach((d) => { map[d.key] = d.value; });
+
+  const provider = String(map.emailProvider || process.env.EMAIL_PROVIDER || "smtp");
+  const apiKey = String(map.resendApiKey || process.env.RESEND_API_KEY || "");
+  const fromEmail = String(map.fromEmail || process.env.FROM_EMAIL || "");
+  const fromName = String(map.fromName || process.env.FROM_NAME || "SpacECE Notifications");
+
+  return { provider, apiKey, fromEmail, fromName };
+}
+
+async function sendResendEmail({ to, subject, html, fromEmail, fromName }) {
+  const { apiKey } = await getEmailProviderConfig();
+  if (!apiKey) {
+    return { success: false, error: "Resend not configured. Set the Resend API key in Settings & Roles > Email." };
+  }
+  if (!fromEmail) {
+    return { success: false, error: "Resend requires a verified From Email. Set it in Settings & Roles > Email." };
+  }
+
+  try {
+    const resend = new Resend(apiKey);
+    const { data, error } = await resend.emails.send({
+      from: `${fromName} <${fromEmail}>`,
+      to,
+      subject,
+      html: html || subject,
+    });
+
+    if (error) {
+      return { success: false, error: error.message || "Resend send failed" };
+    }
+    return { success: true, messageId: data?.id };
+  } catch (error) {
+    return { success: false, error: error.message || "Unknown Resend error" };
+  }
+}
 
 /**
  * Load SMTP config from the PortalSetting collection.
@@ -42,6 +88,17 @@ async function getSmtpConfig() {
  * Returns { success: boolean, error?: string }.
  */
 export async function sendEmail({ to, subject, html }) {
+  const { provider, fromEmail, fromName } = await getEmailProviderConfig();
+
+  if (provider === "resend") {
+    const result = await sendResendEmail({ to, subject, html, fromEmail, fromName });
+    if (!result.success) {
+      console.error("[email] resend_send_error", JSON.stringify({ to, subject, error: result.error }));
+    }
+    return result;
+  }
+
+  // Existing SMTP path — unchanged from here down
   try {
     const config = await getSmtpConfig();
     if (!config) {
@@ -62,9 +119,6 @@ export async function sendEmail({ to, subject, html }) {
       },
     };
 
-    if (config.host && config.host.toLowerCase().includes("gmail")) {
-      transportOpts.service = "gmail";
-    }
 
     const transporter = nodemailer.createTransport(transportOpts);
 
@@ -133,9 +187,16 @@ export async function sendNotificationEmail({ recipient, title, body, category =
     metadata: { category, priority: "normal" },
   });
 
-  // Send email if SMTP is configured
-  const config = await getSmtpConfig();
-  if (config) {
+  // Send email if provider is configured
+  const providerConfig = await getEmailProviderConfig();
+  let canSend = false;
+  if (providerConfig.provider === "resend") {
+    canSend = !!providerConfig.apiKey;
+  } else {
+    canSend = !!(await getSmtpConfig());
+  }
+
+  if (canSend) {
     const result = await sendEmail({
       to: teacher.email,
       subject: title,
@@ -158,10 +219,10 @@ export async function sendNotificationEmail({ recipient, title, body, category =
 
   await Notification.findByIdAndUpdate(notification._id, {
     status: "skipped",
-    error: "SMTP not configured",
+    error: "Email provider not configured",
   });
 
-  return { success: false, error: "SMTP not configured" };
+  return { success: false, error: "Email provider not configured" };
 }
 
 // Start: Dnyaneshwari Thorat
@@ -173,7 +234,7 @@ export async function getMessagingConfig() {
     "messagingProvider",
     "twilioSid", "twilioToken", "twilioFrom",
     "vonageApiKey", "vonageApiSecret", "vonageFrom",
-    "fast2smsKey"
+    "fast2smsKey", "httpsmsApiKey", "httpsmsPhone"
   ];
   const docs = await PortalSetting.find({ key: { $in: keys } });
   const map = {};
@@ -188,6 +249,8 @@ export async function getMessagingConfig() {
     vonageApiSecret: String(map.vonageApiSecret || process.env.VONAGE_API_SECRET || ""),
     vonageFrom: String(map.vonageFrom || process.env.VONAGE_FROM || "SpacECE"),
     fast2smsKey: String(map.fast2smsKey || process.env.FAST2SMS_KEY || ""),
+    httpsmsApiKey: String(map.httpsmsApiKey || process.env.HTTPSMS_API_KEY || ""),
+    httpsmsPhone: String(map.httpsmsPhone || process.env.HTTPSMS_PHONE || ""),
   };
 }
 

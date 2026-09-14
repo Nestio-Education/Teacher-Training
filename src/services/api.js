@@ -992,6 +992,12 @@ export function sendDueReminders() {
   });
 }
 
+export function sendDailyDigest() {
+  return request("/api/reminder-automation/send-daily-digest", {
+    method: "POST",
+  });
+}
+
 export function getTasksForTeacher(teacherId) {
   return request(`/api/teacher-tasks/for-teacher/${teacherId}`);
 }
@@ -1042,7 +1048,7 @@ export function saveTwilioConfig(twilioData) {
 export function updateAdminLanguage(lang) {
   return request("/api/admin/me/language", {
     method: "PATCH",
-    body: JSON.stringify({ lang }),
+    body: JSON.stringify({ language: lang }),
   });
 }
 

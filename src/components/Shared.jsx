@@ -318,6 +318,7 @@ export function ExportMonthModal({ title = "Export Monthly Report", subtitle, on
   );
 }
 
+
 /* ── SearchBar ── */
 export function SearchBar({ value, onChange, placeholder }) {
   return (
