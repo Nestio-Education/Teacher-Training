@@ -1,5 +1,6 @@
 import cron from "node-cron";
 import { sendDailyDigests } from "../services/dailyDigestService.js";
+import { PortalSetting } from "../models/PortalSetting.js";
 
 /**
  * Runs every morning and sends each teacher ONE combined email + SMS +
@@ -15,6 +16,12 @@ export const startDailyDigestCron = () => {
 
   cron.schedule(schedule, async () => {
     try {
+      const setting = await PortalSetting.findOne({ key: "enableReminders" });
+      if (setting && setting.value === false) {
+        console.log("Daily digest skipped (disabled in Portal Settings).");
+        return;
+      }
+
       const result = await sendDailyDigests();
       console.log(
         `Daily digest completed: ${result.teachersNotified} teacher(s) notified, ` +
