@@ -131,6 +131,8 @@ import { AssessmentResult } from "./models/AssessmentResult.js";
 import { sendBulkEmails, sendEmail, getTwilioConfig, getMessagingConfig } from "./email.js";
 // End: Dnyaneshwari Thorat
 import { initSocket, createAndEmitNotification } from "./socket.js";
+import { verifyImageFeatures, calculateHammingDistance } from "./services/imageVerificationService.js";
+import { evaluateAttendanceRisk, calculateHaversineDistance } from "./services/riskScoringService.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "../.env") });
@@ -2266,6 +2268,107 @@ app.patch("/api/mentor/fellows/:id/status", requireAuth, requireRole("mentor"), 
     });
 
     res.json({ success: true, message: `Teacher status updated to ${status}`, fellow });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── Mentor: Assign Attendance Policy (Timeslot & Location) to a Fellow/Teacher ──
+app.put("/api/mentor/fellows/:id/attendance-policy", requireAuth, requireRole("mentor"), async (req, res, next) => {
+  try {
+    const { centerId, assignedLocationName, latitude, longitude, geofenceRadius, expectedTimeStart, expectedTimeEnd } = req.body;
+
+    // Verify this teacher belongs to this mentor
+    const mentorUser = await User.findById(req.user.id).select("mentorProfile.assignedTeachers");
+    const assignedIds = (mentorUser?.mentorProfile?.assignedTeachers || []).map(id => id.toString());
+    const fellowDirect = await User.findOne({ _id: req.params.id, assignedMentor: req.user.id });
+
+    if (!assignedIds.includes(req.params.id) && !fellowDirect) {
+      return res.status(403).json({ message: "This teacher is not assigned to you." });
+    }
+
+    let finalLocName = assignedLocationName;
+    let finalLat = latitude;
+    let finalLon = longitude;
+
+    if (centerId) {
+      const centerObj = await Center.findById(centerId);
+      if (centerObj) {
+        if (!finalLocName) finalLocName = centerObj.name;
+        if (finalLat === undefined && centerObj.latitude != null) finalLat = centerObj.latitude;
+        if (finalLon === undefined && centerObj.longitude != null) finalLon = centerObj.longitude;
+      }
+    }
+
+    const update = {
+      "teacherProfile.attendancePolicy.assignedBy": req.user.id,
+      "teacherProfile.attendancePolicy.assignedAt": new Date(),
+    };
+    if (centerId) update["teacherProfile.center"] = centerId;
+    if (finalLocName !== undefined) update["teacherProfile.attendancePolicy.assignedLocationName"] = finalLocName;
+    if (finalLat !== undefined) update["teacherProfile.attendancePolicy.latitude"] = finalLat;
+    if (finalLon !== undefined) update["teacherProfile.attendancePolicy.longitude"] = finalLon;
+    if (geofenceRadius !== undefined) update["teacherProfile.attendancePolicy.geofenceRadius"] = geofenceRadius;
+    if (expectedTimeStart !== undefined) update["teacherProfile.attendancePolicy.expectedTimeStart"] = expectedTimeStart;
+    if (expectedTimeEnd !== undefined) update["teacherProfile.attendancePolicy.expectedTimeEnd"] = expectedTimeEnd;
+
+    const fellow = await User.findByIdAndUpdate(
+      req.params.id,
+      { $set: update },
+      { new: true }
+    ).select("-passwordHash")
+      .populate("teacherProfile.center", "name city latitude longitude")
+      .populate("teacherProfile.classes", "name");
+
+    if (!fellow) return res.status(404).json({ message: "Teacher not found." });
+
+    res.json({ success: true, message: "Attendance policy assigned successfully.", fellow });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── Admin: Assign Attendance Policy (Timeslot & Location) to a Teacher ──
+app.put("/api/admin/teachers/:id/attendance-policy", requireAuth, requireRole("admin"), async (req, res, next) => {
+  try {
+    const { centerId, assignedLocationName, latitude, longitude, geofenceRadius, expectedTimeStart, expectedTimeEnd } = req.body;
+
+    let finalLocName = assignedLocationName;
+    let finalLat = latitude;
+    let finalLon = longitude;
+
+    if (centerId) {
+      const centerObj = await Center.findById(centerId);
+      if (centerObj) {
+        if (!finalLocName) finalLocName = centerObj.name;
+        if (finalLat === undefined && centerObj.latitude != null) finalLat = centerObj.latitude;
+        if (finalLon === undefined && centerObj.longitude != null) finalLon = centerObj.longitude;
+      }
+    }
+
+    const update = {
+      "teacherProfile.attendancePolicy.assignedBy": req.user.id,
+      "teacherProfile.attendancePolicy.assignedAt": new Date(),
+    };
+    if (centerId) update["teacherProfile.center"] = centerId;
+    if (finalLocName !== undefined) update["teacherProfile.attendancePolicy.assignedLocationName"] = finalLocName;
+    if (finalLat !== undefined) update["teacherProfile.attendancePolicy.latitude"] = finalLat;
+    if (finalLon !== undefined) update["teacherProfile.attendancePolicy.longitude"] = finalLon;
+    if (geofenceRadius !== undefined) update["teacherProfile.attendancePolicy.geofenceRadius"] = geofenceRadius;
+    if (expectedTimeStart !== undefined) update["teacherProfile.attendancePolicy.expectedTimeStart"] = expectedTimeStart;
+    if (expectedTimeEnd !== undefined) update["teacherProfile.attendancePolicy.expectedTimeEnd"] = expectedTimeEnd;
+
+    const teacher = await User.findByIdAndUpdate(
+      req.params.id,
+      { $set: update },
+      { new: true }
+    ).select("-passwordHash")
+      .populate("teacherProfile.center", "name city latitude longitude")
+      .populate("teacherProfile.classes", "name");
+
+    if (!teacher) return res.status(404).json({ message: "Teacher not found." });
+
+    res.json({ success: true, message: "Attendance policy assigned successfully.", teacher });
   } catch (error) {
     next(error);
   }
@@ -5352,7 +5455,8 @@ app.get("/api/attendance/teachers", requireAuth, async (req, res, next) => {
       };
     }
     const records = await TeacherAttendanceRecord.find(filter)
-      .populate("teacher", "name email subject")
+      .populate("teacher", "name email phone subject teacherProfile")
+      .populate("reviewedBy", "name role")
       .sort({ attendanceDate: -1 });
     res.json({ records });
   } catch (error) {
@@ -5425,6 +5529,7 @@ app.post("/api/attendance/mentors", requireAuth, requireRole("mentor"), async (r
     res.status(500).json({ message: error.message, stack: error.stack });
   }
 });
+
 app.post("/api/attendance/teachers", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
     const { status, source, latitude, longitude, note, attendanceDate } = req.body;
@@ -5433,31 +5538,195 @@ app.post("/api/attendance/teachers", requireAuth, requireRole("teacher", "fellow
     const recordDate = attendanceDate ? new Date(attendanceDate) : today;
     recordDate.setHours(0, 0, 0, 0);
 
+    // Fetch teacher profile & policy
+    const teacherUser = await User.findById(req.user.id).populate("teacherProfile.center");
+    const policy = teacherUser?.teacherProfile?.attendancePolicy || {};
+    const center = teacherUser?.teacherProfile?.center;
+
+    const targetLat = policy.latitude != null ? policy.latitude : (center?.latitude ?? 18.6675);
+    const targetLon = policy.longitude != null ? policy.longitude : (center?.longitude ?? 73.8961);
+    const geofenceRadius = policy.geofenceRadius || 200;
+    const locationName = policy.assignedLocationName || center?.name || "Assigned Center";
+    const expectedTimeStart = policy.expectedTimeStart || "09:00 AM";
+    const expectedTimeEnd = policy.expectedTimeEnd || "05:00 PM";
+
+    const snapshot = req.body.snapshot || req.body.snapshotOut;
+    let imageFeatures = {};
+    let duplicateMatch = { isDuplicate: false };
+
+    if (snapshot) {
+      imageFeatures = await verifyImageFeatures(snapshot);
+
+      // Duplicate pHash check against past 60 days of teacher attendance
+      if (imageFeatures.pHash) {
+        const sixtyDaysAgo = new Date();
+        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+        const pastRecords = await TeacherAttendanceRecord.find({
+          attendanceDate: { $gte: sixtyDaysAgo, $lt: recordDate },
+          pHash: { $exists: true, $ne: "" }
+        }).select("_id pHash attendanceDate").limit(100);
+
+        for (const pr of pastRecords) {
+          if (pr.pHash) {
+            const dist = calculateHammingDistance(imageFeatures.pHash, pr.pHash);
+            if (dist <= 5) {
+              duplicateMatch = { isDuplicate: true, matchedRecordId: pr._id, distance: dist };
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    const checkInTime = req.body.checkInTime || (req.body.checkedIn ? new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "");
+
+    const riskEval = evaluateAttendanceRisk({
+      actualLat: latitude,
+      actualLon: longitude,
+      targetLat,
+      targetLon,
+      geofenceRadius,
+      locationName,
+      checkInTime,
+      expectedTimeStart,
+      expectedTimeEnd,
+      imageFeatures,
+      duplicateMatch
+    });
+
+    const calculatedDist = riskEval.distanceMeters ?? req.body.distanceOffset;
+
+    // Status lifecycle: If review needed, set 'pending_review' (do not auto-mark present). If passed, set 'present' or 'late'.
+    const determinedStatus = status || (riskEval.verificationStatus === "NEEDS_REVIEW"
+      ? "pending_review"
+      : (riskEval.timeResult === "LATE" ? "late" : "present"));
+
     const record = await TeacherAttendanceRecord.findOneAndUpdate(
       { teacher: req.user.id, attendanceDate: recordDate },
       {
         teacher: req.user.id,
         attendanceDate: recordDate,
-        status: status || "present",
+        status: determinedStatus,
         source: source || "geo",
         latitude,
         longitude,
         note,
         markedBy: req.user.id,
-        checkInTime: req.body.checkInTime,
+        checkInTime,
         checkOutTime: req.body.checkOutTime,
-        checkedIn: req.body.checkedIn,
+        checkedIn: req.body.checkedIn ?? true,
         checkedOut: req.body.checkedOut,
-        distanceOffset: req.body.distanceOffset,
+        distanceOffset: calculatedDist,
         distanceOffsetOut: req.body.distanceOffsetOut,
         snapshot: req.body.snapshot,
-        snapshotOut: req.body.snapshotOut
+        snapshotOut: req.body.snapshotOut,
+
+        // Verification & Risk Engine fields
+        verificationStatus: riskEval.verificationStatus,
+        riskScore: riskEval.riskScore,
+        reviewReason: riskEval.reviewReason,
+        pHash: riskEval.pHash,
+        blurScore: riskEval.blurScore,
+        brightnessScore: riskEval.brightnessScore,
+        qualityResult: riskEval.qualityResult,
+        locationResult: riskEval.locationResult,
+        timeResult: riskEval.timeResult,
+        exifStatus: riskEval.exifStatus,
+        exifTimestamp: imageFeatures.exif?.exifTimestamp || null
       },
       { upsert: true, new: true }
     );
-    res.status(201).json({ record });
+    res.status(201).json({ record, riskEvaluation: riskEval });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
+  }
+});
+
+// ── Staff Review Actions: Approve, Reject, Follow-Up ──
+app.patch("/api/attendance/records/:id/review", requireAuth, requireRole("admin", "mentor"), async (req, res, next) => {
+  try {
+    const { action, rejectionReason, followUpNote } = req.body;
+    // action: "approve" | "reject" | "follow_up"
+
+    let statusUpdate = "APPROVED";
+    let presenceStatus = "present";
+    if (action === "reject") {
+      statusUpdate = "REJECTED";
+      presenceStatus = "absent";
+    } else if (action === "follow_up") {
+      statusUpdate = "FOLLOW_UP";
+      presenceStatus = "pending_review";
+    } else {
+      statusUpdate = "APPROVED";
+      presenceStatus = "present";
+    }
+
+    const updateFields = {
+      verificationStatus: statusUpdate,
+      status: presenceStatus,
+      reviewedBy: req.user.id,
+      reviewedAt: new Date(),
+    };
+    if (rejectionReason !== undefined) updateFields.rejectionReason = rejectionReason;
+    if (followUpNote !== undefined) updateFields.followUpNote = followUpNote;
+
+    const record = await TeacherAttendanceRecord.findByIdAndUpdate(
+      req.params.id,
+      { $set: updateFields },
+      { new: true }
+    ).populate("teacher", "name email phone teacherProfile")
+     .populate("reviewedBy", "name role");
+
+    if (!record) return res.status(404).json({ message: "Attendance record not found." });
+
+    res.json({ success: true, message: `Record marked as ${statusUpdate} (${presenceStatus})`, record });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── Multi-Channel Intake: Webhook Sync (Google Sheet / Form) ──
+app.post("/api/attendance/intake/webhook", async (req, res, next) => {
+  try {
+    const payload = Array.isArray(req.body) ? req.body : [req.body];
+    const results = [];
+
+    for (const item of payload) {
+      const email = (item.email || item.teacherEmail || "").trim().toLowerCase();
+      const teacher = await User.findOne({ email, role: { $in: ["teacher", "fellow"] } });
+      if (!teacher) continue;
+
+      const dateStr = item.date || item.visitDate || item.attendanceDate || new Date();
+      const recordDate = new Date(dateStr);
+      recordDate.setHours(0, 0, 0, 0);
+
+      const lat = parseFloat(item.latitude || item.lat) || null;
+      const lon = parseFloat(item.longitude || item.lon || item.lng) || null;
+      const checkInTime = item.checkInTime || item.time || "09:00 AM";
+
+      const record = await TeacherAttendanceRecord.findOneAndUpdate(
+        { teacher: teacher._id, attendanceDate: recordDate },
+        {
+          teacher: teacher._id,
+          attendanceDate: recordDate,
+          status: item.status || "present",
+          source: item.source || "intake_webhook",
+          latitude: lat,
+          longitude: lon,
+          checkInTime,
+          checkedIn: true,
+          markedBy: teacher._id,
+          note: item.note || `Imported via intake webhook`
+        },
+        { upsert: true, new: true }
+      );
+      results.push(record._id);
+    }
+
+    res.json({ success: true, count: results.length, ids: results });
+  } catch (error) {
+    next(error);
   }
 });
 

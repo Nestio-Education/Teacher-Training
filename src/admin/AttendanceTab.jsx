@@ -1,21 +1,25 @@
 import { t } from "../services/i18n";
 import { useEffect, useMemo, useState } from "react";
-import { StatCard, SectionCard } from "../components/Shared";
-import { getTeacherAttendance, sendAdminNotification, getMentorAttendance, getMentorFellowsAttendance, getMentorFellows, getAdminTeachers } from "../services/api";
+import { StatCard, SectionCard, Modal } from "../components/Shared";
+import { getTeacherAttendance, sendAdminNotification, getMentorAttendance, getMentorFellowsAttendance, getMentorFellows, getAdminTeachers, reviewAttendanceRecord } from "../services/api";
 
 const STATUS_COLORS = {
   present: { bg: "#10b981", light: "#d1fae5", text: "#065f46" },
+  pending_review: { bg: "#f59e0b", light: "#fef3c7", text: "#92400e" },
   late: { bg: "#f59e0b", light: "#fef3c7", text: "#92400e" },
   absent: { bg: "#ef4444", light: "#fee2e2", text: "#991b1b" },
   excused: { bg: "#8b5cf6", light: "#ede9fe", text: "#6b21a8" },
 };
 
 const STATUS_OPTIONS = [
-  { value: "all", label: "All Status", icon: "📋" },
+  { value: "all", label: "All Records", icon: "📋" },
+  { value: "needs_review", label: "🚨 Needs Review", icon: "🚨" },
+  { value: "approved", label: "✅ Approved", icon: "✅" },
+  { value: "rejected", label: "❌ Rejected", icon: "❌" },
+  { value: "follow_up", label: "📝 Follow-Up", icon: "📝" },
   { value: "present", label: "Present", icon: "✅" },
   { value: "late", label: "Late", icon: "⏰" },
   { value: "absent", label: "Absent", icon: "❌" },
-  { value: "excused", label: "Excused", icon: "📝" },
 ];
 
 const S = {
@@ -68,6 +72,15 @@ export default function AttendanceTab({ teachers: initialTeachers = [], role = "
   const [dateFilter, setDateFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
+
+  // Review & Lightbox states
+  const [zoomPhoto, setZoomPhoto] = useState(null);
+  const [rejectingRecord, setRejectingRecord] = useState(null);
+  const [followingUpRecord, setFollowingUpRecord] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [followUpNote, setFollowUpNote] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionMsg, setActionMsg] = useState({ text: "", type: "" });
 
   useEffect(() => {
     setLoading(true);
@@ -125,18 +138,66 @@ export default function AttendanceTab({ teachers: initialTeachers = [], role = "
       const teacherName = String(record.teacher?.name || "").toLowerCase();
       const teacherEmail = String(record.teacher?.email || "").toLowerCase();
       const matchesSearch = !query || teacherName.includes(query) || teacherEmail.includes(query);
-      const matchesStatus = statusFilter === "all" || record.status === statusFilter;
+
+      let matchesStatus = true;
+      if (statusFilter === "needs_review") {
+        matchesStatus = record.verificationStatus === "NEEDS_REVIEW" || record.needsReview;
+      } else if (statusFilter === "approved") {
+        matchesStatus = record.verificationStatus === "APPROVED";
+      } else if (statusFilter === "rejected") {
+        matchesStatus = record.verificationStatus === "REJECTED";
+      } else if (statusFilter === "follow_up") {
+        matchesStatus = record.verificationStatus === "FOLLOW_UP";
+      } else if (statusFilter !== "all") {
+        matchesStatus = record.status === statusFilter;
+      }
+
       return matchesSearch && matchesStatus;
     });
   }, [records, search, statusFilter]);
 
   const summary = useMemo(() => ({
-    total: filteredRecords.length,
-    present: filteredRecords.filter((r) => r.status === "present").length,
-    late: filteredRecords.filter((r) => r.status === "late").length,
-    absent: filteredRecords.filter((r) => r.status === "absent").length,
-    excused: filteredRecords.filter((r) => r.status === "excused").length,
-  }), [filteredRecords]);
+    total: records.length,
+    needsReview: records.filter((r) => r.verificationStatus === "NEEDS_REVIEW" || r.needsReview).length,
+    present: records.filter((r) => r.status === "present").length,
+    late: records.filter((r) => r.status === "late").length,
+    absent: records.filter((r) => r.status === "absent").length,
+  }), [records]);
+
+  const reloadRecords = () => {
+    setLoading(true);
+    const fetchFunc = () => {
+      if (role === "mentor") {
+        return getMentorFellowsAttendance(dateFilter ? { date: dateFilter } : {});
+      } else if (activeRole === "Mentor") {
+        return getMentorAttendance(dateFilter ? { date: dateFilter } : {});
+      } else {
+        return getTeacherAttendance(dateFilter ? { date: dateFilter } : {});
+      }
+    };
+    fetchFunc()
+      .then((data) => setRecords(data?.records || data?.attendanceRecords || []))
+      .catch((err) => console.error("Failed to reload attendance", err))
+      .finally(() => setLoading(false));
+  };
+
+  const handleReviewAction = async (recordId, action, extra = {}) => {
+    setActionLoading(true);
+    try {
+      await reviewAttendanceRecord(recordId, action, extra);
+      setActionMsg({ text: `Record successfully marked as ${action.toUpperCase()}!`, type: "success" });
+      setTimeout(() => setActionMsg({ text: "", type: "" }), 3000);
+      setRejectingRecord(null);
+      setFollowingUpRecord(null);
+      setRejectionReason("");
+      setFollowUpNote("");
+      reloadRecords();
+    } catch (err) {
+      setActionMsg({ text: err.message || "Failed to update review status.", type: "error" });
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const attendanceByTeacher = useMemo(() => {
     return teachers
@@ -264,13 +325,25 @@ export default function AttendanceTab({ teachers: initialTeachers = [], role = "
         </div>
       )}
 
+      {/* Toast alert for review action */}
+      {actionMsg.text && (
+        <div style={{
+          padding: "10px 16px", borderRadius: 10, marginBottom: 16, fontSize: 13, fontWeight: 700,
+          background: actionMsg.type === "error" ? "#fee2e2" : "#d1fae5",
+          color: actionMsg.type === "error" ? "#991b1b" : "#065f46",
+          border: `1px solid ${actionMsg.type === "error" ? "#fca5a5" : "#86efac"}`
+        }}>
+          {actionMsg.text}
+        </div>
+      )}
+
       {/* KPI Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 14, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12, marginBottom: 20 }}>
         <StatCard icon="📊" label={t("Total Records")} val={summary.total} color="#6366f1" bg="#e0e7ff" />
+        <StatCard icon="🚨" label={t("Needs Review")} val={summary.needsReview} color="#dc2626" bg="#fee2e2" />
         <StatCard icon="✅" label={t("Present")} val={summary.present} color="#10b981" bg="#d1fae5" />
         <StatCard icon="⏰" label={t("Late")} val={summary.late} color="#f59e0b" bg="#fef3c7" />
         <StatCard icon="❌" label={t("Absent")} val={summary.absent} color="#ef4444" bg="#fee2e2" />
-        <StatCard icon="🚨" label={activeRole === "Mentor" ? t("Flagged Mentors") : (role === "mentor" ? t("Flagged Fellows") : t("Flagged Teachers"))} val={flaggedTeachers.length} color="#dc2626" bg="#fee2e2" />
       </div>
 
       {/* Trend Charts */}
@@ -366,33 +439,146 @@ export default function AttendanceTab({ teachers: initialTeachers = [], role = "
               const statusColors = STATUS_COLORS[record.status] || STATUS_COLORS.present;
               const recordDate = record.attendanceDate ? new Date(record.attendanceDate) : null;
               const isToday = recordDate && recordDate.toISOString().split("T")[0] === today;
+              const isNeedsReview = record.verificationStatus === "NEEDS_REVIEW" || record.needsReview;
+              const isApproved = record.verificationStatus === "APPROVED";
+              const isRejected = record.verificationStatus === "REJECTED";
+              const isFollowUp = record.verificationStatus === "FOLLOW_UP";
+              const snapshotSrc = record.snapshot || record.snapshotOut;
+
               return (
                 <div key={record._id} style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: "12px 20px", background: isToday ? "#f0fdf4" : "white",
-                  borderBottom: "1px solid #f3f4f6",
+                  display: "flex", flexDirection: "column", gap: 8,
+                  padding: "14px 20px", background: isNeedsReview ? "#fffbeb" : (isToday ? "#f0fdf4" : "white"),
+                  borderBottom: "1px solid #f1f5f9",
+                  borderLeft: isNeedsReview ? "4px solid #f59e0b" : isApproved ? "4px solid #10b981" : isRejected ? "4px solid #ef4444" : "4px solid transparent"
                 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{
-                      width: 36, height: 36, borderRadius: "50%",
-                      background: `linear-gradient(135deg, ${statusColors.bg}, ${statusColors.bg}cc)`,
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 14, fontWeight: 800, color: "white", flexShrink: 0,
-                    }}>
-                      {(record.teacher?.name || "T")[0]?.toUpperCase()}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{record.teacher?.name || "Unknown"}</div>
-                      <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>
-                        📅 {recordDate ? recordDate.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : "—"}
-                        · {record.source === "geo" ? `📍 ${t("Geo")}` : `📝 ${t("Manual")}`}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      {/* Snapshot Thumbnail or Initials Avatar */}
+                      {snapshotSrc ? (
+                        <div
+                          onClick={() => setZoomPhoto(snapshotSrc)}
+                          style={{ width: 44, height: 44, borderRadius: 8, overflow: "hidden", cursor: "zoom-in", border: "1.5px solid #cbd5e1", flexShrink: 0, position: "relative" }}
+                          title="Click to zoom snapshot"
+                        >
+                          <img src={snapshotSrc} alt="Snapshot" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          <span style={{ position: "absolute", bottom: 1, right: 1, fontSize: 8, background: "rgba(0,0,0,0.6)", color: "white", padding: "1px 2px", borderRadius: 2 }}>🔍</span>
+                        </div>
+                      ) : (
+                        <div style={{
+                          width: 40, height: 40, borderRadius: "50%",
+                          background: `linear-gradient(135deg, ${statusColors.bg}, ${statusColors.bg}cc)`,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 14, fontWeight: 800, color: "white", flexShrink: 0,
+                        }}>
+                          {(record.teacher?.name || "T")[0]?.toUpperCase()}
+                        </div>
+                      )}
+
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 14, fontWeight: 800, color: "#0f172a" }}>{record.teacher?.name || "Unknown Teacher"}</span>
+                          {isNeedsReview && (
+                            <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 6, background: "#fee2e2", color: "#991b1b", fontWeight: 800, border: "1px solid #fca5a5" }}>
+                              🚨 NEEDS REVIEW
+                            </span>
+                          )}
+                          {isApproved && (
+                            <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 6, background: "#d1fae5", color: "#065f46", fontWeight: 800 }}>
+                              ✓ APPROVED
+                            </span>
+                          )}
+                          {isRejected && (
+                            <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 6, background: "#fee2e2", color: "#991b1b", fontWeight: 800 }}>
+                              ✕ REJECTED
+                            </span>
+                          )}
+                          {isFollowUp && (
+                            <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 6, background: "#ede9fe", color: "#6b21a8", fontWeight: 800 }}>
+                              📝 FOLLOW-UP
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
+                          📅 {recordDate ? recordDate.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }) : "—"}
+                          {record.checkInTime && ` · ⏰ Check-In: ${record.checkInTime}`}
+                          {record.distanceOffset != null && ` · 📍 ${record.distanceOffset}m away`}
+                          {record.riskScore > 0 && ` · ⚠️ Risk Score: ${record.riskScore}/100`}
+                        </div>
                       </div>
                     </div>
+
+                    {/* Action Controls for Admin/Mentor */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      {isNeedsReview && (
+                        <>
+                          <button
+                            onClick={() => handleReviewAction(record._id, "approve")}
+                            disabled={actionLoading}
+                            style={{ padding: "5px 10px", background: "#10b981", color: "white", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                          >
+                            ✓ Approve
+                          </button>
+                          <button
+                            onClick={() => setRejectingRecord(record)}
+                            disabled={actionLoading}
+                            style={{ padding: "5px 10px", background: "#ef4444", color: "white", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                          >
+                            ✕ Reject
+                          </button>
+                          <button
+                            onClick={() => setFollowingUpRecord(record)}
+                            disabled={actionLoading}
+                            style={{ padding: "5px 10px", background: "#8b5cf6", color: "white", border: "none", borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                          >
+                            📝 Follow-Up
+                          </button>
+                        </>
+                      )}
+                      <span style={{
+                        padding: "4px 10px", borderRadius: 14, fontSize: 11, fontWeight: 700,
+                        textTransform: "capitalize", background: statusColors.light, color: statusColors.text,
+                      }}>
+                        {record.status}
+                      </span>
+                    </div>
                   </div>
-                  <span style={{
-                    padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600,
-                    textTransform: "capitalize", background: statusColors.light, color: statusColors.text,
-                  }}>{record.status}</span>
+
+                  {/* Review Reason & Signal Breakdown Box */}
+                  {(record.reviewReason || record.rejectionReason || record.followUpNote) && (
+                    <div style={{
+                      background: isRejected ? "#fef2f2" : (isNeedsReview ? "#fffbeb" : "#f8fafc"),
+                      border: `1px solid ${isRejected ? "#fecaca" : (isNeedsReview ? "#fde68a" : "#e2e8f0")}`,
+                      borderRadius: 8, padding: "8px 12px", fontSize: 11, color: isRejected ? "#991b1b" : (isNeedsReview ? "#92400e" : "#475569"),
+                      lineHeight: 1.4, display: "flex", flexDirection: "column", gap: 4
+                    }}>
+                      {record.reviewReason && (
+                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontWeight: 800, color: "#334155" }}>Review Flags:</span>
+                          {record.reviewReason.split("; ").map((reasonStr, rIdx) => (
+                            <span key={rIdx} style={{
+                              fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4,
+                              background: isNeedsReview ? "#fee2e2" : "#f1f5f9",
+                              color: isNeedsReview ? "#991b1b" : "#475569",
+                              border: isNeedsReview ? "1px solid #fca5a5" : "1px solid #e2e8f0"
+                            }}>
+                              ⚠️ {reasonStr}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {record.rejectionReason && (
+                        <div style={{ color: "#dc2626", fontWeight: 700 }}>
+                          ❌ <b>Rejection Note:</b> {record.rejectionReason}
+                        </div>
+                      )}
+                      {record.followUpNote && (
+                        <div style={{ color: "#7c3aed", fontWeight: 700 }}>
+                          📝 <b>Follow-Up Note:</b> {record.followUpNote}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -444,6 +630,100 @@ export default function AttendanceTab({ teachers: initialTeachers = [], role = "
           </div>
         )}
       </div>
+
+      {/* Reject Modal */}
+      {rejectingRecord && (
+        <Modal title={`✕ Reject Attendance — ${rejectingRecord.teacher?.name || "Teacher"}`} onClose={() => setRejectingRecord(null)}>
+          <form onSubmit={(e) => { e.preventDefault(); handleReviewAction(rejectingRecord._id, "reject", { rejectionReason }); }} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ background: "#fee2e2", border: "1px solid #fca5a5", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#991b1b" }}>
+              Rejecting this submission will mark the teacher's record as <strong>Absent</strong> and save the reason for the teacher to see.
+            </div>
+
+            {/* Quick Reason Chips */}
+            <div>
+              <label style={{ ...S.label, marginBottom: 4 }}>Quick Reasons:</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {[
+                  "Wrong Location / Not at Center",
+                  "Invalid / Black Photo",
+                  "Duplicate Photo Reused",
+                  "Unexcused Late Arrival",
+                  "Proxy Attendance"
+                ].map((qr) => (
+                  <button
+                    key={qr}
+                    type="button"
+                    onClick={() => setRejectionReason(qr)}
+                    style={{
+                      fontSize: 11, padding: "3px 8px", borderRadius: 6,
+                      background: rejectionReason === qr ? "#fee2e2" : "#f1f5f9",
+                      border: rejectionReason === qr ? "1px solid #ef4444" : "1px solid #cbd5e1",
+                      color: rejectionReason === qr ? "#991b1b" : "#334155",
+                      cursor: "pointer", fontWeight: 600
+                    }}
+                  >
+                    {qr}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label style={S.label}>Rejection Reason *</label>
+              <textarea
+                style={{ ...S.input, height: 80, resize: "none" }}
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Select a quick reason above or write custom details..."
+                required
+              />
+            </div>
+            <button type="submit" disabled={actionLoading} style={{ ...S.primaryBtn, background: "#ef4444", width: "100%", padding: "10px" }}>
+              {actionLoading ? "Rejecting..." : "Confirm & Mark Absent →"}
+            </button>
+          </form>
+        </Modal>
+      )}
+
+      {/* Follow-Up Modal */}
+      {followingUpRecord && (
+        <Modal title={`📝 Require Follow-Up — ${followingUpRecord.teacher?.name || "Teacher"}`} onClose={() => setFollowingUpRecord(null)}>
+          <form onSubmit={(e) => { e.preventDefault(); handleReviewAction(followingUpRecord._id, "follow_up", { followUpNote }); }} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ background: "#ede9fe", border: "1px solid #ddd6fe", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#6b21a8" }}>
+              Leave a follow-up note for the teacher / mentor regarding this attendance record.
+            </div>
+            <div>
+              <label style={S.label}>Follow-Up Action / Note *</label>
+              <textarea
+                style={{ ...S.input, height: 80, resize: "none" }}
+                value={followUpNote}
+                onChange={(e) => setFollowUpNote(e.target.value)}
+                placeholder="e.g. Please verify with center coordinator regarding arrival time..."
+                required
+              />
+            </div>
+            <button type="submit" disabled={actionLoading} style={{ ...S.primaryBtn, background: "#8b5cf6", width: "100%", padding: "10px" }}>
+              {actionLoading ? "Saving..." : "Save Follow-Up Action →"}
+            </button>
+          </form>
+        </Modal>
+      )}
+
+      {/* Snapshot Zoom Lightbox */}
+      {zoomPhoto && (
+        <div
+          onClick={() => setZoomPhoto(null)}
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 1200,
+            display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out", padding: 20
+          }}
+        >
+          <div style={{ position: "relative", maxWidth: "90vw", maxHeight: "90vh" }}>
+            <img src={zoomPhoto} alt="Snapshot Enlarged" style={{ maxWidth: "100%", maxHeight: "85vh", borderRadius: 12, border: "2px solid #f59e0b" }} />
+            <button onClick={() => setZoomPhoto(null)} style={{ position: "absolute", top: -14, right: -14, width: 32, height: 32, borderRadius: "50%", background: "#ef4444", color: "white", border: "none", fontSize: 14, fontWeight: 900, cursor: "pointer" }}>✕</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

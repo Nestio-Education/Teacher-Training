@@ -43,7 +43,17 @@ const userSchema = new mongoose.Schema(
       communityProfilingStatus: { type: String, enum: ["pending", "in_progress", "completed"], default: "pending" },
       communityImmersionStatus: { type: String, enum: ["pending", "in_progress", "completed"], default: "pending" },
       curriculumImplementationStatus: { type: String, enum: ["pending", "in_progress", "completed"], default: "pending" },
-      
+      // Mentor-assigned attendance policy (timeslot + location)
+      attendancePolicy: {
+        assignedLocationName: { type: String, default: "" },
+        latitude: { type: Number, default: null },
+        longitude: { type: Number, default: null },
+        geofenceRadius: { type: Number, default: 200 }, // meters
+        expectedTimeStart: { type: String, default: "" }, // e.g. "09:00"
+        expectedTimeEnd: { type: String, default: "" },   // e.g. "17:00"
+        assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        assignedAt: { type: Date }
+      },
     },
     mentorProfile: {
       center: { type: mongoose.Schema.Types.ObjectId, ref: "Center" },

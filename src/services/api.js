@@ -1890,3 +1890,22 @@ export function mentorOverrideFellowChecklist(fellowId, month, deliverablesStatu
     body: JSON.stringify({ deliverablesStatus }),
   });
 }
+
+// ── Mentor / Admin Attendance Policy Assignment ──
+export function assignTeacherAttendancePolicy(teacherId, policy, isMentor = false) {
+  const endpoint = isMentor
+    ? `/api/mentor/fellows/${teacherId}/attendance-policy`
+    : `/api/admin/teachers/${teacherId}/attendance-policy`;
+  return request(endpoint, {
+    method: "PUT",
+    body: JSON.stringify(policy),
+  });
+}
+
+// ── Staff Review: Approve, Reject, Follow-Up ──
+export function reviewAttendanceRecord(recordId, action, data = {}) {
+  return request(`/api/attendance/records/${recordId}/review`, {
+    method: "PATCH",
+    body: JSON.stringify({ action, ...data }),
+  });
+}

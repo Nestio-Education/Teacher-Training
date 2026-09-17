@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { AttendanceBar, ExportMonthModal, Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
-import { getAdminTeachers, updateTeacherStatus, updateTeacherProfile, registerTeacher, getCenters, getClasses, sendDirectMessageToTeacher, blockTeacher, unblockTeacher, deleteTeacher, assignTeacherTaskByAdmin, getMentorFellows, claimFellow, unclaimFellow, updateFellowStatus, deleteMentorFellow, bulkSetChecklistTargets, exportActivitySubmissions } from "../services/api";
+import { getAdminTeachers, updateTeacherStatus, updateTeacherProfile, registerTeacher, getCenters, getClasses, sendDirectMessageToTeacher, blockTeacher, unblockTeacher, deleteTeacher, assignTeacherTaskByAdmin, getMentorFellows, claimFellow, unclaimFellow, updateFellowStatus, deleteMentorFellow, bulkSetChecklistTargets, exportActivitySubmissions, assignTeacherAttendancePolicy } from "../services/api";
 import { t } from "../services/i18n";
 import MentorManagementTab from "../mentor/MentorManagementTab";
 import { MentorTeacherChecklistPanel, MentorFellowPDCAChecklistPanel } from "../mentor/MentorDashboardTabs";
@@ -77,6 +77,7 @@ const mapTeacherFromApi = (tr) => ({
     ? new Date(tr.teacherProfile.fellowshipStartDate).toISOString().slice(0, 10)
     : "",
   role: tr.role || "teacher",
+  attendancePolicy: tr.teacherProfile?.attendancePolicy || {},
 });
 /* ─── Reusable teacher avatar with graceful fallback ─── */
 function TeacherAvatar({ teacher, size = 34, borderColor = "#e2e8f0", borderWidth = 1 }) {
@@ -201,6 +202,257 @@ function DirectMessageModal({ teacher, onClose, setToast }) {
         style={{ ...S.primaryBtn, width: "100%", opacity: sending ? 0.7 : 1 }}>
         {sending ? "Sending..." : "📤 Send Message"}
       </button>
+    </Modal>
+  );
+}
+
+/* ── Assign Attendance Policy Modal (Timeslot & Location) ── */
+function AssignAttendancePolicyModal({ teacher, centers = [], isMentorView = false, onSave, onClose, setToast }) {
+  const existingPolicy = teacher.attendancePolicy || {};
+  const [form, setForm] = useState({
+    centerId: teacher.centerId || "",
+    expectedTimeStart: existingPolicy.expectedTimeStart || "09:00 AM",
+    expectedTimeEnd: existingPolicy.expectedTimeEnd || "05:00 PM",
+    assignedLocationName: existingPolicy.assignedLocationName || teacher.assignedCenter || "Campus / Center",
+    latitude: existingPolicy.latitude != null ? String(existingPolicy.latitude) : "",
+    longitude: existingPolicy.longitude != null ? String(existingPolicy.longitude) : "",
+    geofenceRadius: existingPolicy.geofenceRadius || 200,
+  });
+  const [saving, setSaving] = useState(false);
+  const [locating, setLocating] = useState(false);
+
+  // When center dropdown changes, auto-fill coordinates and name
+  const handleCenterSelect = (selectedId) => {
+    if (!selectedId) {
+      setForm(prev => ({ ...prev, centerId: "" }));
+      return;
+    }
+    const found = centers.find(c => String(c._id || c.id) === String(selectedId));
+    if (found) {
+      setForm(prev => ({
+        ...prev,
+        centerId: selectedId,
+        assignedLocationName: found.name,
+        latitude: found.latitude != null ? String(found.latitude) : prev.latitude,
+        longitude: found.longitude != null ? String(found.longitude) : prev.longitude,
+      }));
+      setToast({ msg: `🏫 Synced with ${found.name}`, type: "info" });
+    }
+  };
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setToast({ msg: "Geolocation is not supported by your browser.", type: "error" });
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setForm(prev => ({
+          ...prev,
+          latitude: pos.coords.latitude.toFixed(6),
+          longitude: pos.coords.longitude.toFixed(6)
+        }));
+        setLocating(false);
+        setToast({ msg: "📍 Current GPS location captured!", type: "success" });
+      },
+      (err) => {
+        setLocating(false);
+        setToast({ msg: err.message || "Failed to get current GPS location.", type: "error" });
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  const handleUseCenterLocation = () => {
+    const centerObj = centers.find(c => String(c._id || c.id) === String(form.centerId || teacher.centerId));
+    if (centerObj && centerObj.latitude != null && centerObj.longitude != null) {
+      setForm(prev => ({
+        ...prev,
+        assignedLocationName: centerObj.name || prev.assignedLocationName,
+        latitude: String(centerObj.latitude),
+        longitude: String(centerObj.longitude),
+      }));
+      setToast({ msg: `🏫 Filled coordinates from ${centerObj.name}`, type: "success" });
+    } else {
+      setForm(prev => ({
+        ...prev,
+        assignedLocationName: teacher.assignedCenter || "Main Campus",
+        latitude: "18.6675",
+        longitude: "73.8961",
+      }));
+      setToast({ msg: "Filled default campus coordinates (18.6675, 73.8961)", type: "info" });
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const payload = {
+        centerId: form.centerId || undefined,
+        expectedTimeStart: form.expectedTimeStart.trim(),
+        expectedTimeEnd: form.expectedTimeEnd.trim(),
+        assignedLocationName: form.assignedLocationName.trim(),
+        latitude: form.latitude ? parseFloat(form.latitude) : null,
+        longitude: form.longitude ? parseFloat(form.longitude) : null,
+        geofenceRadius: Number(form.geofenceRadius) || 200,
+      };
+
+      await assignTeacherAttendancePolicy(teacher.id, payload, isMentorView);
+      setToast({ msg: `⏰ Attendance policy & assigned center updated for ${teacher.name}!`, type: "success" });
+      if (onSave) onSave();
+      onClose();
+    } catch (err) {
+      setToast({ msg: err.message || "Failed to assign policy.", type: "error" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal title={`⏰ Assign Attendance Policy & Center — ${teacher.name}`} onClose={onClose}>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ background: "#f5f3ff", border: "1px solid #ddd6fe", borderRadius: 10, padding: "10px 12px", fontSize: 12, color: "#5b21b6" }}>
+          ℹ️ Assigning a center/location and timeslot ensures teacher check-ins are verified automatically. Out-of-bounds or late check-ins will require admin approval.
+        </div>
+
+        {/* Section 1: Center Selection */}
+        {centers.length > 0 && (
+          <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 12 }}>
+            <label style={S.label}>Assigned School Center / Campus</label>
+            <select
+              style={{ ...S.input, padding: "9px 12px" }}
+              value={form.centerId}
+              onChange={e => handleCenterSelect(e.target.value)}
+            >
+              <option value="">-- Select Center (or enter custom below) --</option>
+              {centers.map(c => (
+                <option key={c._id || c.id} value={c._id || c.id}>
+                  {c.name} {c.city ? `(${c.city})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* Section 2: Timeslot */}
+        <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: "#334155", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+            <span>⏰</span> Expected Working Hours
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <label style={S.label}>Start Time (Check-In By) *</label>
+              <input
+                style={S.input}
+                type="text"
+                value={form.expectedTimeStart}
+                onChange={e => setForm({ ...form, expectedTimeStart: e.target.value })}
+                placeholder="e.g. 09:00 AM"
+                required
+              />
+            </div>
+            <div>
+              <label style={S.label}>End Time (Check-Out) *</label>
+              <input
+                style={S.input}
+                type="text"
+                value={form.expectedTimeEnd}
+                onChange={e => setForm({ ...form, expectedTimeEnd: e.target.value })}
+                placeholder="e.g. 05:00 PM"
+                required
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Section 3: Geofence Location */}
+        <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#334155", display: "flex", alignItems: "center", gap: 6 }}>
+              <span>📍</span> Geofenced Location Details
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                type="button"
+                onClick={handleUseCurrentLocation}
+                disabled={locating}
+                style={{ fontSize: 11, padding: "4px 8px", background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: 6, cursor: "pointer", fontWeight: 700 }}
+              >
+                {locating ? "Locating..." : "📍 Use My GPS"}
+              </button>
+              <button
+                type="button"
+                onClick={handleUseCenterLocation}
+                style={{ fontSize: 11, padding: "4px 8px", background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0", borderRadius: 6, cursor: "pointer", fontWeight: 700 }}
+              >
+                🏫 Reset to Center Coords
+              </button>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 10 }}>
+            <label style={S.label}>Location / Center Name *</label>
+            <input
+              style={S.input}
+              value={form.assignedLocationName}
+              onChange={e => setForm({ ...form, assignedLocationName: e.target.value })}
+              placeholder="e.g. Mumbai Main Center"
+              required
+            />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div>
+              <label style={S.label}>Latitude</label>
+              <input
+                style={S.input}
+                type="number"
+                step="any"
+                value={form.latitude}
+                onChange={e => setForm({ ...form, latitude: e.target.value })}
+                placeholder="e.g. 18.6675"
+              />
+            </div>
+            <div>
+              <label style={S.label}>Longitude</label>
+              <input
+                style={S.input}
+                type="number"
+                step="any"
+                value={form.longitude}
+                onChange={e => setForm({ ...form, longitude: e.target.value })}
+                placeholder="e.g. 73.8961"
+              />
+            </div>
+          </div>
+
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <label style={S.label}>Allowed Radius Threshold</label>
+              <span style={{ fontSize: 11, fontWeight: 800, color: "#d97706" }}>{form.geofenceRadius} meters</span>
+            </div>
+            <input
+              type="range"
+              min="50"
+              max="1000"
+              step="25"
+              value={form.geofenceRadius}
+              onChange={e => setForm({ ...form, geofenceRadius: Number(e.target.value) })}
+              style={{ width: "100%", accentColor: "#f59e0b", cursor: "pointer" }}
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          disabled={saving}
+          style={{ ...S.primaryBtn, width: "100%", padding: "10px", fontSize: 13, opacity: saving ? 0.7 : 1 }}
+        >
+          {saving ? "Saving Policy..." : "💾 Save Policy & Center"}
+        </button>
+      </form>
     </Modal>
   );
 }
@@ -444,8 +696,10 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
 
   const [showAssignTask, setShowAssignTask] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
 
   const quickActions = [
+    { icon: "⏰", label: "Assign Policy", onClick: () => setShowPolicyModal(true), color: "#7c3aed", bg: "#f5f3ff" },
     { icon: "📌", label: "Assign Task", onClick: () => setShowAssignTask(true), color: "#059669", bg: "#d1fae5" },
     { icon: "💬", label: "Send Message", onClick: () => setShowMsg(true), color: "#8b5cf6", bg: "#ede9fe" },
     { icon: "🏫", label: "Change Center", onClick: () => setShowCourses(true), color: "#f59e0b", bg: "#fef3c7" },
@@ -461,6 +715,7 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
       {showCourses && <ChangeCenterModal teacher={teacher} centers={centers} classes={classes} onClose={() => setShowCourses(false)} onSave={doChangeCenter} />}
       {showEdit && <EditTeacherModal teacher={teacher} onClose={() => setShowEdit(false)} onSave={() => { onUpdate(); }} setToast={setToast} />}
       {showAssignTask && <AssignTaskModal teacher={teacher} onClose={() => setShowAssignTask(false)} setToast={setToast} isMentorView={isMentorView} />}
+      {showPolicyModal && <AssignAttendancePolicyModal teacher={teacher} centers={centers} isMentorView={isMentorView} onClose={() => setShowPolicyModal(false)} onSave={() => onUpdate()} setToast={setToast} />}
       {showExport && (
         <ExportMonthModal
           title={`Export — ${teacher.name}`}
@@ -623,6 +878,8 @@ function TeacherProfileView({ teacher, centers = [], classes = [], onBack, onUpd
               {[
                 { icon: "🎓", label: "Qualification", val: teacher.qualification },
                 { icon: "🏢", label: "Assigned Center", val: teacher.assignedCenter },
+                { icon: "⏰", label: "Working Hours", val: teacher.attendancePolicy?.expectedTimeStart ? `${teacher.attendancePolicy.expectedTimeStart} - ${teacher.attendancePolicy.expectedTimeEnd}` : "09:00 AM - 05:00 PM" },
+                ...(teacher.attendancePolicy?.assignedLocationName ? [{ icon: "📍", label: "Policy Location", val: `${teacher.attendancePolicy.assignedLocationName} (±${teacher.attendancePolicy.geofenceRadius || 200}m)` }] : []),
                 { icon: "💼", label: "Experience", val: teacher.experience },
                 { icon: "📅", label: "Joined", val: teacher.joined },
                 { icon: "📍", label: "Address", val: teacher.address },
@@ -716,6 +973,7 @@ export function TeacherManagementList({ setToast, role = "admin", user = null, o
   const [addModal, setAddModal]   = useState(false);
   const [showBulkGoalsModal, setShowBulkGoalsModal] = useState(false);
   const [assigningTaskTeacher, setAssigningTaskTeacher] = useState(null);
+  const [policyTeacher, setPolicyTeacher] = useState(null);
   const [loading, setLoading]     = useState(true);
   const [toast, setLocalToast]    = useState({ msg: "", type: "" });
   const [newT, setNewT] = useState({
@@ -959,6 +1217,9 @@ export function TeacherManagementList({ setToast, role = "admin", user = null, o
                       <span style={{ display: "inline-flex", width: 22, height: 22, alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "rgba(255,255,255,0.8)", fontSize: 12 }}>📌</span>
                       <span>Assign Task</span>
                     </button>
+                    <button onClick={() => setPolicyTeacher(tr)}
+                      style={{ ...S.tblBtn, color: "#7c3aed", borderColor: "#ddd6fe" }}
+                      title="Assign Timeslot & Location">⏰ Policy</button>
                     <button onClick={() => setSelected(tr)}
                       style={{ ...S.tblBtn, color: "#3b82f6", borderColor: "#93c5fd" }}>👁 View</button>
                     {/* Claim button only for mentor view on unclaimed teachers */}
@@ -997,6 +1258,18 @@ export function TeacherManagementList({ setToast, role = "admin", user = null, o
           onClose={() => setAssigningTaskTeacher(null)}
           setToast={showToast}
           isMentorView={isMentorView}
+        />
+      )}
+
+      {/* Assign Attendance Policy Modal from Table Row */}
+      {policyTeacher && (
+        <AssignAttendancePolicyModal
+          teacher={policyTeacher}
+          centers={centers}
+          isMentorView={isMentorView}
+          onClose={() => setPolicyTeacher(null)}
+          onSave={() => loadData()}
+          setToast={showToast}
         />
       )}
 
