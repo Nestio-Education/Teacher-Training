@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+import { API_BASE_URL } from "../services/api";
 
 const DELIVERY_MODES = ["Bootcamp", "Field Visit", "Online", "Roleplay", "Peer Learning", "Workshop"];
 

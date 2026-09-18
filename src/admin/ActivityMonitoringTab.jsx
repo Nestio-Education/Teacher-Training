@@ -1,11 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Modal, S, SearchBar, StatCard, StatusBadge, Toast } from "../components/Shared";
-import { getActivities, reviewActivity, getCenters, sendAdminNotification } from "../services/api";
+import { getActivities, reviewActivity, getCenters, sendAdminNotification, API_BASE_URL } from "../services/api";
 import { t } from "../services/i18n";
-
-// BUG FIX: was hardcoded to http://localhost:5000, which breaks in any
-// non-local environment. Now reuses the same base URL the API layer uses.
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 const REJECT_REASONS = [
   "Incomplete documentation",

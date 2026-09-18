@@ -11,12 +11,13 @@ import { Trainer } from "./models/Trainer.js";
 import { Batch } from "./models/Batch.js";
 import { AttendanceAlert } from "./models/AttendanceAlert.js";
 import { CurriculumUnit } from "./models/CurriculumUnit.js";
-
+import { TeacherAttendanceRecord, MentorAttendanceRecord } from "./models/Attendance.js";
 
 export async function autoSeed() {
   console.log("Seeding database with initial portal data...");
 
   const adminPassword = await hashPassword("Admin@123");
+  const mentorPassword = await hashPassword("Mentor@123");
   const teacherPassword = await hashPassword("Teacher@123");
 
   const admin = await User.findOneAndUpdate(
@@ -42,6 +43,8 @@ export async function autoSeed() {
       contactPerson: "Center Head",
       phone: "9876543210",
       email: "mumbai@spaceece.in",
+      latitude: 18.6675,
+      longitude: 73.8961,
       status: "active",
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -59,18 +62,34 @@ export async function autoSeed() {
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
-  // Start: Dnyaneshwari Thorat
+  // Seed Mentor
+  const mentor = await User.findOneAndUpdate(
+    { email: "mentor@spaceece.com" },
+    {
+      role: "mentor",
+      name: "Dr. Ananya Iyer",
+      email: "mentor@spaceece.com",
+      phone: "9876500001",
+      passwordHash: mentorPassword,
+      status: "approved",
+      mentorProfile: {
+        center: center._id,
+        subject: "Early Childhood Development",
+        qualification: "Ph.D. Education",
+        experience: "8 Years",
+        bio: "Senior ECCE Specialist and Mentor",
+        performanceRating: 4.8,
+        assignedCenters: [center._id],
+      }
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+
   const teacherInputs = [
     { name: "Dnyaneshwari Thorat", email: "dnyaneshwarit27@gmail.com", phone: "8605689467", subject: "Pre-Primary", qualification: "Graduate" },
     { name: "Gauri Thorat", email: "dnyaneshwarithrt@gmail.com", phone: "8605689467", subject: "Montessori", qualification: "Graduate" },
+    { name: "Pooja Sharma", email: "teacher@spaceece.com", phone: "9876543211", subject: "Foundational Literacy", qualification: "B.Ed." },
   ];
-
-  // Clean up any other teachers from the database
-  await User.deleteMany({
-    role: "teacher",
-    email: { $nin: ["dnyaneshwarit27@gmail.com", "dnyaneshwarithrt@gmail.com"] }
-  });
-  // End: Dnyaneshwari Thorat
 
   const teachers = [];
   for (const input of teacherInputs) {
@@ -83,6 +102,7 @@ export async function autoSeed() {
         phone: input.phone,
         passwordHash: teacherPassword,
         status: "approved",
+        assignedMentor: mentor._id,
         teacherProfile: {
           center: center._id,
           class: classRecord._id,
@@ -90,13 +110,105 @@ export async function autoSeed() {
           subject: input.subject,
           experience: "Fresher",
           address: "Pune, Maharashtra",
-          performanceRating: 0,
+          performanceRating: 4.2,
+          attendancePolicy: {
+            centerId: center._id,
+            assignedLocationName: "Spacece Mumbai Center",
+            latitude: 18.6675,
+            longitude: 73.8961,
+            geofenceRadius: 200,
+            expectedTimeStart: "09:00 AM",
+            expectedTimeEnd: "05:00 PM",
+            assignedBy: mentor._id,
+            assignedAt: new Date(),
+          }
         },
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
     teachers.push(teacher);
   }
+
+  // Associate teachers to mentor
+  await User.findByIdAndUpdate(mentor._id, {
+    $set: {
+      "mentorProfile.assignedTeachers": teachers.map(t => t._id)
+    }
+  });
+
+  // Seed sample attendance records for testing Admin and Mentor tabs
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  for (const teacher of teachers) {
+    await TeacherAttendanceRecord.findOneAndUpdate(
+      { teacher: teacher._id, attendanceDate: today },
+      {
+        teacher: teacher._id,
+        attendanceDate: today,
+        status: "present",
+        source: "geo",
+        latitude: 18.6675,
+        longitude: 73.8961,
+        checkedIn: true,
+        checkedOut: false,
+        checkInTime: "09:05 AM",
+        checkOutTime: "",
+        distanceOffset: 15,
+        verificationStatus: "VALID",
+        riskScore: 5,
+        reviewReason: "Valid on-time geo-checkin verified",
+        qualityResult: "PASS",
+        locationResult: "PASS",
+        timeResult: "PASS",
+        note: JSON.stringify({ coords: "18.66750, 73.89610" })
+      },
+      { upsert: true, new: true }
+    );
+
+    await TeacherAttendanceRecord.findOneAndUpdate(
+      { teacher: teacher._id, attendanceDate: yesterday },
+      {
+        teacher: teacher._id,
+        attendanceDate: yesterday,
+        status: "present",
+        source: "geo",
+        latitude: 18.6675,
+        longitude: 73.8961,
+        checkedIn: true,
+        checkedOut: true,
+        checkInTime: "09:00 AM",
+        checkOutTime: "05:00 PM",
+        distanceOffset: 20,
+        verificationStatus: "APPROVED",
+        riskScore: 0,
+        qualityResult: "PASS",
+        locationResult: "PASS",
+        timeResult: "PASS",
+        note: JSON.stringify({ coords: "18.66750, 73.89610" })
+      },
+      { upsert: true, new: true }
+    );
+  }
+
+  await MentorAttendanceRecord.findOneAndUpdate(
+    { mentor: mentor._id, attendanceDate: today },
+    {
+      mentor: mentor._id,
+      attendanceDate: today,
+      status: "present",
+      source: "geo",
+      latitude: 18.6675,
+      longitude: 73.8961,
+      checkedIn: true,
+      checkInTime: "08:55 AM",
+      checkOutTime: "",
+      distanceOffset: 10,
+    },
+    { upsert: true, new: true }
+  );
 
   await Child.findOneAndUpdate(
     { class: classRecord._id, rollNo: "N-A-001" },

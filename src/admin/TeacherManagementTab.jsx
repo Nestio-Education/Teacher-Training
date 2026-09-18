@@ -1,12 +1,9 @@
 import { useState, useEffect } from "react";
 import { AttendanceBar, ExportMonthModal, Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
-import { getAdminTeachers, updateTeacherStatus, updateTeacherProfile, registerTeacher, getCenters, getClasses, sendDirectMessageToTeacher, blockTeacher, unblockTeacher, deleteTeacher, assignTeacherTaskByAdmin, getMentorFellows, claimFellow, unclaimFellow, updateFellowStatus, deleteMentorFellow, bulkSetChecklistTargets, exportActivitySubmissions, assignTeacherAttendancePolicy } from "../services/api";
+import { getAdminTeachers, updateTeacherStatus, updateTeacherProfile, registerTeacher, getCenters, getClasses, sendDirectMessageToTeacher, blockTeacher, unblockTeacher, deleteTeacher, assignTeacherTaskByAdmin, getMentorFellows, claimFellow, unclaimFellow, updateFellowStatus, deleteMentorFellow, bulkSetChecklistTargets, exportActivitySubmissions, assignTeacherAttendancePolicy, API_BASE_URL } from "../services/api";
 import { t } from "../services/i18n";
 import MentorManagementTab from "../mentor/MentorManagementTab";
 import { MentorTeacherChecklistPanel, MentorFellowPDCAChecklistPanel } from "../mentor/MentorDashboardTabs";
-
-// Reuse same base URL pattern as ActivityMonitoringTab
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 // Returns the teacher's real photo URL if available, otherwise DiceBear initials avatar
 const avatarSrc = (teacher) =>

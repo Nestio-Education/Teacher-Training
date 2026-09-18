@@ -1,7 +1,7 @@
 import { t } from "../services/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { StatCard, SectionCard, Modal } from "../components/Shared";
-import { getTeacherAttendance, sendAdminNotification, getMentorAttendance, getMentorFellowsAttendance, getMentorFellows, getAdminTeachers, reviewAttendanceRecord } from "../services/api";
+import { getTeacherAttendance, sendAdminNotification, getMentorAttendance, getMentorFellowsAttendance, getMentorFellows, getAdminTeachers, reviewAttendanceRecord, API_BASE_URL } from "../services/api";
 
 const STATUS_COLORS = {
   present: { bg: "#10b981", light: "#d1fae5", text: "#065f46" },
@@ -30,8 +30,6 @@ const S = {
   tblBtn: { padding: "5px 10px", background: "white", color: "#475569", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" },
   primaryBtn: { padding: "8px 16px", background: "#f59e0b", color: "white", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
 };
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 function exportCsv(filename, rows) {
   const csv = rows.map((row) => row.map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");

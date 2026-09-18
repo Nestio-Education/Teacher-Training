@@ -2,14 +2,12 @@ import { useState, useEffect } from "react";
 import { S, SearchBar, StatCard } from "../components/Shared";
 import {
   getCourses, createCourse, updateCourse, deleteCourse as deleteCourseApi,
-  getCourseAssignments, getCourseNotes, createCourseNote
+  getCourseAssignments, getCourseNotes, createCourseNote, API_BASE_URL
 } from "../services/api";
 import { NotesPreviewModal, AssessmentPreviewModal, AssignCourseModal, CourseTrackingModal } from "../admin/CurriculumTrainingTab";
 import { CourseFormModal, CoursePreviewModal } from "../admin/CourseManagementTab";
 import { CourseLibraryPickerModal } from "../admin/CurriculumTrainingTab";
 import AICourseGenerator from "../admin/AICourseGenerator";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 const getCourseId = (course) => course?._id || course?.id;
 
