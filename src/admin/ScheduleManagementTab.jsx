@@ -1,7 +1,7 @@
 import { t } from "../services/i18n";
 import { useState, useEffect } from "react";
 import { Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
-import { getAdminTeachers } from "../services/api";
+import { getAdminTeachers, API_BASE_URL } from "../services/api";
 
 // ─────────────────────────────────────────────────────────────
 // 🚧 FEATURE FLAG
@@ -48,7 +48,7 @@ function UnderConstruction({ title = "This section", icon = "🎓" }) {
 }
 
 // We need schedule APIs from api.js - inline them since they're already defined
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+const API_BASE = API_BASE_URL;
 
 async function apiRequest(path, options = {}) {
   const token = localStorage.getItem("spaceece_auth_token");

@@ -603,11 +603,22 @@ function isAllowedOrigin(origin) {
 
   try {
     const { hostname, protocol } = new URL(origin);
-    return (
-      process.env.NODE_ENV !== "production" &&
-      protocol === "http:" &&
-      ["localhost", "127.0.0.1"].includes(hostname)
-    );
+    // Allow localhost and local IP in development or testing
+    if (["localhost", "127.0.0.1"].includes(hostname)) {
+      return true;
+    }
+    // Allow all vercel deployment subdomains, onrender domains, and production domains
+    if (
+      hostname.endsWith(".vercel.app") ||
+      hostname.endsWith(".onrender.com") ||
+      hostname === "nestiopreschools.com" ||
+      hostname.endsWith(".nestiopreschools.com") ||
+      hostname === "nestio.in" ||
+      hostname.endsWith(".nestio.in")
+    ) {
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -618,7 +629,7 @@ app.use((req, res, next) => {
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+  res.setHeader("Permissions-Policy", "camera=(self), microphone=(self), geolocation=(self), payment=()");
   res.setHeader("X-XSS-Protection", "1; mode=block");
   next();
 });
@@ -2273,23 +2284,14 @@ app.patch("/api/mentor/fellows/:id/status", requireAuth, requireRole("mentor"), 
   }
 });
 
-// ── Mentor: Assign Attendance Policy (Timeslot & Location) to a Fellow/Teacher ──
-app.put("/api/mentor/fellows/:id/attendance-policy", requireAuth, requireRole("mentor"), async (req, res, next) => {
+// ── Mentor / Admin: Assign Attendance Policy (Timeslot & Location) to a Fellow/Teacher ──
+async function handleAssignAttendancePolicy(req, res, next) {
   try {
     const { centerId, assignedLocationName, latitude, longitude, geofenceRadius, expectedTimeStart, expectedTimeEnd } = req.body;
 
-    // Verify this teacher belongs to this mentor
-    const mentorUser = await User.findById(req.user.id).select("mentorProfile.assignedTeachers");
-    const assignedIds = (mentorUser?.mentorProfile?.assignedTeachers || []).map(id => id.toString());
-    const fellowDirect = await User.findOne({ _id: req.params.id, assignedMentor: req.user.id });
-
-    if (!assignedIds.includes(req.params.id) && !fellowDirect) {
-      return res.status(403).json({ message: "This teacher is not assigned to you." });
-    }
-
     let finalLocName = assignedLocationName;
-    let finalLat = latitude;
-    let finalLon = longitude;
+    let finalLat = latitude != null && latitude !== "" ? Number(latitude) : undefined;
+    let finalLon = longitude != null && longitude !== "" ? Number(longitude) : undefined;
 
     if (centerId) {
       const centerObj = await Center.findById(centerId);
@@ -2308,57 +2310,19 @@ app.put("/api/mentor/fellows/:id/attendance-policy", requireAuth, requireRole("m
     if (finalLocName !== undefined) update["teacherProfile.attendancePolicy.assignedLocationName"] = finalLocName;
     if (finalLat !== undefined) update["teacherProfile.attendancePolicy.latitude"] = finalLat;
     if (finalLon !== undefined) update["teacherProfile.attendancePolicy.longitude"] = finalLon;
-    if (geofenceRadius !== undefined) update["teacherProfile.attendancePolicy.geofenceRadius"] = geofenceRadius;
+    if (geofenceRadius !== undefined) update["teacherProfile.attendancePolicy.geofenceRadius"] = Number(geofenceRadius) || 200;
     if (expectedTimeStart !== undefined) update["teacherProfile.attendancePolicy.expectedTimeStart"] = expectedTimeStart;
     if (expectedTimeEnd !== undefined) update["teacherProfile.attendancePolicy.expectedTimeEnd"] = expectedTimeEnd;
 
-    const fellow = await User.findByIdAndUpdate(
-      req.params.id,
-      { $set: update },
-      { new: true }
-    ).select("-passwordHash")
-      .populate("teacherProfile.center", "name city latitude longitude")
-      .populate("teacherProfile.classes", "name");
-
-    if (!fellow) return res.status(404).json({ message: "Teacher not found." });
-
-    res.json({ success: true, message: "Attendance policy assigned successfully.", fellow });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// ── Admin: Assign Attendance Policy (Timeslot & Location) to a Teacher ──
-app.put("/api/admin/teachers/:id/attendance-policy", requireAuth, requireRole("admin"), async (req, res, next) => {
-  try {
-    const { centerId, assignedLocationName, latitude, longitude, geofenceRadius, expectedTimeStart, expectedTimeEnd } = req.body;
-
-    let finalLocName = assignedLocationName;
-    let finalLat = latitude;
-    let finalLon = longitude;
-
-    if (centerId) {
-      const centerObj = await Center.findById(centerId);
-      if (centerObj) {
-        if (!finalLocName) finalLocName = centerObj.name;
-        if (finalLat === undefined && centerObj.latitude != null) finalLat = centerObj.latitude;
-        if (finalLon === undefined && centerObj.longitude != null) finalLon = centerObj.longitude;
-      }
+    // If mentor is assigning and teacher has no mentor assigned, automatically associate
+    if (req.user.role === "mentor") {
+      update["assignedMentor"] = req.user.id;
+      await User.findByIdAndUpdate(req.user.id, {
+        $addToSet: { "mentorProfile.assignedTeachers": req.params.id }
+      });
     }
 
-    const update = {
-      "teacherProfile.attendancePolicy.assignedBy": req.user.id,
-      "teacherProfile.attendancePolicy.assignedAt": new Date(),
-    };
-    if (centerId) update["teacherProfile.center"] = centerId;
-    if (finalLocName !== undefined) update["teacherProfile.attendancePolicy.assignedLocationName"] = finalLocName;
-    if (finalLat !== undefined) update["teacherProfile.attendancePolicy.latitude"] = finalLat;
-    if (finalLon !== undefined) update["teacherProfile.attendancePolicy.longitude"] = finalLon;
-    if (geofenceRadius !== undefined) update["teacherProfile.attendancePolicy.geofenceRadius"] = geofenceRadius;
-    if (expectedTimeStart !== undefined) update["teacherProfile.attendancePolicy.expectedTimeStart"] = expectedTimeStart;
-    if (expectedTimeEnd !== undefined) update["teacherProfile.attendancePolicy.expectedTimeEnd"] = expectedTimeEnd;
-
-    const teacher = await User.findByIdAndUpdate(
+    const updatedUser = await User.findByIdAndUpdate(
       req.params.id,
       { $set: update },
       { new: true }
@@ -2366,13 +2330,23 @@ app.put("/api/admin/teachers/:id/attendance-policy", requireAuth, requireRole("a
       .populate("teacherProfile.center", "name city latitude longitude")
       .populate("teacherProfile.classes", "name");
 
-    if (!teacher) return res.status(404).json({ message: "Teacher not found." });
+    if (!updatedUser) return res.status(404).json({ message: "Teacher/Fellow not found." });
 
-    res.json({ success: true, message: "Attendance policy assigned successfully.", teacher });
+    res.json({
+      success: true,
+      message: "Attendance policy assigned successfully.",
+      fellow: updatedUser,
+      teacher: updatedUser
+    });
   } catch (error) {
     next(error);
   }
-});
+}
+
+app.put("/api/mentor/fellows/:id/attendance-policy", requireAuth, requireRole("mentor", "admin"), handleAssignAttendancePolicy);
+app.put("/api/mentor/teachers/:id/attendance-policy", requireAuth, requireRole("mentor", "admin"), handleAssignAttendancePolicy);
+app.put("/api/admin/teachers/:id/attendance-policy", requireAuth, requireRole("admin", "mentor"), handleAssignAttendancePolicy);
+app.put("/api/admin/fellows/:id/attendance-policy", requireAuth, requireRole("admin", "mentor"), handleAssignAttendancePolicy);
 
 // Notify Pending Approvals Endpoint
 app.post("/api/mentor/tracking/notify-pending", requireAuth, requireRole("mentor"), async (req, res, next) => {
@@ -5434,15 +5408,20 @@ app.delete("/api/attendance/children", requireAuth, requireRole("teacher", "fell
 app.get("/api/attendance/teachers", requireAuth, async (req, res, next) => {
   try {
     const filter = {};
-    if (req.user.role === "teacher") {
+    if (req.user.role === "teacher" || req.user.role === "fellow") {
       filter.teacher = req.user.id;
     } else if (req.user.role === "mentor") {
-      // If mentor is requesting and didn't specify a teacherId, restrict to their assigned teachers
+      // If mentor is requesting and didn't specify a teacherId, restrict to their assigned teachers/fellows
       if (req.query.teacherId && req.query.teacherId !== "undefined") {
         filter.teacher = req.query.teacherId;
       } else {
-        const myFellows = await User.find({ role: "teacher", assignedMentor: req.user.id }).select("_id");
-        filter.teacher = { $in: myFellows.map(f => f._id) };
+        const mentorUser = await User.findById(req.user.id).select("mentorProfile.assignedTeachers");
+        const assignedIds = (mentorUser?.mentorProfile?.assignedTeachers || []).map(id => id.toString());
+        const directFellows = await User.find({ assignedMentor: req.user.id }).select("_id");
+        const allIds = Array.from(new Set([...assignedIds, ...directFellows.map(f => f._id.toString())]));
+        if (allIds.length > 0) {
+          filter.teacher = { $in: allIds };
+        }
       }
     } else {
       if (req.query.teacherId && req.query.teacherId !== "undefined") filter.teacher = req.query.teacherId;

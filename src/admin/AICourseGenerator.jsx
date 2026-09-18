@@ -28,15 +28,14 @@
 
 import { useState } from "react";
 import { t } from "../services/i18n";
+import { API_BASE_URL } from "../services/api";
 
 const TONES = ["Professional", "Friendly", "Academic", "Motivational"];
 const LEVELS = ["Beginner", "Intermediate", "Advanced", "All Levels"];
 const DURATIONS = ["2 Weeks", "4 Weeks", "6 Weeks", "8 Weeks", "3 Months", "6 Months"];
 
 // Helper: get API base from environment or default
-const getApiBase = () => {
-  return import.meta.env?.VITE_API_BASE_URL || "http://localhost:5000";
-};
+const getApiBase = () => API_BASE_URL;
 
 export default function AICourseGenerator({ onApply, categories = [] }) {
   const [topic,      setTopic]      = useState("");

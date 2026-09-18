@@ -1,7 +1,7 @@
 import PDCAGenerator from "./PDCAGenerator";
 import { useState, useEffect, useRef } from "react";
 import { S, SectionCard, Toast, StatCard, StatusBadge, SearchBar, Modal } from "../components/Shared";
-import { uploadFile, submitFeedback, getFeedbacks, updateMentorMe, changeMentorPassword, recordMenteeObservation, getMenteeObservations, submitCapstoneMilestone, getCapstoneSubmissions, submitPDCACycle, getPDCACycles, getMentorFellows, updateFellowStatus, getMentorMe, updateMenteeTracking, claimFellow, unclaimFellow, deleteMentorFellow, getMentorAttendance, getCourseAssignments, getTeacherChecklist, mentorOverrideTeacherChecklist, getMentorFellowChecklist, mentorOverrideFellowChecklist } from "../services/api";
+import { uploadFile, submitFeedback, getFeedbacks, updateMentorMe, changeMentorPassword, recordMenteeObservation, getMenteeObservations, submitCapstoneMilestone, getCapstoneSubmissions, submitPDCACycle, getPDCACycles, getMentorFellows, updateFellowStatus, getMentorMe, updateMenteeTracking, claimFellow, unclaimFellow, deleteMentorFellow, getMentorAttendance, getCourseAssignments, getTeacherChecklist, mentorOverrideTeacherChecklist, getMentorFellowChecklist, mentorOverrideFellowChecklist, API_BASE_URL } from "../services/api";
 /* ── Mentor: Teacher Month Checklist Override Panel ── */
 export function MentorTeacherChecklistPanel({ teacherId, setToast }) {
   const now = new Date();
@@ -317,7 +317,6 @@ export function MentorFellowPDCAChecklistPanel({ fellowId, setToast }) {
     </div>
   );
 }
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 const getMentorPhotoUrl = (user) => {
   const photo = user?.mentorProfile?.profilePhoto || user?.mentorProfile?.photo || user?.photoUrl || user?.profilePhoto;

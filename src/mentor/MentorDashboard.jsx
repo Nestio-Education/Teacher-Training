@@ -24,8 +24,7 @@ import { PendingApprovalsReminder } from "./PendingApprovalsReminder";
 import TeacherManagementTab from "../admin/TeacherManagementTab";
 import GeotagAttendance from "../pages/GeotagAttendance";
 import { calculateTeacherScore } from "../admin/OverviewTab";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+import { API_BASE_URL } from "../services/api";
 
 const getMentorPhotoUrl = (user) => {
   const photo = user?.mentorProfile?.profilePhoto || user?.mentorProfile?.photo || user?.photoUrl || user?.profilePhoto;

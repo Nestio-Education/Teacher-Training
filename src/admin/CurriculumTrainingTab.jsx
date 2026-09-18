@@ -4,7 +4,7 @@ import { Modal, S, SearchBar, StatCard } from "../components/Shared";
 import {
   getCourses, createCourse, deleteCourse, getCourseAssignments, getAdminTeachers,
   assignCourse, getCourseNotes, createCourseNote, getAdminAssessmentResults, getCourseAssessment,
-  parseCourseDocx
+  parseCourseDocx, API_BASE_URL
 } from "../services/api";
 
 /* ══════════════════════════════════════════════════════════════
@@ -1000,7 +1000,7 @@ export default function CurriculumTrainingTab({ setToast }) {
       const formData = new FormData();
       formData.append("file", file);
       const token = localStorage.getItem("spaceece_auth_token");
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:5000"}/api/admin/upload-material`, {
+      const res = await fetch(`${API_BASE_URL}/api/admin/upload-material`, {
         method: "POST",
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),

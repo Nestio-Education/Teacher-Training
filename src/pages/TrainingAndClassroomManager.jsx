@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Modal, S, StatCard, StatusBadge, Toast, SearchBar, SectionCard } from "../components/Shared";
-import { getTeacherLessonPlans, submitLessonCompletion, uploadFile, getActivityBank, uploadActivityBank, getActivitySubmissions, submitActivityCompletion, deleteActivity, createActivityBank, getChildren, getTeacherChildren } from "../services/api";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
+import { getTeacherLessonPlans, submitLessonCompletion, uploadFile, getActivityBank, uploadActivityBank, getActivitySubmissions, submitActivityCompletion, deleteActivity, createActivityBank, getChildren, getTeacherChildren, API_BASE_URL } from "../services/api";
 
 const formatDate = (value) => {
   if (!value) return "Not scheduled";
@@ -1540,7 +1538,7 @@ export default function TrainingAndClassroomManager({ user }) {
     setIsTabDrafting(true);
     setReportError("");
     try {
-      const response = await fetch("http://localhost:5000/api/teacher/reports/draft-ai", {
+      const response = await fetch(`${API_BASE_URL}/api/teacher/reports/draft-ai`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

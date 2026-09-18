@@ -320,7 +320,8 @@ export default function AssignmentReviewTab({ assignments, setAssignments, setTo
     const submissionText = toText(assignment?.notes, "No submission text provided.");
 
     try {
-      const response = await fetch("http://localhost:8001/api/v1/assignment-feedback", {
+      const aiServiceUrl = import.meta.env.VITE_AI_SERVICE_URL || "http://localhost:8001";
+      const response = await fetch(`${aiServiceUrl}/api/v1/assignment-feedback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

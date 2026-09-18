@@ -1,10 +1,7 @@
 import { useState, useEffect } from "react";
 import { AttendanceBar, Modal, S, SearchBar, SectionCard, StatCard, StatusBadge, Toast } from "../components/Shared";
-import { getAdminMentors, updateMentorStatus, updateMentorProfile, registerMentor, deleteMentor, getCenters, getClasses, blockMentor, unblockMentor, sendDirectMessageToMentor } from "../services/api";
+import { getAdminMentors, updateMentorStatus, updateMentorProfile, registerMentor, deleteMentor, getCenters, getClasses, blockMentor, unblockMentor, sendDirectMessageToMentor, API_BASE_URL } from "../services/api";
 import { t } from "../services/i18n";
-
-// Reuse same base URL pattern as ActivityMonitoringTab
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
 // Returns the mentor's real photo URL if available, otherwise DiceBear initials avatar
 const avatarSrc = (mentor) =>
