@@ -1933,6 +1933,13 @@ export function getAdminMentorAttendance(params = {}) {
 }
 
 // ── HAALS Home Visit Observation & Child Enrollment API ──
+export function enrollHaalsChild(childData) {
+  return request("/api/haals/children", {
+    method: "POST",
+    body: JSON.stringify(childData)
+  });
+}
+
 export function getHaalsEnrolledChildren({ page = 1, limit = 10, search = "", program, fellowId } = {}) {
   const params = new URLSearchParams();
   if (page) params.append("page", page);

@@ -15,21 +15,21 @@ function escapeRegex(string) {
 function mapRawRowToSchema(row) {
   const normalizedRow = {};
   for (const key of Object.keys(row)) {
-    const normKey = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const normKey = String(key).toLowerCase().replace(/[\s_\-–—:/?!.,()[\]{}"'\\\/]/g, "");
     normalizedRow[normKey] = row[key];
   }
 
   function getVal(keysList, defaultValue = undefined) {
     // 1. Exact match on normalized keys
     for (const key of keysList) {
-      const norm = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const norm = String(key).toLowerCase().replace(/[\s_\-–—:/?!.,()[\]{}"'\\\/]/g, "");
       if (normalizedRow[norm] !== undefined && normalizedRow[norm] !== null && normalizedRow[norm] !== "") {
         return normalizedRow[norm];
       }
     }
     // 2. Fuzzy substring match fallback
     for (const key of keysList) {
-      const norm = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const norm = String(key).toLowerCase().replace(/[\s_\-–—:/?!.,()[\]{}"'\\\/]/g, "");
       if (norm.length >= 4) {
         for (const [rKey, rVal] of Object.entries(normalizedRow)) {
           if ((rKey.includes(norm) || norm.includes(rKey)) && rVal !== undefined && rVal !== null && rVal !== "") {
@@ -1117,6 +1117,504 @@ router.get("/debug-stats", async (req, res, next) => {
         } : null,
         visitsSample: sanikaVisits.slice(0, 5)
       }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ── Helper: Map Raw Row from Child Enrollment Google Form ──
+function mapRawChildEnrollmentRowToSchema(row) {
+  const normalizedRow = {};
+  for (const key of Object.keys(row)) {
+    // Preserve Devanagari and alphanumeric characters, strip punctuation and whitespace
+    const normKey = String(key).toLowerCase().replace(/[\s_\-–—:/?!.,()[\]{}"'\\\/]/g, "");
+    normalizedRow[normKey] = row[key];
+  }
+
+  function getVal(keysList, defaultValue = "") {
+    for (const key of keysList) {
+      const norm = String(key).toLowerCase().replace(/[\s_\-–—:/?!.,()[\]{}"'\\\/]/g, "");
+      if (normalizedRow[norm] !== undefined && normalizedRow[norm] !== null && normalizedRow[norm] !== "") {
+        return normalizedRow[norm];
+      }
+    }
+    for (const key of keysList) {
+      const norm = String(key).toLowerCase().replace(/[\s_\-–—:/?!.,()[\]{}"'\\\/]/g, "");
+      if (norm.length >= 3) {
+        for (const [rKey, rVal] of Object.entries(normalizedRow)) {
+          if ((rKey.includes(norm) || norm.includes(rKey)) && rVal !== undefined && rVal !== null && rVal !== "") {
+            return rVal;
+          }
+        }
+      }
+    }
+    return defaultValue;
+  }
+
+  function getNum(keysList, defaultValue = undefined) {
+    const val = getVal(keysList);
+    if (!val) return defaultValue;
+    const match = String(val).match(/\d+(\.\d+)?/);
+    if (match) {
+      const num = parseFloat(match[0]);
+      return isNaN(num) ? defaultValue : num;
+    }
+    return defaultValue;
+  }
+
+  const fullName = String(getVal([
+    "childsfullname", "childfullname", "childsname", "childname", "nameofchild",
+    "nameofstudent", "studentname", "child", "mulachenaav", "mulachenav", "fullname", "name",
+    "मुलाचेनाव", "मुलाचेपूर्णनाव", "बालकाचेनाव", "विद्यार्थ्याचेनाव"
+  ])).trim();
+
+  const rawAge = getNum(["childsage", "childage", "age", "vay", "ageinyears", "वय", "वर्ष"]);
+  const ageGroup = getVal([
+    "agegroup", "agebracket", "childsagegroup", "childagegroup", "agecategory", "वयोगट"
+  ], rawAge ? `${rawAge} years` : "3-5 years");
+
+  const rawGender = String(getVal(["gender", "sex", "ling", "लिंग"])).toLowerCase();
+  let gender = "Male";
+  if (rawGender.startsWith("f") || rawGender.includes("female") || rawGender.includes("स्त्री") || rawGender.includes("मुल्गी") || rawGender.includes("महिला")) {
+    gender = "Female";
+  } else if (rawGender.includes("other") || rawGender.includes("इतर")) {
+    gender = "Other";
+  }
+
+  const village = getVal([
+    "villagearea", "village", "area", "community", "center", "address",
+    "location", "ward", "gaav", "gav", "wasti", "slum", "neighborhood",
+    "गाव", "वस्ती", "परिसर", "गावकिंवापरिसर"
+  ]);
+
+  const program = getVal(["programenrolled", "program", "course", "project", "initiative", "प्रकल्प", "उपक्रम"], "HAALS");
+
+  const guardianName = getVal([
+    "parentsname", "parentname", "guardianname", "mothersname", "fathersname",
+    "mothername", "fathername", "caregivername", "palkachenaav", "guardian",
+    "पालकाचेनाव", "आईचेनाव", "वडिलांचेनाव"
+  ]);
+
+  const guardianPhone = String(getVal([
+    "parentsphonenumber", "parentphone", "guardianphone", "contactnumber",
+    "mobilenumber", "phone", "mobile", "phonenumber", "phoneno", "contact",
+    "फोननंबर", "मोबाईल", "संपर्कनंबर"
+  ])).trim();
+
+  const guardianRelation = getVal([
+    "guardianrelation", "relationwithchild", "relation", "caregiverrelation", "palkanchenate",
+    "नाते", "पालकांचेनाते"
+  ], "Mother");
+
+  const address = getVal([
+    "homeaddress", "address", "landmark", "residentialaddress", "locationaddress", "houseaddress",
+    "पत्ता", "घरक्रमांक"
+  ]);
+
+  const notes = getVal([
+    "notes", "remarks", "initialobservation", "baselinenotes", "comments", "additionalnotes", "developmentnotes",
+    "शेरा", "नोंद"
+  ]);
+
+  const facilitatorNameRaw = getVal([
+    "nameoffieldfacilitator", "facilitatorname", "teachername", "facilitator",
+    "fieldfacilitator", "fellowname", "recordedby", "enrolledby", "fieldfellow",
+    "कार्यकर्त्याचेनाव", "शिक्षकाचेनाव"
+  ]);
+
+  return {
+    fullName,
+    age: rawAge,
+    ageGroup,
+    gender,
+    village,
+    program: program || "HAALS",
+    guardianName,
+    guardianPhone,
+    guardianRelation: guardianRelation || "Mother",
+    address,
+    notes,
+    facilitatorNameRaw
+  };
+}
+
+// ── 8. Child Enrollment for Home Visits ──
+
+// POST /api/haals/children/sync - Webhook for Google Form Child Enrollment Sync
+router.post("/children/sync", async (req, res, next) => {
+  try {
+    const expectedSecret = process.env.HAALS_SYNC_SECRET;
+    if (!expectedSecret) {
+      console.error("[Child Enrollment Sync] HAALS_SYNC_SECRET is not configured on the server.");
+      return res.status(500).json({ success: false, message: "HAALS_SYNC_SECRET is not configured on the server." });
+    }
+    const clientSecret = req.headers["x-sync-secret"] || req.query.secret;
+    if (!clientSecret || clientSecret !== expectedSecret) {
+      return res.status(401).json({ success: false, message: "Unauthorized sync attempt." });
+    }
+
+    const payload = req.body;
+    if (!payload) {
+      return res.status(400).json({ success: false, message: "Empty request payload." });
+    }
+
+    const rows = Array.isArray(payload) ? payload : [payload];
+    if (rows.length === 0) {
+      return res.json({ success: true, processedCount: 0, syncedCount: 0 });
+    }
+
+    const parsedRows = rows.map(mapRawChildEnrollmentRowToSchema).filter(r => r.fullName && r.fullName.length > 0);
+
+    // Resolve facilitators in batch
+    const facilitatorCache = new Map();
+    for (const item of parsedRows) {
+      let facilitatorId = null;
+      let centerId = undefined;
+
+      if (item.facilitatorNameRaw) {
+        const rawName = item.facilitatorNameRaw.trim().toLowerCase();
+        if (!facilitatorCache.has(rawName)) {
+          const facilitator = await User.findOne({
+            name: { $regex: new RegExp(`^${escapeRegex(item.facilitatorNameRaw.trim())}$`, "i") },
+            role: { $in: ["fellow", "teacher", "admin", "mentor"] }
+          }).lean();
+          facilitatorCache.set(rawName, facilitator || null);
+        }
+        const cached = facilitatorCache.get(rawName);
+        if (cached) {
+          facilitatorId = cached._id;
+          centerId = cached.teacherProfile?.center;
+        }
+      }
+
+      item.assignedFellow = facilitatorId;
+      item.center = centerId;
+    }
+
+    const bulkOps = parsedRows.map(doc => ({
+      updateOne: {
+        filter: {
+          fullName: doc.fullName,
+          ...(doc.village ? { village: doc.village } : {})
+        },
+        update: {
+          $set: {
+            fullName: doc.fullName,
+            age: doc.age,
+            ageGroup: doc.ageGroup,
+            gender: doc.gender,
+            village: doc.village,
+            program: doc.program,
+            guardianName: doc.guardianName,
+            guardianPhone: doc.guardianPhone,
+            guardianRelation: doc.guardianRelation,
+            address: doc.address,
+            notes: doc.notes,
+            enrollmentType: "home_visit",
+            status: "active",
+            ...(doc.assignedFellow ? { assignedFellow: doc.assignedFellow } : {}),
+            ...(doc.center ? { center: doc.center } : {})
+          }
+        },
+        upsert: true
+      }
+    }));
+
+    const bulkRes = await Child.bulkWrite(bulkOps, { ordered: false });
+
+    res.json({
+      success: true,
+      processedCount: rows.length,
+      syncedCount: parsedRows.length,
+      upsertedCount: bulkRes.upsertedCount || 0,
+      modifiedCount: bulkRes.modifiedCount || 0,
+      matchedCount: bulkRes.matchedCount || 0
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/haals/children - In-portal direct child enrollment
+router.post("/children", requireAuth, async (req, res, next) => {
+  try {
+    const {
+      fullName,
+      age,
+      ageGroup,
+      gender,
+      village,
+      program = "HAALS",
+      guardianName,
+      guardianPhone,
+      guardianRelation = "Mother",
+      address,
+      notes,
+      fellowId
+    } = req.body;
+
+    if (!fullName || !fullName.trim()) {
+      return res.status(400).json({ success: false, message: "Child's full name is required." });
+    }
+
+    // Determine assigned fellow
+    let assignedFellow = req.user.id;
+    if (["admin", "mentor", "super_admin"].includes(req.user.role) && fellowId) {
+      assignedFellow = fellowId;
+    }
+
+    // Get fellow's profile center if available
+    const fellowUser = await User.findById(assignedFellow).lean();
+    const centerId = fellowUser?.teacherProfile?.center || undefined;
+
+    const newChild = await Child.create({
+      fullName: fullName.trim(),
+      age: age ? Number(age) : undefined,
+      ageGroup: ageGroup ? ageGroup.trim() : (age ? `${age} years` : "3-5 years"),
+      gender: gender || "",
+      village: village ? village.trim() : "",
+      program: program ? program.trim() : "HAALS",
+      guardianName: guardianName ? guardianName.trim() : "",
+      guardianPhone: guardianPhone ? guardianPhone.trim() : "",
+      guardianRelation: guardianRelation || "Mother",
+      address: address ? address.trim() : "",
+      notes: notes ? notes.trim() : "",
+      enrollmentType: "home_visit",
+      assignedFellow,
+      center: centerId,
+      status: "active",
+      createdBy: req.user.id
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Child successfully enrolled for Home Visits!",
+      child: newChild
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/haals/children - List enrolled children with visit counts and history status
+router.get("/children", requireAuth, async (req, res, next) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10));
+    const skip = (page - 1) * limit;
+    const search = req.query.search ? String(req.query.search).trim() : "";
+    const program = req.query.program ? String(req.query.program).trim() : "";
+    const fellowId = req.query.fellowId ? String(req.query.fellowId).trim() : "";
+
+    const filter = { status: "active" };
+
+    // Role-based scoping
+    if (["fellow", "teacher"].includes(req.user.role)) {
+      filter.$or = [
+        { assignedFellow: req.user.id },
+        { createdBy: req.user.id }
+      ];
+    } else if (fellowId && ["admin", "mentor", "super_admin"].includes(req.user.role)) {
+      filter.$or = [
+        { assignedFellow: fellowId },
+        { createdBy: fellowId }
+      ];
+    }
+
+    if (program && program !== "all") {
+      filter.program = { $regex: new RegExp(`^${escapeRegex(program)}$`, "i") };
+    }
+
+    if (search) {
+      const searchRegex = new RegExp(escapeRegex(search), "i");
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          { fullName: searchRegex },
+          { village: searchRegex },
+          { guardianName: searchRegex },
+          { guardianPhone: searchRegex },
+          { program: searchRegex }
+        ]
+      });
+    }
+
+    const totalChildren = await Child.countDocuments(filter);
+    const childrenDocs = await Child.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate("assignedFellow", "name email phone")
+      .lean();
+
+    // Enrich each child with real-time visit count and last visit date
+    const enrichedChildren = await Promise.all(
+      childrenDocs.map(async (child) => {
+        const childNameRegex = new RegExp(`^${escapeRegex(child.fullName)}$`, "i");
+        const visitQuery = {
+          $or: [
+            { childId: child._id },
+            { childName: { $regex: childNameRegex } }
+          ]
+        };
+
+        const totalVisits = await VisitObservation.countDocuments(visitQuery);
+        const lastVisit = await VisitObservation.findOne(visitQuery)
+          .sort({ visitDate: -1 })
+          .select("visitDate activities childParticipationRating")
+          .lean();
+
+        return {
+          ...child,
+          totalVisits,
+          lastVisitDate: lastVisit ? lastVisit.visitDate : null,
+          lastScore: lastVisit?.activities?.[0]?.milestoneStatus || lastVisit?.childParticipationRating || null
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      children: enrichedChildren,
+      pagination: {
+        totalChildren,
+        totalPages: Math.ceil(totalChildren / limit) || 1,
+        page,
+        limit
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /api/haals/children/:id - Update an enrolled child
+router.put("/children/:id", requireAuth, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const updateData = { ...req.body };
+    delete updateData._id;
+    delete updateData.createdBy;
+
+    const updatedChild = await Child.findByIdAndUpdate(id, { $set: updateData }, { new: true }).lean();
+    if (!updatedChild) {
+      return res.status(404).json({ success: false, message: "Child not found." });
+    }
+
+    res.json({
+      success: true,
+      message: "Child details updated successfully.",
+      child: updatedChild
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /api/haals/children/:id - Archive / delete enrolled child
+router.delete("/children/:id", requireAuth, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const child = await Child.findByIdAndUpdate(id, { $set: { status: "inactive" } }, { new: true });
+    if (!child) {
+      return res.status(404).json({ success: false, message: "Child not found." });
+    }
+
+    res.json({
+      success: true,
+      message: "Child removed from active enrollment."
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/haals/quick-visit - Record a direct Home Visit observation from portal
+router.post("/quick-visit", requireAuth, async (req, res, next) => {
+  try {
+    const {
+      childId,
+      childName,
+      visitDate = new Date(),
+      village,
+      program = "HAALS",
+      ageGroup,
+      activityName,
+      domain = ["Cognitive"],
+      milestoneStatus = 4,
+      engagementLevel = "Highly Engaged",
+      caregiverObserved = true,
+      caregiverParticipated = true,
+      childPresent = true,
+      caregiverAvailable = true,
+      spaceAdequate = true,
+      materialsAvailable = ["Household items", "Flashcards"],
+      challenges = [],
+      helpFactors = [],
+      recommendedAction = "Continue home activities",
+      remarks = ""
+    } = req.body;
+
+    if (!childName && !childId) {
+      return res.status(400).json({ success: false, message: "Child name or ID is required." });
+    }
+
+    let finalChildName = childName;
+    let resolvedChildId = childId || null;
+
+    if (childId && !finalChildName) {
+      const childDoc = await Child.findById(childId).lean();
+      if (childDoc) {
+        finalChildName = childDoc.fullName;
+        resolvedChildId = childDoc._id;
+      }
+    }
+
+    const newVisit = await VisitObservation.create({
+      visitDate: new Date(visitDate),
+      facilitatorId: req.user.id,
+      facilitatorNameRaw: req.user.name || "Facilitator",
+      childId: resolvedChildId,
+      childName: finalChildName,
+      ageGroup: ageGroup || "3-5 years",
+      program: program || "HAALS",
+      village: village || "",
+      childPresent: Boolean(childPresent),
+      caregiverAvailable: Boolean(caregiverAvailable),
+      childWillingness: true,
+      spaceAdequate: Boolean(spaceAdequate),
+      materialsAvailable: Array.isArray(materialsAvailable) ? materialsAvailable : [materialsAvailable],
+      householdItemsUsable: true,
+      activities: [
+        {
+          activityName: activityName || "Structured Home Developmental Activity",
+          milestoneSource: "HAALS Framework",
+          domain: Array.isArray(domain) ? domain : [domain],
+          engagementLevel: engagementLevel || "Highly Engaged",
+          attempted: true,
+          completed: true,
+          supportNeeded: false,
+          milestoneStatus: Number(milestoneStatus) || 4
+        }
+      ],
+      caregiverObserved: Boolean(caregiverObserved),
+      caregiverParticipated: Boolean(caregiverParticipated),
+      canRepeatAtHome: true,
+      helpFactors: Array.isArray(helpFactors) ? helpFactors : (helpFactors ? [helpFactors] : []),
+      challenges: Array.isArray(challenges) ? challenges : (challenges ? [challenges] : []),
+      isFollowUp: false,
+      recommendedAction: recommendedAction || "Continue home activities",
+      childParticipationRating: Number(milestoneStatus) || 4,
+      parentCooperationRating: caregiverParticipated ? 5 : 4,
+      homeEnvironmentRating: 4,
+      remarks: remarks || "Logged directly from portal."
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Home Visit Observation logged successfully!",
+      visit: newVisit
     });
   } catch (err) {
     next(err);
