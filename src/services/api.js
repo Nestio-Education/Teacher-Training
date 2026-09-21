@@ -1931,3 +1931,36 @@ export function getAdminMentorAttendance(params = {}) {
   const searchParams = new URLSearchParams(params);
   return request(`/api/admin/mentor-attendance?${searchParams.toString()}`);
 }
+
+// ── HAALS Home Visit Observation & Child Enrollment API ──
+export function getHaalsEnrolledChildren({ page = 1, limit = 10, search = "", program, fellowId } = {}) {
+  const params = new URLSearchParams();
+  if (page) params.append("page", page);
+  if (limit) params.append("limit", limit);
+  if (search) params.append("search", search);
+  if (program && program !== "all") params.append("program", program);
+  if (fellowId) params.append("fellowId", fellowId);
+
+  return request(`/api/haals/children?${params.toString()}`);
+}
+
+export function updateHaalsChild(id, childData) {
+  return request(`/api/haals/children/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(childData)
+  });
+}
+
+export function deleteHaalsChild(id) {
+  return request(`/api/haals/children/${id}`, {
+    method: "DELETE"
+  });
+}
+
+export function createQuickHaalsVisit(visitData) {
+  return request("/api/haals/quick-visit", {
+    method: "POST",
+    body: JSON.stringify(visitData)
+  });
+}
+
