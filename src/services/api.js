@@ -1783,39 +1783,6 @@ export function updateQuestionBankSections(ageGroup, sections) {
   });
 }
 // End: Prajwal
-// ── HAALS / Home Visit Observation APIs ──
-export function getFellowHaalsMetrics(fellowId) {
-  const path = fellowId ? `/api/haals/fellow/metrics?fellowId=${fellowId}` : "/api/haals/fellow/metrics";
-  return request(path);
-}
-
-export function getMentorHaalsMetrics() {
-  return request("/api/haals/mentor/metrics");
-}
-
-export function getHaalsVisits(params = {}) {
-  const searchParams = new URLSearchParams();
-  Object.keys(params).forEach(k => {
-    if (params[k] !== undefined && params[k] !== null && params[k] !== "") {
-      searchParams.append(k, params[k]);
-    }
-  });
-  const query = searchParams.toString();
-  return request(query ? `/api/haals/visits?${query}` : "/api/haals/visits");
-}
-
-export function getHaalsVisitDetails(visitId) {
-  return request(`/api/haals/visits/${visitId}`);
-}
-
-export function triggerHaalsAiReportStub(fellowId, month) {
-  return request("/api/haals/reports/generate-stub", {
-    method: "POST",
-    body: JSON.stringify({ fellowId, month })
-  });
-}
-
-
 // ── Admin Quiz APIs ──
 export function getAdminQuizzes() {
   return request("/api/admin/quizzes").catch((err) => {
@@ -1930,4 +1897,74 @@ export function reviewMentorAttendanceRecord(recordId, action, data = {}) {
 export function getAdminMentorAttendance(params = {}) {
   const searchParams = new URLSearchParams(params);
   return request(`/api/admin/mentor-attendance?${searchParams.toString()}`);
+// ── HAALS Home Visit Observation & Child Enrollment API ──
+export function getFellowHaalsMetrics(fellowId) {
+  const query = fellowId ? `?fellowId=${encodeURIComponent(fellowId)}` : "";
+  return request(`/api/haals/fellow/metrics${query}`);
+}
+
+export function getMentorHaalsMetrics() {
+  return request("/api/haals/mentor/metrics");
+}
+
+export function getHaalsVisits({ page = 1, limit = 10, search = "", program, status, fellowId, village } = {}) {
+  const params = new URLSearchParams();
+  if (page) params.append("page", page);
+  if (limit) params.append("limit", limit);
+  if (search) params.append("search", search);
+  if (program && program !== "all") params.append("program", program);
+  if (status && status !== "all") params.append("status", status);
+  if (fellowId) params.append("fellowId", fellowId);
+  if (village) params.append("village", village);
+
+  return request(`/api/haals/visits?${params.toString()}`);
+}
+
+export function getHaalsVisitDetails(id) {
+  return request(`/api/haals/visits/${id}`);
+}
+
+export function triggerHaalsAiReportStub(fellowId, month) {
+  return request("/api/haals/reports/generate-stub", {
+    method: "POST",
+    body: JSON.stringify({ fellowId, month })
+  });
+}
+
+export function enrollHaalsChild(childData) {
+  return request("/api/haals/children", {
+    method: "POST",
+    body: JSON.stringify(childData)
+  });
+}
+
+export function getHaalsEnrolledChildren({ page = 1, limit = 10, search = "", program, fellowId } = {}) {
+  const params = new URLSearchParams();
+  if (page) params.append("page", page);
+  if (limit) params.append("limit", limit);
+  if (search) params.append("search", search);
+  if (program && program !== "all") params.append("program", program);
+  if (fellowId) params.append("fellowId", fellowId);
+
+  return request(`/api/haals/children?${params.toString()}`);
+}
+
+export function updateHaalsChild(id, childData) {
+  return request(`/api/haals/children/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(childData)
+  });
+}
+
+export function deleteHaalsChild(id) {
+  return request(`/api/haals/children/${id}`, {
+    method: "DELETE"
+  });
+}
+
+export function createQuickHaalsVisit(visitData) {
+  return request("/api/haals/quick-visit", {
+    method: "POST",
+    body: JSON.stringify(visitData)
+  });
 }

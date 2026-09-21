@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { StatCard, SectionCard, StatusBadge } from "../components/Shared";
-import { getMentorHaalsMetrics, getHaalsVisits, triggerHaalsAiReportStub } from "../services/api";
+import { getMentorHaalsMetrics, getHaalsVisits, getHaalsEnrolledChildren, triggerHaalsAiReportStub } from "../services/api";
 
 export default function MentorHomeVisitsTab({ user, setToast }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeSubTab, setActiveSubTab] = useState("overview"); // "overview" | "logs"
+  const [activeSubTab, setActiveSubTab] = useState("overview"); // "overview" | "logs" | "children"
   const [reportingFellowId, setReportingFellowId] = useState(null);
 
   // Paginated Visit Logs for Mentor
@@ -20,6 +20,17 @@ export default function MentorHomeVisitsTab({ user, setToast }) {
   const [programFilter, setProgramFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
 
+  // Enrolled Children Directory for Mentor
+  const [enrolledChildren, setEnrolledChildren] = useState([]);
+  const [loadingChildren, setLoadingChildren] = useState(false);
+  const [childSearch, setChildSearch] = useState("");
+  const [debouncedChildSearch, setDebouncedChildSearch] = useState("");
+  const [childProgramFilter, setChildProgramFilter] = useState("all");
+  const [childFellowFilter, setChildFellowFilter] = useState("all");
+  const [childPage, setChildPage] = useState(1);
+  const [totalChildren, setTotalChildren] = useState(0);
+  const [totalChildPages, setTotalChildPages] = useState(1);
+
   // Detail Modal
   const [selectedVisit, setSelectedVisit] = useState(null);
 
@@ -31,6 +42,15 @@ export default function MentorHomeVisitsTab({ user, setToast }) {
     }, 400);
     return () => clearTimeout(timer);
   }, [search]);
+
+  // Debounce child search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedChildSearch(childSearch);
+      setChildPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [childSearch]);
 
   // Load Mentor Rollup Metrics
   const loadMentorMetrics = useCallback(async () => {
@@ -83,6 +103,35 @@ export default function MentorHomeVisitsTab({ user, setToast }) {
       fetchVisits();
     }
   }, [activeSubTab, fetchVisits]);
+
+  // Load Enrolled Children for Mentor
+  const fetchChildren = useCallback(async () => {
+    setLoadingChildren(true);
+    try {
+      const res = await getHaalsEnrolledChildren({
+        page: childPage,
+        limit: 10,
+        search: debouncedChildSearch,
+        program: childProgramFilter !== "all" ? childProgramFilter : undefined,
+        fellowId: childFellowFilter !== "all" ? childFellowFilter : undefined
+      });
+      if (res.success) {
+        setEnrolledChildren(res.children || []);
+        setTotalChildren(res.pagination?.totalChildren || 0);
+        setTotalChildPages(res.pagination?.totalPages || 1);
+      }
+    } catch (err) {
+      console.error("Failed to load children", err);
+    } finally {
+      setLoadingChildren(false);
+    }
+  }, [childPage, debouncedChildSearch, childProgramFilter, childFellowFilter]);
+
+  useEffect(() => {
+    if (activeSubTab === "children") {
+      fetchChildren();
+    }
+  }, [activeSubTab, fetchChildren]);
 
   const handleGenerateReportStub = async (fellowId, fellowName) => {
     setReportingFellowId(fellowId);
@@ -144,7 +193,7 @@ export default function MentorHomeVisitsTab({ user, setToast }) {
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
             <span style={{ fontSize: 24 }}>🧭</span>
             <h1 style={{ fontSize: 22, fontWeight: 800, color: "#701a75", margin: 0 }}>
-              HAALS Mentor Oversight (Home Visits)
+              HAALS Mentor Oversight (Home Visits & Child Roster)
             </h1>
           </div>
           <p style={{ margin: 0, fontSize: 13, color: "#86198f", maxWidth: 650, lineHeight: 1.5 }}>
@@ -153,7 +202,11 @@ export default function MentorHomeVisitsTab({ user, setToast }) {
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
           <button
-            onClick={() => { loadMentorMetrics(); if (activeSubTab === "logs") fetchVisits(); }}
+            onClick={() => {
+              loadMentorMetrics();
+              if (activeSubTab === "logs") fetchVisits();
+              if (activeSubTab === "children") fetchChildren();
+            }}
             style={{
               padding: "8px 14px",
               background: "#ffffff",
@@ -208,7 +261,7 @@ export default function MentorHomeVisitsTab({ user, setToast }) {
       </div>
 
       {/* Sub-Tab Navigation Toggle */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 20, borderBottom: "2px solid #f1f5f9", paddingBottom: 10 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20, borderBottom: "2px solid #f1f5f9", paddingBottom: 10 }}>
         <button
           onClick={() => setActiveSubTab("overview")}
           style={{
@@ -225,6 +278,7 @@ export default function MentorHomeVisitsTab({ user, setToast }) {
         >
           👥 Fellow Comparison & Intervention Flags
         </button>
+
         <button
           onClick={() => setActiveSubTab("logs")}
           style={{
@@ -240,6 +294,26 @@ export default function MentorHomeVisitsTab({ user, setToast }) {
           }}
         >
           📋 Center-Wide Visit Log Explorer (All Rows)
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveSubTab("children");
+            fetchChildren();
+          }}
+          style={{
+            padding: "8px 18px",
+            borderRadius: 8,
+            border: "none",
+            background: activeSubTab === "children" ? "linear-gradient(135deg, #7c3aed, #6d28d9)" : "#f1f5f9",
+            color: activeSubTab === "children" ? "#ffffff" : "#475569",
+            fontSize: 13,
+            fontWeight: 700,
+            cursor: "pointer",
+            transition: "all 0.2s ease"
+          }}
+        >
+          👶 Enrolled Children Directory ({totalChildren})
         </button>
       </div>
 
@@ -699,6 +773,244 @@ export default function MentorHomeVisitsTab({ user, setToast }) {
               </button>
             </div>
           </div>
+        </SectionCard>
+      )}
+
+      {/* View 3: Enrolled Children Directory for Mentor */}
+      {activeSubTab === "children" && (
+        <SectionCard title="👶 Center Enrolled Children Directory">
+          {/* Controls Bar: Search, Filters */}
+          <div style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            marginBottom: 16,
+            background: "#f8fafc",
+            padding: "12px 16px",
+            borderRadius: 12,
+            border: "1px solid #e2e8f0"
+          }}>
+            <div style={{ flex: "1 1 240px", position: "relative" }}>
+              <span style={{ position: "absolute", left: 10, top: 9, color: "#94a3b8", fontSize: 14 }}>🔍</span>
+              <input
+                type="text"
+                placeholder="Search child by name, village, guardian, program..."
+                value={childSearch}
+                onChange={(e) => setChildSearch(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px 8px 32px",
+                  borderRadius: 8,
+                  border: "1px solid #cbd5e1",
+                  fontSize: 12,
+                  outline: "none",
+                  background: "#ffffff"
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+              <select
+                value={childFellowFilter}
+                onChange={(e) => { setChildFellowFilter(e.target.value); setChildPage(1); }}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #cbd5e1",
+                  fontSize: 12,
+                  background: "#ffffff",
+                  color: "#334155"
+                }}
+              >
+                <option value="all">All Facilitators / Fellows</option>
+                {fellowComparisonTable.map(f => (
+                  <option key={f.fellowId} value={f.fellowId}>{f.fellowName}</option>
+                ))}
+              </select>
+
+              <select
+                value={childProgramFilter}
+                onChange={(e) => { setChildProgramFilter(e.target.value); setChildPage(1); }}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: 8,
+                  border: "1px solid #cbd5e1",
+                  fontSize: 12,
+                  background: "#ffffff",
+                  color: "#334155"
+                }}
+              >
+                <option value="all">All Programs</option>
+                <option value="HAALS">HAALS</option>
+                <option value="PTP">PTP</option>
+                <option value="School Readiness">School Readiness</option>
+                <option value="FLN">FLN</option>
+                <option value="Early Literacy">Early Literacy</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Children Table */}
+          {loadingChildren ? (
+            <div style={{ textAlign: "center", padding: "40px 0", color: "#64748b", fontSize: 13 }}>
+              🔄 Loading enrolled children...
+            </div>
+          ) : enrolledChildren.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "40px 0", color: "#64748b", fontSize: 13 }}>
+              No enrolled children found matching your search.
+            </div>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: "2px solid #e2e8f0", textAlign: "left", color: "#64748b", fontWeight: 700, background: "#f8fafc" }}>
+                    <th style={{ padding: "10px 12px" }}>Child Name</th>
+                    <th style={{ padding: "10px 12px" }}>Assigned Facilitator</th>
+                    <th style={{ padding: "10px 12px" }}>Age Group</th>
+                    <th style={{ padding: "10px 12px" }}>Village / Area</th>
+                    <th style={{ padding: "10px 12px" }}>Program</th>
+                    <th style={{ padding: "10px 12px" }}>Guardian</th>
+                    <th style={{ padding: "10px 12px", textAlign: "center" }}>Total Visits</th>
+                    <th style={{ padding: "10px 12px" }}>Last Visit Date</th>
+                    <th style={{ padding: "10px 12px", textAlign: "right" }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {enrolledChildren.map((child) => (
+                    <tr
+                      key={child._id}
+                      style={{
+                        borderBottom: "1px solid #f1f5f9",
+                        color: "#334155",
+                        transition: "background 0.15s ease"
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "#faf5ff")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      <td style={{ padding: "12px 12px", fontWeight: 700, color: "#0f172a" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ width: 28, height: 28, borderRadius: "50%", background: "#f3e8ff", color: "#7e22ce", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 12 }}>
+                            {child.fullName ? child.fullName.charAt(0).toUpperCase() : "C"}
+                          </span>
+                          <div>
+                            <div>{child.fullName}</div>
+                            {child.gender && <span style={{ fontSize: 11, color: "#64748b", fontWeight: 500 }}>{child.gender}</span>}
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ padding: "12px 12px", color: "#475569" }}>
+                        {child.assignedFellow?.name || "Assigned Fellow"}
+                      </td>
+                      <td style={{ padding: "12px 12px", color: "#475569" }}>
+                        <span style={{ background: "#f1f5f9", padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600 }}>
+                          {child.ageGroup || (child.age ? `${child.age} yrs` : "3-5 yrs")}
+                        </span>
+                      </td>
+                      <td style={{ padding: "12px 12px", color: "#475569" }}>
+                        {child.village || "—"}
+                      </td>
+                      <td style={{ padding: "12px 12px" }}>
+                        <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700, color: "#0369a1", background: "#e0f2fe" }}>
+                          {child.program || "HAALS"}
+                        </span>
+                      </td>
+                      <td style={{ padding: "12px 12px", color: "#475569" }}>
+                        <div>{child.guardianName || "—"}</div>
+                        {child.guardianPhone && (
+                          <div style={{ fontSize: 11, color: "#64748b" }}>📞 {child.guardianPhone}</div>
+                        )}
+                      </td>
+                      <td style={{ padding: "12px 12px", textAlign: "center" }}>
+                        <span style={{
+                          padding: "3px 10px",
+                          borderRadius: 12,
+                          fontSize: 11,
+                          fontWeight: 800,
+                          background: child.totalVisits > 0 ? "#ecfdf5" : "#fef2f2",
+                          color: child.totalVisits > 0 ? "#059669" : "#dc2626",
+                          border: child.totalVisits > 0 ? "1px solid #a7f3d0" : "1px solid #fecdd3"
+                        }}>
+                          {child.totalVisits || 0} Visits
+                        </span>
+                      </td>
+                      <td style={{ padding: "12px 12px", color: "#64748b" }}>
+                        {child.lastVisitDate ? new Date(child.lastVisitDate).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
+                      </td>
+                      <td style={{ padding: "12px 12px", textAlign: "right" }}>
+                        <button
+                          onClick={() => {
+                            setActiveSubTab("logs");
+                            setSearch(child.fullName);
+                            setDebouncedSearch(child.fullName);
+                            setPage(1);
+                          }}
+                          style={{
+                            padding: "5px 10px",
+                            borderRadius: 6,
+                            border: "1px solid #e2e8f0",
+                            background: "#ffffff",
+                            color: "#7c3aed",
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: "pointer"
+                          }}
+                        >
+                          📜 View Visit Logs
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalChildren > 0 && (
+            <div style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              paddingTop: 14,
+              marginTop: 12,
+              borderTop: "1px solid #e2e8f0",
+              fontSize: 12,
+              color: "#64748b"
+            }}>
+              <div>Total Enrolled Children: <strong>{totalChildren}</strong></div>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <button
+                  disabled={childPage <= 1}
+                  onClick={() => setChildPage(p => Math.max(1, p - 1))}
+                  style={{
+                    padding: "5px 10px",
+                    borderRadius: 6,
+                    border: "1px solid #cbd5e1",
+                    background: childPage <= 1 ? "#f1f5f9" : "#ffffff",
+                    cursor: childPage <= 1 ? "not-allowed" : "pointer"
+                  }}
+                >
+                  ◀ Previous
+                </button>
+                <span style={{ fontWeight: 700 }}>Page {childPage} of {totalChildPages}</span>
+                <button
+                  disabled={childPage >= totalChildPages}
+                  onClick={() => setChildPage(p => Math.min(totalChildPages, p + 1))}
+                  style={{
+                    padding: "5px 10px",
+                    borderRadius: 6,
+                    border: "1px solid #cbd5e1",
+                    background: childPage >= totalChildPages ? "#f1f5f9" : "#ffffff",
+                    cursor: childPage >= totalChildPages ? "not-allowed" : "pointer"
+                  }}
+                >
+                  Next ▶
+                </button>
+              </div>
+            </div>
+          )}
         </SectionCard>
       )}
 
