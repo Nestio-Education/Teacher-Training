@@ -23,9 +23,13 @@ export default function SettingsTab({ setToast, teachers }) {
     adminLanguage: getCurrentLanguage(),
     timezone: "Asia/Kolkata (IST)",
     maintenanceMode: false,
+    enableReminders: true,
   });
   const [emailConfig, setEmailConfig] = useState({
-    smtpHost: "", smtpPort: 587, smtpUser: "", smtpPass: "", fromEmail: "", fromName: "",
+    emailProvider: "smtp",
+    smtpHost: "", smtpPort: 587, smtpUser: "", smtpPass: "",
+    resendApiKey: "",
+    fromEmail: "", fromName: "",
   });
   const [twilioConfig, setTwilioConfig] = useState({
     messagingProvider: "twilio",
@@ -79,12 +83,15 @@ export default function SettingsTab({ setToast, teachers }) {
             adminLanguage: serverSettings.adminLanguage || prev.adminLanguage,
             timezone: serverSettings.timezone || prev.timezone,
             maintenanceMode: safeBool(serverSettings.maintenanceMode, prev.maintenanceMode),
+            enableReminders: safeBool(serverSettings.enableReminders, prev.enableReminders),
           }));
           setEmailConfig((prev) => ({
+            emailProvider: serverSettings.emailProvider || prev.emailProvider,
             smtpHost: serverSettings.smtpHost || prev.smtpHost,
             smtpPort: serverSettings.smtpPort || prev.smtpPort,
             smtpUser: serverSettings.smtpUser || prev.smtpUser,
             smtpPass: serverSettings.smtpPass || prev.smtpPass,
+            resendApiKey: serverSettings.resendApiKey || prev.resendApiKey,
             fromEmail: serverSettings.fromEmail || prev.fromEmail,
             fromName: serverSettings.fromName || prev.fromName,
           }));
@@ -197,11 +204,14 @@ export default function SettingsTab({ setToast, teachers }) {
         adminLanguage: settings.adminLanguage,
         timezone: settings.timezone,
         maintenanceMode: settings.maintenanceMode,
+        enableReminders: settings.enableReminders,
         minLength: passwordPolicy.minLength,
         requireUppercase: passwordPolicy.requireUppercase,
         requireNumbers: passwordPolicy.requireNumbers,
         requireSpecial: passwordPolicy.requireSpecial,
         expiryDays: passwordPolicy.expiryDays,
+        emailProvider: emailConfig.emailProvider,
+        resendApiKey: emailConfig.resendApiKey,
         smtpHost: emailConfig.smtpHost,
         smtpPort: emailConfig.smtpPort,
         smtpUser: emailConfig.smtpUser,
@@ -485,6 +495,15 @@ export default function SettingsTab({ setToast, teachers }) {
                     <div style={{ position: "absolute", top: 3, left: settings.maintenanceMode ? 22 : 3, width: 20, height: 20, borderRadius: "50%", background: "white", transition: "left 0.3s", boxShadow: "0 1px 4px rgba(0,0,0,0.2)" }} />
                   </div>
                 </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderTop: "1px solid #f3f4f6" }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#1c1917" }}>⏰ Automatic Reminders</div>
+                    <div style={{ fontSize: 11, color: "#9ca3af" }}>Send daily digest and deadline reminders via Email/SMS</div>
+                  </div>
+                  <div onClick={() => { setSettings((p) => ({ ...p, enableReminders: !p.enableReminders })); markDirty(); }} style={{ width: 46, height: 26, borderRadius: 13, background: settings.enableReminders ? "#10b981" : "#e5e7eb", position: "relative", cursor: "pointer", transition: "background 0.3s" }}>
+                    <div style={{ position: "absolute", top: 3, left: settings.enableReminders ? 22 : 3, width: 20, height: 20, borderRadius: "50%", background: "white", transition: "left 0.3s", boxShadow: "0 1px 4px rgba(0,0,0,0.2)" }} />
+                  </div>
+                </div>
               </SectionCard>
 
               <SectionCard title="📊 System Information">
@@ -509,27 +528,51 @@ export default function SettingsTab({ setToast, teachers }) {
 
           {/* Email Configuration */}
           {activeSection === "email" && (
-            <SectionCard title="📧 Email (SMTP) Configuration">
+            <SectionCard title="📧 Email Configuration">
               <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 16, lineHeight: 1.5 }}>
-                Configure SMTP settings to send real emails to registered teacher email addresses. Used for notifications, password resets, and system alerts.
+                Configure email settings to send real emails to registered teacher email addresses. Used for notifications, password resets, and system alerts.
               </div>
+              
+              <div style={{ marginBottom: 16 }}>
+                <label style={S.label}>Email provider</label>
+                <select
+                  style={{ ...S.input, background: "white" }}
+                  value={emailConfig.emailProvider}
+                  onChange={(e) => { setEmailConfig((p) => ({ ...p, emailProvider: e.target.value })); markDirty(); }}
+                >
+                  <option value="smtp">SMTP</option>
+                  <option value="resend">Resend</option>
+                </select>
+              </div>
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                <div>
-                  <label style={S.label}>SMTP Host</label>
-                  <input type="text" style={S.input} placeholder="smtp.gmail.com" value={emailConfig.smtpHost} onChange={(e) => { setEmailConfig((p) => ({ ...p, smtpHost: e.target.value })); markDirty(); }} />
-                </div>
-                <div>
-                  <label style={S.label}>SMTP Port</label>
-                  <input type="number" style={S.input} placeholder="587" value={emailConfig.smtpPort} onChange={(e) => { setEmailConfig((p) => ({ ...p, smtpPort: Number(e.target.value) })); markDirty(); }} />
-                </div>
-                <div>
-                  <label style={S.label}>SMTP Username</label>
-                  <input type="text" style={S.input} placeholder="your-email@gmail.com" value={emailConfig.smtpUser} onChange={(e) => { setEmailConfig((p) => ({ ...p, smtpUser: e.target.value })); markDirty(); }} />
-                </div>
-                <div>
-                  <label style={S.label}>SMTP Password / App Password</label>
-                  <input type="password" style={S.input} placeholder="••••••••" value={emailConfig.smtpPass} onChange={(e) => { setEmailConfig((p) => ({ ...p, smtpPass: e.target.value })); markDirty(); }} />
-                </div>
+                {emailConfig.emailProvider === "resend" ? (
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <label style={S.label}>Resend API Key</label>
+                    <input type="password" style={S.input} placeholder="re_••••••••"
+                      value={emailConfig.resendApiKey}
+                      onChange={(e) => { setEmailConfig((p) => ({ ...p, resendApiKey: e.target.value })); markDirty(); }} />
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label style={S.label}>SMTP Host</label>
+                      <input type="text" style={S.input} placeholder="smtp.gmail.com" value={emailConfig.smtpHost} onChange={(e) => { setEmailConfig((p) => ({ ...p, smtpHost: e.target.value })); markDirty(); }} />
+                    </div>
+                    <div>
+                      <label style={S.label}>SMTP Port</label>
+                      <input type="number" style={S.input} placeholder="587" value={emailConfig.smtpPort} onChange={(e) => { setEmailConfig((p) => ({ ...p, smtpPort: Number(e.target.value) })); markDirty(); }} />
+                    </div>
+                    <div>
+                      <label style={S.label}>SMTP Username</label>
+                      <input type="text" style={S.input} placeholder="your-email@gmail.com" value={emailConfig.smtpUser} onChange={(e) => { setEmailConfig((p) => ({ ...p, smtpUser: e.target.value })); markDirty(); }} />
+                    </div>
+                    <div>
+                      <label style={S.label}>SMTP Password / App Password</label>
+                      <input type="password" style={S.input} placeholder="••••••••" value={emailConfig.smtpPass} onChange={(e) => { setEmailConfig((p) => ({ ...p, smtpPass: e.target.value })); markDirty(); }} />
+                    </div>
+                  </>
+                )}
                 <div>
                   <label style={S.label}>From Email</label>
                   <input type="email" style={S.input} placeholder="noreply@portal.com" value={emailConfig.fromEmail} onChange={(e) => { setEmailConfig((p) => ({ ...p, fromEmail: e.target.value })); markDirty(); }} />
@@ -540,9 +583,15 @@ export default function SettingsTab({ setToast, teachers }) {
                 </div>
               </div>
 
-              <div style={{ background: "#fef3c7", padding: "12px 16px", borderRadius: 10, border: "1px solid #fbbf24", fontSize: 12, color: "#92400e", marginBottom: 20 }}>
-                💡 <strong>Gmail users:</strong> Use host <code>smtp.gmail.com</code>, port <code>587</code>, and generate an <strong>App Password</strong> (not your regular password) from Google Account → Security → 2-Step Verification → App passwords.
-              </div>
+              {emailConfig.emailProvider === "resend" ? (
+                <div style={{ background: "#eff6ff", padding: "12px 16px", borderRadius: 10, border: "1px solid #bfdbfe", fontSize: 12, color: "#1e3a8a", marginBottom: 20 }}>
+                  💡 <strong>Resend:</strong> The From Email domain must be verified in your Resend dashboard before emails will deliver successfully.
+                </div>
+              ) : (
+                <div style={{ background: "#fef3c7", padding: "12px 16px", borderRadius: 10, border: "1px solid #fbbf24", fontSize: 12, color: "#92400e", marginBottom: 20 }}>
+                  💡 <strong>Gmail users:</strong> Use host <code>smtp.gmail.com</code>, port <code>587</code>, and generate an <strong>App Password</strong> (not your regular password) from Google Account → Security → 2-Step Verification → App passwords.
+                </div>
+              )}
 
               {/* ─── Test Email ─── */}
               <div style={{ borderTop: "1px solid #f3f4f6", paddingTop: 18 }}>
