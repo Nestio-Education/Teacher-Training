@@ -1909,3 +1909,25 @@ export function reviewAttendanceRecord(recordId, action, data = {}) {
     body: JSON.stringify({ action, ...data }),
   });
 }
+
+// ── Admin: Assign Attendance Policy to Mentor ──
+export function assignMentorAttendancePolicy(mentorId, policy) {
+  return request(`/api/admin/mentors/${mentorId}/attendance-policy`, {
+    method: "PUT",
+    body: JSON.stringify(policy),
+  });
+}
+
+// ── Admin: Review Mentor Attendance Record ──
+export function reviewMentorAttendanceRecord(recordId, action, data = {}) {
+  return request(`/api/attendance/mentor-records/${recordId}/review`, {
+    method: "PATCH",
+    body: JSON.stringify({ action, ...data }),
+  });
+}
+
+// ── Admin: Get Mentor Attendance Records for Review ──
+export function getAdminMentorAttendance(params = {}) {
+  const searchParams = new URLSearchParams(params);
+  return request(`/api/admin/mentor-attendance?${searchParams.toString()}`);
+}

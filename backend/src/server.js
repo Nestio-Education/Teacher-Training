@@ -13,7 +13,15 @@ import { fileURLToPath } from "url";
 import multer from "multer";
 import mongoose from "mongoose";
 import ExcelJS from "exceljs";
-import sharp from "sharp";
+// Resilient sharp import — server must not crash if native binary is unavailable
+let sharp = null;
+try {
+  const sharpMod = await import("sharp");
+  sharp = sharpMod.default || sharpMod;
+} catch (err) {
+  console.warn("[server] sharp native module not available — thumbnail generation will be skipped:", err.message);
+  sharp = () => { throw new Error("sharp not available"); };
+}
 import { connectDb } from "./db.js";
 import { Quiz } from "./models/Quiz.js";
 import { hashPassword, requireAuth, requireRole, signToken, verifyPassword, validatePasswordAgainstPolicy, createPasswordResetToken, verifyPasswordResetToken } from "./auth.js";
@@ -5476,34 +5484,112 @@ app.get("/api/attendance/mentors", requireAuth, requireRole("admin", "mentor"), 
 
 app.post("/api/attendance/mentors", requireAuth, requireRole("mentor"), async (req, res, next) => {
   try {
-    const { status, source, latitude, longitude, note, attendanceDate } = req.body;
+    const { source, latitude, longitude, note, attendanceDate } = req.body;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const recordDate = attendanceDate ? new Date(attendanceDate) : today;
     recordDate.setHours(0, 0, 0, 0);
+
+    // Fetch mentor profile & policy
+    const mentorUser = await User.findById(req.user.id).populate("mentorProfile.center");
+    const policy = mentorUser?.mentorProfile?.attendancePolicy || {};
+    const center = mentorUser?.mentorProfile?.center;
+
+    const targetLat = policy.latitude != null ? policy.latitude : (center?.latitude ?? 18.6675);
+    const targetLon = policy.longitude != null ? policy.longitude : (center?.longitude ?? 73.8961);
+    const geofenceRadius = policy.geofenceRadius || 200;
+    const locationName = policy.assignedLocationName || center?.name || "Assigned Center";
+    const expectedTimeStart = policy.expectedTimeStart || "09:00 AM";
+    const expectedTimeEnd = policy.expectedTimeEnd || "05:00 PM";
+
+    const snapshot = req.body.snapshot || req.body.snapshotOut;
+    let imageFeatures = {};
+    let duplicateMatch = { isDuplicate: false };
+
+    if (snapshot) {
+      imageFeatures = await verifyImageFeatures(snapshot);
+
+      // Duplicate pHash check against past 60 days of mentor attendance
+      if (imageFeatures.pHash) {
+        const sixtyDaysAgo = new Date();
+        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+
+        const pastRecords = await MentorAttendanceRecord.find({
+          attendanceDate: { $gte: sixtyDaysAgo, $lt: recordDate },
+          pHash: { $exists: true, $ne: "" }
+        }).select("_id pHash attendanceDate").limit(100);
+
+        for (const pr of pastRecords) {
+          if (pr.pHash) {
+            const dist = calculateHammingDistance(imageFeatures.pHash, pr.pHash);
+            if (dist <= 5) {
+              duplicateMatch = { isDuplicate: true, matchedRecordId: pr._id, distance: dist };
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    const checkInTime = req.body.checkInTime || (req.body.checkedIn ? new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "");
+
+    const riskEval = evaluateAttendanceRisk({
+      actualLat: latitude,
+      actualLon: longitude,
+      targetLat,
+      targetLon,
+      geofenceRadius,
+      locationName,
+      checkInTime,
+      expectedTimeStart,
+      expectedTimeEnd,
+      imageFeatures,
+      duplicateMatch
+    });
+
+    const calculatedDist = riskEval.distanceMeters ?? req.body.distanceOffset;
+
+    // Status lifecycle: BACKEND ONLY — the risk engine determines status, never the frontend.
+    const determinedStatus = riskEval.verificationStatus === "NEEDS_REVIEW"
+      ? "pending_review"
+      : (riskEval.timeResult === "LATE" ? "late" : "present");
 
     const record = await MentorAttendanceRecord.findOneAndUpdate(
       { mentor: req.user.id, attendanceDate: recordDate },
       {
         mentor: req.user.id,
         attendanceDate: recordDate,
-        status: status || "present",
+        status: determinedStatus,
         source: source || "geo",
         latitude,
         longitude,
         note,
-        checkInTime: req.body.checkInTime,
+        markedBy: req.user.id,
+        checkInTime,
         checkOutTime: req.body.checkOutTime,
-        checkedIn: req.body.checkedIn,
+        checkedIn: req.body.checkedIn ?? true,
         checkedOut: req.body.checkedOut,
-        distanceOffset: req.body.distanceOffset,
+        distanceOffset: calculatedDist,
         distanceOffsetOut: req.body.distanceOffsetOut,
         snapshot: req.body.snapshot,
-        snapshotOut: req.body.snapshotOut
+        snapshotOut: req.body.snapshotOut,
+
+        // Verification & Risk Engine fields
+        verificationStatus: riskEval.verificationStatus,
+        riskScore: riskEval.riskScore,
+        reviewReason: riskEval.reviewReason,
+        pHash: riskEval.pHash,
+        blurScore: riskEval.blurScore,
+        brightnessScore: riskEval.brightnessScore,
+        qualityResult: riskEval.qualityResult,
+        locationResult: riskEval.locationResult,
+        timeResult: riskEval.timeResult,
+        exifStatus: riskEval.exifStatus,
+        exifTimestamp: imageFeatures.exif?.exifTimestamp || null
       },
       { upsert: true, new: true }
     );
-    res.status(201).json({ record });
+    res.status(201).json({ record, riskEvaluation: riskEval });
   } catch (error) {
     res.status(500).json({ message: error.message, stack: error.stack });
   }
@@ -5511,7 +5597,7 @@ app.post("/api/attendance/mentors", requireAuth, requireRole("mentor"), async (r
 
 app.post("/api/attendance/teachers", requireAuth, requireRole("teacher", "fellow"), async (req, res, next) => {
   try {
-    const { status, source, latitude, longitude, note, attendanceDate } = req.body;
+    const { source, latitude, longitude, note, attendanceDate } = req.body;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const recordDate = attendanceDate ? new Date(attendanceDate) : today;
@@ -5576,10 +5662,11 @@ app.post("/api/attendance/teachers", requireAuth, requireRole("teacher", "fellow
 
     const calculatedDist = riskEval.distanceMeters ?? req.body.distanceOffset;
 
-    // Status lifecycle: If review needed, set 'pending_review' (do not auto-mark present). If passed, set 'present' or 'late'.
-    const determinedStatus = status || (riskEval.verificationStatus === "NEEDS_REVIEW"
+    // Status lifecycle: BACKEND ONLY — the risk engine determines status, never the frontend.
+    // If review is needed → 'pending_review'. If late → 'late'. Otherwise → 'present'.
+    const determinedStatus = riskEval.verificationStatus === "NEEDS_REVIEW"
       ? "pending_review"
-      : (riskEval.timeResult === "LATE" ? "late" : "present"));
+      : (riskEval.timeResult === "LATE" ? "late" : "present");
 
     const record = await TeacherAttendanceRecord.findOneAndUpdate(
       { teacher: req.user.id, attendanceDate: recordDate },
@@ -5660,6 +5747,126 @@ app.patch("/api/attendance/records/:id/review", requireAuth, requireRole("admin"
     if (!record) return res.status(404).json({ message: "Attendance record not found." });
 
     res.json({ success: true, message: `Record marked as ${statusUpdate} (${presenceStatus})`, record });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── Mentor Attendance Review: Approve, Reject, Follow-Up ──
+app.patch("/api/attendance/mentor-records/:id/review", requireAuth, requireRole("admin"), async (req, res, next) => {
+  try {
+    const { action, rejectionReason, followUpNote } = req.body;
+
+    let statusUpdate = "APPROVED";
+    let presenceStatus = "present";
+    if (action === "reject") {
+      statusUpdate = "REJECTED";
+      presenceStatus = "absent";
+    } else if (action === "follow_up") {
+      statusUpdate = "FOLLOW_UP";
+      presenceStatus = "pending_review";
+    } else {
+      statusUpdate = "APPROVED";
+      presenceStatus = "present";
+    }
+
+    const updateFields = {
+      verificationStatus: statusUpdate,
+      status: presenceStatus,
+      reviewedBy: req.user.id,
+      reviewedAt: new Date(),
+    };
+    if (rejectionReason !== undefined) updateFields.rejectionReason = rejectionReason;
+    if (followUpNote !== undefined) updateFields.followUpNote = followUpNote;
+
+    const record = await MentorAttendanceRecord.findByIdAndUpdate(
+      req.params.id,
+      { $set: updateFields },
+      { new: true }
+    ).populate("mentor", "name email phone mentorProfile")
+     .populate("reviewedBy", "name role");
+
+    if (!record) return res.status(404).json({ message: "Mentor attendance record not found." });
+
+    res.json({ success: true, message: `Mentor record marked as ${statusUpdate} (${presenceStatus})`, record });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── Admin: Assign Attendance Policy to Mentor ──
+async function handleAssignMentorAttendancePolicy(req, res, next) {
+  try {
+    const { centerId, assignedLocationName, latitude, longitude, geofenceRadius, expectedTimeStart, expectedTimeEnd } = req.body;
+
+    let finalLocName = assignedLocationName;
+    let finalLat = latitude != null && latitude !== "" ? Number(latitude) : undefined;
+    let finalLon = longitude != null && longitude !== "" ? Number(longitude) : undefined;
+
+    if (centerId) {
+      const centerObj = await Center.findById(centerId);
+      if (centerObj) {
+        if (!finalLocName) finalLocName = centerObj.name;
+        if (finalLat === undefined && centerObj.latitude != null) finalLat = centerObj.latitude;
+        if (finalLon === undefined && centerObj.longitude != null) finalLon = centerObj.longitude;
+      }
+    }
+
+    const update = {
+      "mentorProfile.attendancePolicy.assignedBy": req.user.id,
+      "mentorProfile.attendancePolicy.assignedAt": new Date(),
+    };
+    if (centerId) update["mentorProfile.center"] = centerId;
+    if (finalLocName !== undefined) update["mentorProfile.attendancePolicy.assignedLocationName"] = finalLocName;
+    if (finalLat !== undefined) update["mentorProfile.attendancePolicy.latitude"] = finalLat;
+    if (finalLon !== undefined) update["mentorProfile.attendancePolicy.longitude"] = finalLon;
+    if (geofenceRadius !== undefined) update["mentorProfile.attendancePolicy.geofenceRadius"] = Number(geofenceRadius) || 200;
+    if (expectedTimeStart !== undefined) update["mentorProfile.attendancePolicy.expectedTimeStart"] = expectedTimeStart;
+    if (expectedTimeEnd !== undefined) update["mentorProfile.attendancePolicy.expectedTimeEnd"] = expectedTimeEnd;
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.params.id,
+      { $set: update },
+      { new: true }
+    ).select("-passwordHash")
+      .populate("mentorProfile.center", "name city latitude longitude");
+
+    if (!updatedUser) return res.status(404).json({ message: "Mentor not found." });
+
+    res.json({
+      success: true,
+      message: "Mentor attendance policy assigned successfully.",
+      mentor: updatedUser
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+app.put("/api/admin/mentors/:id/attendance-policy", requireAuth, requireRole("admin"), handleAssignMentorAttendancePolicy);
+
+// ── Admin: Get Mentor Attendance Records (for review panel) ──
+app.get("/api/admin/mentor-attendance", requireAuth, requireRole("admin"), async (req, res, next) => {
+  try {
+    const { month, year, status, verificationStatus } = req.query;
+    const filter = {};
+    
+    if (month && year) {
+      const startDate = new Date(Number(year), Number(month) - 1, 1);
+      const endDate = new Date(Number(year), Number(month), 0);
+      endDate.setHours(23, 59, 59, 999);
+      filter.attendanceDate = { $gte: startDate, $lte: endDate };
+    }
+    if (status) filter.status = status;
+    if (verificationStatus) filter.verificationStatus = verificationStatus;
+
+    const records = await MentorAttendanceRecord.find(filter)
+      .populate("mentor", "name email phone mentorProfile")
+      .populate("reviewedBy", "name role")
+      .sort({ attendanceDate: -1 })
+      .limit(200);
+
+    res.json({ records });
   } catch (error) {
     next(error);
   }

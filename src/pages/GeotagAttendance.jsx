@@ -25,12 +25,12 @@ export default function GeotagAttendance({ user }) {
 
   // Calendar navigation state
   const [viewMonth, setViewMonth] = useState(currentMonth);
-  const [viewYear, setViewYear]   = useState(currentYear);
+  const [viewYear, setViewYear] = useState(currentYear);
 
-  const viewMonthName  = new Date(viewYear, viewMonth, 1).toLocaleString("en-IN", { month: "long" });
-  const daysInMonth    = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const viewMonthName = new Date(viewYear, viewMonth, 1).toLocaleString("en-IN", { month: "long" });
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
   const firstDayOfMonth = new Date(viewYear, viewMonth, 1).getDay();
-  const startOffset    = (firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1);
+  const startOffset = (firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1);
 
   const isViewingCurrentMonth = viewMonth === currentMonth && viewYear === currentYear;
 
@@ -199,12 +199,14 @@ export default function GeotagAttendance({ user }) {
         updatedRecord = { checkedIn: recordToday.checkedIn || true, checkedOut: true, checkInTime: recordToday.checkInTime || "09:00 AM", checkOutTime: timeStr, coords: coordStr, snapshot: recordToday.snapshot || null, snapshotOut: snapshot, distanceOffset: recordToday.distanceOffset || 0, distanceOffsetOut: Math.round(dist) };
       }
       const saveApi = isMentor ? saveSelfMentorAttendance : saveTeacherAttendance;
-      await saveApi({ status: "present", source: "geo", latitude: lat, longitude: lng, checkInTime: updatedRecord.checkInTime, checkOutTime: updatedRecord.checkOutTime, checkedIn: updatedRecord.checkedIn, checkedOut: updatedRecord.checkedOut, distanceOffset: updatedRecord.distanceOffset, distanceOffsetOut: updatedRecord.distanceOffsetOut, snapshot: updatedRecord.snapshot, snapshotOut: updatedRecord.snapshotOut, note: JSON.stringify({ coords: coordStr }) });
+      const response = await saveApi({ source: "geo", latitude: lat, longitude: lng, checkInTime: updatedRecord.checkInTime, checkOutTime: updatedRecord.checkOutTime, checkedIn: updatedRecord.checkedIn, checkedOut: updatedRecord.checkedOut, distanceOffset: updatedRecord.distanceOffset, distanceOffsetOut: updatedRecord.distanceOffsetOut, snapshot: updatedRecord.snapshot, snapshotOut: updatedRecord.snapshotOut, note: JSON.stringify({ coords: coordStr }) });
+      const serverRecord = response?.record || {};
       const updatedMap = { ...attendanceMap };
-      updatedMap[todayKey] = { checkedIn: updatedRecord.checkedIn, checkedOut: updatedRecord.checkedOut, checkInTime: updatedRecord.checkInTime, checkOutTime: updatedRecord.checkOutTime };
+      updatedMap[todayKey] = { checkedIn: updatedRecord.checkedIn, checkedOut: updatedRecord.checkedOut, checkInTime: updatedRecord.checkInTime, checkOutTime: updatedRecord.checkOutTime, status: serverRecord.status || "present", verificationStatus: serverRecord.verificationStatus || "VALID", reviewReason: serverRecord.reviewReason || "", riskScore: serverRecord.riskScore || 0 };
       setAttendanceMap(updatedMap);
       setHistoryLogs(prev => [{ id: `GEO-${Date.now()}`, type, date: dateStr, time: timeStr, coords: coordStr, snapshot, distanceOffset: Math.round(dist) }, ...prev]);
-      setStatusReport({ success: true, type, message: `${type === "checkin" ? "Check-in" : "Check-out"} recorded at ${timeStr}. Distance from campus: ${Math.round(dist)}m.` });
+      const reviewInfo = serverRecord.verificationStatus === "NEEDS_REVIEW" ? ` ⚠️ Flagged for review: ${serverRecord.reviewReason || "Risk detected"}` : "";
+      setStatusReport({ success: true, type, message: `${type === "checkin" ? "Check-in" : "Check-out"} recorded at ${timeStr}. Distance from campus: ${Math.round(dist)}m.${reviewInfo}` });
     } catch (err) {
       console.error("Error saving attendance:", err);
       setErrorAlert("Failed to save attendance to backend database.");
@@ -243,13 +245,13 @@ export default function GeotagAttendance({ user }) {
 
   const getTileStyle = (status) => {
     switch (status) {
-      case "present":  return { background: "#f0fdf4", border: "1.5px solid #86efac", color: "#166534" };
-      case "review":   return { background: "#fffbeb", border: "1.5px solid #fde68a", color: "#92400e" };
-      case "extra":    return { background: "#f5f3ff", border: "1.5px solid #c4b5fd", color: "#5b21b6" };
-      case "absent":   return { background: "#fef2f2", border: "1.5px solid #fca5a5", color: "#991b1b" };
-      case "today":    return { background: "#eff6ff", border: "2px solid #60a5fa",   color: "#1d4ed8", fontWeight: "800" };
-      case "holiday":  return { background: "#fefce8", border: "1.5px solid #fde68a", color: "#92400e" };
-      default:         return { background: "#f8fafc", border: "1.5px solid #e2e8f0", color: "#94a3b8" };
+      case "present": return { background: "#f0fdf4", border: "1.5px solid #86efac", color: "#166534" };
+      case "review": return { background: "#fffbeb", border: "1.5px solid #fde68a", color: "#92400e" };
+      case "extra": return { background: "#f5f3ff", border: "1.5px solid #c4b5fd", color: "#5b21b6" };
+      case "absent": return { background: "#fef2f2", border: "1.5px solid #fca5a5", color: "#991b1b" };
+      case "today": return { background: "#eff6ff", border: "2px solid #60a5fa", color: "#1d4ed8", fontWeight: "800" };
+      case "holiday": return { background: "#fefce8", border: "1.5px solid #fde68a", color: "#92400e" };
+      default: return { background: "#f8fafc", border: "1.5px solid #e2e8f0", color: "#94a3b8" };
     }
   };
 
@@ -289,10 +291,10 @@ export default function GeotagAttendance({ user }) {
       {/* KPI Strip */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px,1fr))", gap: 10 }}>
         {[
-          { label: "Present Days",  val: presentDays,      color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0" },
-          { label: "Absent Days",   val: absentDays,       color: "#dc2626", bg: "#fef2f2", border: "#fecaca" },
-          { label: "Working Days",  val: totalWorkdays,    color: "#2563eb", bg: "#eff6ff", border: "#bfdbfe" },
-          { label: "Extra Days",    val: extraWorkingDays, color: "#7c3aed", bg: "#f5f3ff", border: "#ddd6fe" },
+          { label: "Present Days", val: presentDays, color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0" },
+          { label: "Absent Days", val: absentDays, color: "#dc2626", bg: "#fef2f2", border: "#fecaca" },
+          { label: "Working Days", val: totalWorkdays, color: "#2563eb", bg: "#eff6ff", border: "#bfdbfe" },
+          { label: "Extra Days", val: extraWorkingDays, color: "#7c3aed", bg: "#f5f3ff", border: "#ddd6fe" },
         ].map(({ label, val, color, bg, border }) => (
           <div key={label} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 12, padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ fontSize: 20, fontWeight: 900, color, minWidth: 24 }}>{val}</div>
@@ -321,32 +323,32 @@ export default function GeotagAttendance({ user }) {
 
               {/* Campus & Timing Policy info — teachers only */}
               {!isMentor && (
-              <div style={{ background: "#f8fafc", borderRadius: 10, padding: "12px", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 18 }}>🏫</span>
-                    <div>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.4px" }}>Assigned Location</div>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b" }}>
-                        {user?.teacherProfile?.attendancePolicy?.assignedLocationName || centerName}
+                <div style={{ background: "#f8fafc", borderRadius: 10, padding: "12px", border: "1px solid #e2e8f0", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 18 }}>🏫</span>
+                      <div>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.4px" }}>Assigned Location</div>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: "#1e293b" }}>
+                          {user?.teacherProfile?.attendancePolicy?.assignedLocationName || centerName}
+                        </div>
                       </div>
                     </div>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: "#2563eb", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 6, padding: "2px 6px" }}>
+                      ≤ {user?.teacherProfile?.attendancePolicy?.geofenceRadius || 200}m
+                    </span>
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 800, color: "#2563eb", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 6, padding: "2px 6px" }}>
-                    ≤ {user?.teacherProfile?.attendancePolicy?.geofenceRadius || 200}m
-                  </span>
-                </div>
 
-                {user?.teacherProfile?.attendancePolicy?.expectedTimeStart && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 6, borderTop: "1px dashed #e2e8f0" }}>
-                    <span style={{ fontSize: 16 }}>⏰</span>
-                    <div style={{ fontSize: 11, color: "#475569" }}>
-                      <span style={{ fontWeight: 700, color: "#0f172a" }}>Allowed Hours: </span>
-                      {user.teacherProfile.attendancePolicy.expectedTimeStart} – {user.teacherProfile.attendancePolicy.expectedTimeEnd || "05:00 PM"}
+                  {user?.teacherProfile?.attendancePolicy?.expectedTimeStart && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 6, borderTop: "1px dashed #e2e8f0" }}>
+                      <span style={{ fontSize: 16 }}>⏰</span>
+                      <div style={{ fontSize: 11, color: "#475569" }}>
+                        <span style={{ fontWeight: 700, color: "#0f172a" }}>Allowed Hours: </span>
+                        {user.teacherProfile.attendancePolicy.expectedTimeStart} – {user.teacherProfile.attendancePolicy.expectedTimeEnd || "05:00 PM"}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
               )}
 
               {/* Status Banner for Today */}
@@ -426,7 +428,7 @@ export default function GeotagAttendance({ user }) {
               {/* Today status */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 {[
-                  { label: "Check-In",  time: todayRecord.checkInTime,  done: todayRecord.checkedIn },
+                  { label: "Check-In", time: todayRecord.checkInTime, done: todayRecord.checkedIn },
                   { label: "Check-Out", time: todayRecord.checkOutTime, done: todayRecord.checkedOut },
                 ].map(({ label, time, done }) => (
                   <div key={label} style={{ background: done ? "#f0fdf4" : "#f8fafc", border: `1px solid ${done ? "#bbf7d0" : "#e2e8f0"}`, borderRadius: 8, padding: "9px 12px", textAlign: "center" }}>
@@ -565,7 +567,7 @@ export default function GeotagAttendance({ user }) {
 
             {/* Day headers */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, textAlign: "center", paddingBottom: 8, borderBottom: "1px solid #f1f5f9" }}>
-              {["M","T","W","T","F","S","S"].map((d, i) => (
+              {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
                 <span key={i} style={{ fontSize: 10, fontWeight: 700, color: i >= 5 ? "#a78bfa" : "#94a3b8" }}>{d}</span>
               ))}
             </div>
@@ -580,12 +582,12 @@ export default function GeotagAttendance({ user }) {
                 return (
                   <div key={day} style={{ ...tile, height: 46, borderRadius: 8, display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "5px", boxSizing: "border-box", outline: isToday ? "2px solid #60a5fa" : "none", outlineOffset: 1 }}>
                     <span style={{ fontSize: 11, fontWeight: isToday ? 800 : 600 }}>{day}</span>
-                    {status === "present"  && <span style={{ alignSelf: "flex-end", fontSize: 7, background: "#16a34a", color: "white", padding: "1px 3px", borderRadius: 2, fontWeight: 800 }}>✓</span>}
-                    {status === "review"   && <span style={{ alignSelf: "flex-end", fontSize: 7, background: "#d97706", color: "white", padding: "1px 3px", borderRadius: 2, fontWeight: 800 }}>⏳</span>}
-                    {status === "extra"    && <span style={{ alignSelf: "flex-end", fontSize: 7, background: "#7c3aed", color: "white", padding: "1px 3px", borderRadius: 2, fontWeight: 800 }}>✓</span>}
-                    {status === "absent"   && <span style={{ alignSelf: "flex-end", fontSize: 7, background: "#dc2626", color: "white", padding: "1px 3px", borderRadius: 2, fontWeight: 800 }}>✗</span>}
-                    {status === "today"    && <span style={{ alignSelf: "flex-end", fontSize: 6, background: "#3b82f6", color: "white", padding: "1px 3px", borderRadius: 2, fontWeight: 800 }}>NOW</span>}
-                    {status === "holiday"  && <span style={{ alignSelf: "flex-end", fontSize: 7, background: "#d1d5db", color: "white", padding: "1px 3px", borderRadius: 2 }}>—</span>}
+                    {status === "present" && <span style={{ alignSelf: "flex-end", fontSize: 7, background: "#16a34a", color: "white", padding: "1px 3px", borderRadius: 2, fontWeight: 800 }}>✓</span>}
+                    {status === "review" && <span style={{ alignSelf: "flex-end", fontSize: 7, background: "#d97706", color: "white", padding: "1px 3px", borderRadius: 2, fontWeight: 800 }}>⏳</span>}
+                    {status === "extra" && <span style={{ alignSelf: "flex-end", fontSize: 7, background: "#7c3aed", color: "white", padding: "1px 3px", borderRadius: 2, fontWeight: 800 }}>✓</span>}
+                    {status === "absent" && <span style={{ alignSelf: "flex-end", fontSize: 7, background: "#dc2626", color: "white", padding: "1px 3px", borderRadius: 2, fontWeight: 800 }}>✗</span>}
+                    {status === "today" && <span style={{ alignSelf: "flex-end", fontSize: 6, background: "#3b82f6", color: "white", padding: "1px 3px", borderRadius: 2, fontWeight: 800 }}>NOW</span>}
+                    {status === "holiday" && <span style={{ alignSelf: "flex-end", fontSize: 7, background: "#d1d5db", color: "white", padding: "1px 3px", borderRadius: 2 }}>—</span>}
                   </div>
                 );
               })}
@@ -594,8 +596,8 @@ export default function GeotagAttendance({ user }) {
             {/* Monthly summary */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
               {[
-                { label: "Present",   value: presentDays,   color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0" },
-                { label: "Absent",    value: absentDays,    color: "#dc2626", bg: "#fef2f2", border: "#fecaca" },
+                { label: "Present", value: presentDays, color: "#16a34a", bg: "#f0fdf4", border: "#bbf7d0" },
+                { label: "Absent", value: absentDays, color: "#dc2626", bg: "#fef2f2", border: "#fecaca" },
                 { label: "Work Days", value: totalWorkdays, color: "#2563eb", bg: "#eff6ff", border: "#bfdbfe" },
               ].map(({ label, value, color, bg, border }) => (
                 <div key={label} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
