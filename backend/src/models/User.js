@@ -96,7 +96,18 @@ const userSchema = new mongoose.Schema(
           date: { type: Date, default: Date.now },
           status: { type: String, default: "Completed" }
         }
-      ]
+      ],
+      // Admin-assigned attendance policy (timeslot + location) for mentors
+      attendancePolicy: {
+        assignedLocationName: { type: String, default: "" },
+        latitude: { type: Number, default: null },
+        longitude: { type: Number, default: null },
+        geofenceRadius: { type: Number, default: 200 }, // meters
+        expectedTimeStart: { type: String, default: "" }, // e.g. "09:00"
+        expectedTimeEnd: { type: String, default: "" },   // e.g. "17:00"
+        assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        assignedAt: { type: Date }
+      },
     },
   },
   { timestamps: true }

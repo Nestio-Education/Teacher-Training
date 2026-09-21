@@ -1,7 +1,7 @@
 import { t } from "../services/i18n";
 import { useEffect, useMemo, useState } from "react";
 import { StatCard, SectionCard, Modal } from "../components/Shared";
-import { getTeacherAttendance, sendAdminNotification, getMentorAttendance, getMentorFellowsAttendance, getMentorFellows, getAdminTeachers, reviewAttendanceRecord, API_BASE_URL } from "../services/api";
+import { getTeacherAttendance, sendAdminNotification, getMentorAttendance, getMentorFellowsAttendance, getMentorFellows, getAdminTeachers, reviewAttendanceRecord, reviewMentorAttendanceRecord, getAdminMentorAttendance, API_BASE_URL } from "../services/api";
 
 const STATUS_COLORS = {
   present: { bg: "#10b981", light: "#d1fae5", text: "#065f46" },
@@ -87,7 +87,7 @@ export default function AttendanceTab({ teachers: initialTeachers = [], role = "
       if (role === "mentor") {
         return getMentorFellowsAttendance(dateFilter ? { date: dateFilter } : {});
       } else if (activeRole === "Mentor") {
-        return getMentorAttendance(dateFilter ? { date: dateFilter } : {});
+        return getAdminMentorAttendance(dateFilter ? { date: dateFilter } : {});
       } else {
         return getTeacherAttendance(dateFilter ? { date: dateFilter } : {});
       }
@@ -133,9 +133,9 @@ export default function AttendanceTab({ teachers: initialTeachers = [], role = "
   const filteredRecords = useMemo(() => {
     const query = search.trim().toLowerCase();
     return records.filter((record) => {
-      const teacherName = String(record.teacher?.name || "").toLowerCase();
-      const teacherEmail = String(record.teacher?.email || "").toLowerCase();
-      const matchesSearch = !query || teacherName.includes(query) || teacherEmail.includes(query);
+      const personName = String(record.teacher?.name || record.mentor?.name || "").toLowerCase();
+      const personEmail = String(record.teacher?.email || record.mentor?.email || "").toLowerCase();
+      const matchesSearch = !query || personName.includes(query) || personEmail.includes(query);
 
       let matchesStatus = true;
       if (statusFilter === "needs_review") {
@@ -168,7 +168,7 @@ export default function AttendanceTab({ teachers: initialTeachers = [], role = "
       if (role === "mentor") {
         return getMentorFellowsAttendance(dateFilter ? { date: dateFilter } : {});
       } else if (activeRole === "Mentor") {
-        return getMentorAttendance(dateFilter ? { date: dateFilter } : {});
+        return getAdminMentorAttendance(dateFilter ? { date: dateFilter } : {});
       } else {
         return getTeacherAttendance(dateFilter ? { date: dateFilter } : {});
       }
@@ -182,7 +182,8 @@ export default function AttendanceTab({ teachers: initialTeachers = [], role = "
   const handleReviewAction = async (recordId, action, extra = {}) => {
     setActionLoading(true);
     try {
-      await reviewAttendanceRecord(recordId, action, extra);
+      const reviewFn = activeRole === "Mentor" ? reviewMentorAttendanceRecord : reviewAttendanceRecord;
+      await reviewFn(recordId, action, extra);
       setActionMsg({ text: `Record successfully marked as ${action.toUpperCase()}!`, type: "success" });
       setTimeout(() => setActionMsg({ text: "", type: "" }), 3000);
       setRejectingRecord(null);
@@ -201,7 +202,7 @@ export default function AttendanceTab({ teachers: initialTeachers = [], role = "
     return teachers
       .filter((t) => t.status === "approved")
       .map((teacher) => {
-        const teacherRecords = records.filter((r) => String(r.teacher?._id || r.teacher) === String(teacher._id));
+        const teacherRecords = records.filter((r) => String(r.teacher?._id || r.mentor?._id || r.teacher || r.mentor) === String(teacher._id));
         const presentCount = teacherRecords.filter((r) => ["present", "late"].includes(r.status)).length;
         const pct = teacherRecords.length ? Math.round((presentCount / teacherRecords.length) * 100) : 0;
         return { teacher, pct, count: teacherRecords.length, absentCount: teacherRecords.filter(r => r.status === "absent").length };
@@ -216,7 +217,7 @@ export default function AttendanceTab({ teachers: initialTeachers = [], role = "
       if (item.pct < 50) return true; // Less than 50% attendance
       // Check for 3+ consecutive absences
       const teacherRecords = records
-        .filter(r => String(r.teacher?._id || r.teacher) === String(item.teacher._id))
+        .filter(r => String(r.teacher?._id || r.mentor?._id || r.teacher || r.mentor) === String(item.teacher._id))
         .sort((a, b) => new Date(b.attendanceDate) - new Date(a.attendanceDate));
       let consecutive = 0;
       for (const r of teacherRecords.slice(0, 5)) {
@@ -469,13 +470,13 @@ export default function AttendanceTab({ teachers: initialTeachers = [], role = "
                           display: "flex", alignItems: "center", justifyContent: "center",
                           fontSize: 14, fontWeight: 800, color: "white", flexShrink: 0,
                         }}>
-                          {(record.teacher?.name || "T")[0]?.toUpperCase()}
+                          {(record.teacher?.name || record.mentor?.name || "T")[0]?.toUpperCase()}
                         </div>
                       )}
 
                       <div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontSize: 14, fontWeight: 800, color: "#0f172a" }}>{record.teacher?.name || "Unknown Teacher"}</span>
+                          <span style={{ fontSize: 14, fontWeight: 800, color: "#0f172a" }}>{record.teacher?.name || record.mentor?.name || "Unknown"}</span>
                           {isNeedsReview && (
                             <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 6, background: "#fee2e2", color: "#991b1b", fontWeight: 800, border: "1px solid #fca5a5" }}>
                               🚨 NEEDS REVIEW
