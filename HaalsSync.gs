@@ -106,25 +106,40 @@ function backfillAllRows() {
     };
     
     var batchStart = new Date().getTime();
-    try {
-      var response = UrlFetchApp.fetch(HAALS_BACKEND_URL, options);
-      var code = response.getResponseCode();
-      var responseText = response.getContentText();
-      var batchDuration = ((new Date().getTime() - batchStart) / 1000).toFixed(1);
-      
-      if (code === 200) {
-        successCount += batch.length;
-        Logger.log("✓ Batch " + batchIndex + " OK (took " + batchDuration + "s): " + responseText);
-      } else {
-        failedCount += batch.length;
-        Logger.log("✗ Batch " + batchIndex + " Failed (HTTP " + code + " in " + batchDuration + "s): " + responseText);
+    var success = false;
+    var maxRetries = 2;
+    
+    for (var attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        var response = UrlFetchApp.fetch(HAALS_BACKEND_URL, options);
+        var code = response.getResponseCode();
+        var batchDuration = ((new Date().getTime() - batchStart) / 1000).toFixed(1);
+        
+        if (code === 200) {
+          successCount += batch.length;
+          Logger.log("✓ Batch " + batchIndex + " OK (" + batch.length + " rows in " + batchDuration + "s)");
+          success = true;
+          break;
+        } else {
+          var responseText = response.getContentText();
+          Logger.log("✗ Batch " + batchIndex + " Failed (HTTP " + code + " in " + batchDuration + "s): " + responseText);
+          break;
+        }
+      } catch (fetchErr) {
+        if (attempt < maxRetries) {
+          Logger.log("⚠️ Batch " + batchIndex + " attempt " + attempt + " timed out / server waking up. Retrying in 2s...");
+          Utilities.sleep(2000);
+        } else {
+          Logger.log("✗ Batch " + batchIndex + " Network Exception after " + maxRetries + " attempts: " + fetchErr.toString());
+        }
       }
-    } catch (fetchErr) {
-      failedCount += batch.length;
-      Logger.log("✗ Batch " + batchIndex + " Network Exception: " + fetchErr.toString());
     }
     
-    Utilities.sleep(100);
+    if (!success) {
+      failedCount += batch.length;
+    }
+    
+    Utilities.sleep(150);
   }
   
   var totalDuration = ((new Date().getTime() - startTime) / 1000).toFixed(1);
