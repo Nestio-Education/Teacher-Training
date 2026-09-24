@@ -58,7 +58,8 @@ export function evaluateAttendanceRisk({
   expectedTimeStart,
   expectedTimeEnd,
   imageFeatures = {},
-  duplicateMatch = {}
+  duplicateMatch = {},
+  faceComparison = {}
 }) {
   let riskScore = 0;
   const reasons = [];
@@ -143,16 +144,32 @@ export function evaluateAttendanceRisk({
     reasons.push("Duplicate Photo (Previously Used Photo)");
   }
 
+  // 4. Face Recognition Evaluation (Checked after Location, Time & Quality)
+  const faceResult = faceComparison.result || "N/A";
+  const faceScore = faceComparison.score != null ? faceComparison.score : null;
+
+  if (faceResult === "MISMATCH") {
+    riskScore += 30;
+    reasons.push(`Face Similarity Mismatch (${faceScore != null ? `${faceScore}% match` : "Below threshold"})`);
+  }
+
   // Cap risk score between 0 and 100
   riskScore = Math.min(100, Math.max(0, riskScore));
 
   // Determine Verification Status
-  const isNeedsReview = riskScore >= 25 || locationResult === "FAIL" || timeResult === "LATE" || duplicateMatch?.isDuplicate || qualityResult === "FAIL";
+  const isNeedsReview = 
+    riskScore >= 25 || 
+    locationResult === "FAIL" || 
+    timeResult === "LATE" || 
+    duplicateMatch?.isDuplicate || 
+    qualityResult === "FAIL" ||
+    faceResult === "MISMATCH";
+
   const verificationStatus = isNeedsReview ? "NEEDS_REVIEW" : "APPROVED";
 
   const reviewReason = reasons.length > 0
     ? reasons.join("; ")
-    : "All criteria passed (on-time, within geofence, clear photo).";
+    : "All criteria passed (on-time, within geofence, clear photo, face matched).";
 
   return {
     verificationStatus,
@@ -166,6 +183,9 @@ export function evaluateAttendanceRisk({
     exifStatus,
     pHash: imageFeatures.pHash || "",
     blurScore: imageFeatures.blur?.score ?? null,
-    brightnessScore: imageFeatures.brightness?.score ?? null
+    brightnessScore: imageFeatures.brightness?.score ?? null,
+    faceMatchScore: faceScore,
+    faceVerificationResult: faceResult
   };
 }
+

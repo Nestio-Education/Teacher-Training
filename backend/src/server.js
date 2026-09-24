@@ -139,7 +139,7 @@ import { AssessmentResult } from "./models/AssessmentResult.js";
 import { sendBulkEmails, sendEmail, getTwilioConfig, getMessagingConfig } from "./email.js";
 // End: Dnyaneshwari Thorat
 import { initSocket, createAndEmitNotification } from "./socket.js";
-import { verifyImageFeatures, calculateHammingDistance } from "./services/imageVerificationService.js";
+import { verifyImageFeatures, calculateHammingDistance, compareFaceSimilarity } from "./services/imageVerificationService.js";
 import { evaluateAttendanceRisk, calculateHaversineDistance } from "./services/riskScoringService.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -5442,7 +5442,7 @@ app.get("/api/attendance/teachers", requireAuth, async (req, res, next) => {
       };
     }
     const records = await TeacherAttendanceRecord.find(filter)
-      .populate("teacher", "name email phone subject teacherProfile")
+      .populate("teacher", "name email phone subject photoUrl teacherProfile")
       .populate("reviewedBy", "name role")
       .sort({ attendanceDate: -1 });
     res.json({ records });
@@ -5467,7 +5467,7 @@ app.get("/api/attendance/mentors", requireAuth, requireRole("admin", "mentor"), 
       };
     }
     const records = await MentorAttendanceRecord.find(filter)
-      .populate("mentor", "name email")
+      .populate("mentor", "name email phone photoUrl mentorProfile")
       .sort({ attendanceDate: -1 });
 
     const mapped = records.map(r => {
@@ -5531,6 +5531,20 @@ app.post("/api/attendance/mentors", requireAuth, requireRole("mentor"), async (r
       }
     }
 
+    // ── Face Recognition Comparison (Selfie vs Reference Photo) ──
+    const referencePhoto = mentorUser?.mentorProfile?.profilePhoto || mentorUser?.photoUrl || "";
+    let faceComparison = { result: "N/A", score: null };
+
+    if (snapshot && referencePhoto) {
+      faceComparison = await compareFaceSimilarity(snapshot, referencePhoto, 45);
+    } else if (snapshot && !referencePhoto) {
+      faceComparison = { result: "NO_BASELINE", score: null, reason: "No baseline profile photo on file" };
+      // Auto-enroll baseline reference photo if none exists
+      if (imageFeatures && !imageFeatures.isInvalidPhoto) {
+        await User.findByIdAndUpdate(req.user.id, { "mentorProfile.profilePhoto": snapshot, photoUrl: snapshot });
+      }
+    }
+
     const checkInTime = req.body.checkInTime || (req.body.checkedIn ? new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "");
 
     const riskEval = evaluateAttendanceRisk({
@@ -5544,7 +5558,8 @@ app.post("/api/attendance/mentors", requireAuth, requireRole("mentor"), async (r
       expectedTimeStart,
       expectedTimeEnd,
       imageFeatures,
-      duplicateMatch
+      duplicateMatch,
+      faceComparison
     });
 
     const calculatedDist = riskEval.distanceMeters ?? req.body.distanceOffset;
@@ -5585,7 +5600,12 @@ app.post("/api/attendance/mentors", requireAuth, requireRole("mentor"), async (r
         locationResult: riskEval.locationResult,
         timeResult: riskEval.timeResult,
         exifStatus: riskEval.exifStatus,
-        exifTimestamp: imageFeatures.exif?.exifTimestamp || null
+        exifTimestamp: imageFeatures.exif?.exifTimestamp || null,
+
+        // Face Recognition fields
+        faceMatchScore: riskEval.faceMatchScore,
+        faceVerificationResult: riskEval.faceVerificationResult,
+        referencePhoto: referencePhoto || snapshot
       },
       { upsert: true, new: true }
     );
@@ -5644,6 +5664,20 @@ app.post("/api/attendance/teachers", requireAuth, requireRole("teacher", "fellow
       }
     }
 
+    // ── Face Recognition Comparison (Selfie vs Reference Photo) ──
+    const referencePhoto = teacherUser?.photoUrl || teacherUser?.teacherProfile?.photoUrl || "";
+    let faceComparison = { result: "N/A", score: null };
+
+    if (snapshot && referencePhoto) {
+      faceComparison = await compareFaceSimilarity(snapshot, referencePhoto, 45);
+    } else if (snapshot && !referencePhoto) {
+      faceComparison = { result: "NO_BASELINE", score: null, reason: "No baseline profile photo on file" };
+      // Auto-enroll baseline reference photo if none exists
+      if (imageFeatures && !imageFeatures.isInvalidPhoto) {
+        await User.findByIdAndUpdate(req.user.id, { photoUrl: snapshot });
+      }
+    }
+
     const checkInTime = req.body.checkInTime || (req.body.checkedIn ? new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "");
 
     const riskEval = evaluateAttendanceRisk({
@@ -5657,7 +5691,8 @@ app.post("/api/attendance/teachers", requireAuth, requireRole("teacher", "fellow
       expectedTimeStart,
       expectedTimeEnd,
       imageFeatures,
-      duplicateMatch
+      duplicateMatch,
+      faceComparison
     });
 
     const calculatedDist = riskEval.distanceMeters ?? req.body.distanceOffset;
@@ -5699,7 +5734,12 @@ app.post("/api/attendance/teachers", requireAuth, requireRole("teacher", "fellow
         locationResult: riskEval.locationResult,
         timeResult: riskEval.timeResult,
         exifStatus: riskEval.exifStatus,
-        exifTimestamp: imageFeatures.exif?.exifTimestamp || null
+        exifTimestamp: imageFeatures.exif?.exifTimestamp || null,
+
+        // Face Recognition fields
+        faceMatchScore: riskEval.faceMatchScore,
+        faceVerificationResult: riskEval.faceVerificationResult,
+        referencePhoto: referencePhoto || snapshot
       },
       { upsert: true, new: true }
     );

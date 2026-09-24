@@ -55,6 +55,11 @@ const teacherAttendanceRecordSchema = new mongoose.Schema(
     timeResult: { type: String, enum: ["PASS", "LATE", "FAIL", "N/A"], default: "N/A" },
     exifStatus: { type: String, enum: ["VALID", "MISSING", "TAMPERED", "N/A"], default: "N/A" },
     exifTimestamp: { type: Date, default: null },
+
+    // Face Recognition Verification Fields
+    faceMatchScore: { type: Number, default: null }, // 0 to 100
+    faceVerificationResult: { type: String, enum: ["PASS", "MISMATCH", "NO_BASELINE", "N/A"], default: "N/A" },
+    referencePhoto: { type: String, default: "" },
     
     // Staff Review Workflow
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
@@ -104,6 +109,11 @@ const mentorAttendanceRecordSchema = new mongoose.Schema(
     timeResult: { type: String, enum: ["PASS", "LATE", "FAIL", "N/A"], default: "N/A" },
     exifStatus: { type: String, enum: ["VALID", "MISSING", "TAMPERED", "N/A"], default: "N/A" },
     exifTimestamp: { type: Date, default: null },
+
+    // Face Recognition Verification Fields
+    faceMatchScore: { type: Number, default: null }, // 0 to 100
+    faceVerificationResult: { type: String, enum: ["PASS", "MISMATCH", "NO_BASELINE", "N/A"], default: "N/A" },
+    referencePhoto: { type: String, default: "" },
 
     // Staff Review Workflow
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },

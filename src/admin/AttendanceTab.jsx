@@ -29,6 +29,7 @@ const S = {
   input: { width: "100%", padding: "9px 12px 9px 34px", background: "white", border: "1.5px solid #e5e7eb", borderRadius: 10, fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box", color: "#111827" },
   tblBtn: { padding: "5px 10px", background: "white", color: "#475569", border: "1.5px solid #e5e7eb", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" },
   primaryBtn: { padding: "8px 16px", background: "#f59e0b", color: "white", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
+  label: { fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 4, display: "block" },
 };
 
 function exportCsv(filename, rows) {
@@ -381,11 +382,11 @@ export default function AttendanceTab({ teachers: initialTeachers = [], role = "
                 : t("Teachers with <50% attendance or 3+ consecutive absences need attention."))}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {flaggedTeachers.map(item => (
-              <div key={item.teacher._id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "white", borderRadius: 10, padding: "10px 14px", border: "1px solid #fecaca" }}>
+            {flaggedTeachers.map((item, idx) => (
+              <div key={item.teacher?._id || idx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "white", borderRadius: 10, padding: "10px 14px", border: "1px solid #fecaca" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#fee2e2", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: "#991b1b" }}>
-                    {item.teacher.name?.[0]?.toUpperCase() || "?"}
+                    {item.teacher?.name?.[0]?.toUpperCase() || "?"}
                   </div>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: "#1c1917" }}>{item.teacher.name}</div>
@@ -443,6 +444,7 @@ export default function AttendanceTab({ teachers: initialTeachers = [], role = "
               const isRejected = record.verificationStatus === "REJECTED";
               const isFollowUp = record.verificationStatus === "FOLLOW_UP";
               const snapshotSrc = record.snapshot || record.snapshotOut;
+              const profilePhotoSrc = record.referencePhoto || record.teacher?.photoUrl || record.mentor?.mentorProfile?.profilePhoto || record.mentor?.photoUrl || null;
 
               return (
                 <div key={record._id} style={{
@@ -453,30 +455,61 @@ export default function AttendanceTab({ teachers: initialTeachers = [], role = "
                 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      {/* Snapshot Thumbnail or Initials Avatar */}
-                      {snapshotSrc ? (
-                        <div
-                          onClick={() => setZoomPhoto(snapshotSrc)}
-                          style={{ width: 44, height: 44, borderRadius: 8, overflow: "hidden", cursor: "zoom-in", border: "1.5px solid #cbd5e1", flexShrink: 0, position: "relative" }}
-                          title="Click to zoom snapshot"
-                        >
-                          <img src={snapshotSrc} alt="Snapshot" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                          <span style={{ position: "absolute", bottom: 1, right: 1, fontSize: 8, background: "rgba(0,0,0,0.6)", color: "white", padding: "1px 2px", borderRadius: 2 }}>🔍</span>
-                        </div>
-                      ) : (
-                        <div style={{
-                          width: 40, height: 40, borderRadius: "50%",
-                          background: `linear-gradient(135deg, ${statusColors.bg}, ${statusColors.bg}cc)`,
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontSize: 14, fontWeight: 800, color: "white", flexShrink: 0,
-                        }}>
-                          {(record.teacher?.name || record.mentor?.name || "T")[0]?.toUpperCase()}
-                        </div>
-                      )}
+                      {/* Side-by-Side Thumbnails: Attendance Selfie & Registered Profile Photo */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                        {snapshotSrc ? (
+                          <div
+                            onClick={() => setZoomPhoto({ snapshot: snapshotSrc, profile: profilePhotoSrc, record })}
+                            style={{ width: 44, height: 44, borderRadius: 8, overflow: "hidden", cursor: "zoom-in", border: "1.5px solid #cbd5e1", position: "relative" }}
+                            title="Click to zoom selfie & compare with profile"
+                          >
+                            <img src={snapshotSrc} alt="Selfie" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            <span style={{ position: "absolute", bottom: 1, right: 1, fontSize: 8, background: "rgba(0,0,0,0.6)", color: "white", padding: "1px 2px", borderRadius: 2 }}>📷</span>
+                          </div>
+                        ) : (
+                          <div style={{
+                            width: 40, height: 40, borderRadius: "50%",
+                            background: `linear-gradient(135deg, ${statusColors.bg}, ${statusColors.bg}cc)`,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: 14, fontWeight: 800, color: "white",
+                          }}>
+                            {(record.teacher?.name || record.mentor?.name || "T")[0]?.toUpperCase()}
+                          </div>
+                        )}
+
+                        {profilePhotoSrc && (
+                          <div
+                            onClick={() => setZoomPhoto({ snapshot: snapshotSrc, profile: profilePhotoSrc, record })}
+                            style={{ width: 44, height: 44, borderRadius: 8, overflow: "hidden", cursor: "zoom-in", border: "1.5px solid #93c5fd", position: "relative" }}
+                            title="Registered Profile Photo"
+                          >
+                            <img src={profilePhotoSrc} alt="Profile Baseline" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                            <span style={{ position: "absolute", bottom: 1, right: 1, fontSize: 8, background: "rgba(37,99,235,0.75)", color: "white", padding: "1px 2px", borderRadius: 2 }}>👤</span>
+                          </div>
+                        )}
+                      </div>
 
                       <div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
                           <span style={{ fontSize: 14, fontWeight: 800, color: "#0f172a" }}>{record.teacher?.name || record.mentor?.name || "Unknown"}</span>
+                          
+                          {/* Face Match Badge */}
+                          {record.faceMatchScore != null && (
+                            <span style={{
+                              fontSize: 10, padding: "2px 7px", borderRadius: 6, fontWeight: 800,
+                              background: record.faceMatchScore >= 45 ? "#dcfce7" : "#fee2e2",
+                              color: record.faceMatchScore >= 45 ? "#166534" : "#991b1b",
+                              border: `1px solid ${record.faceMatchScore >= 45 ? "#86efac" : "#fca5a5"}`
+                            }}>
+                              👤 Face Match: {record.faceMatchScore}% {record.faceMatchScore >= 45 ? "✓" : "⚠️"}
+                            </span>
+                          )}
+                          {record.faceVerificationResult === "NO_BASELINE" && (
+                            <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 6, background: "#eff6ff", color: "#1d4ed8", fontWeight: 700, border: "1px solid #bfdbfe" }}>
+                              👤 Baseline Enrolled
+                            </span>
+                          )}
+
                           {isNeedsReview && (
                             <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 6, background: "#fee2e2", color: "#991b1b", fontWeight: 800, border: "1px solid #fca5a5" }}>
                               🚨 NEEDS REVIEW
@@ -594,9 +627,9 @@ export default function AttendanceTab({ teachers: initialTeachers = [], role = "
           <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 400, overflowY: "auto" }}>
             {attendanceByTeacher.map((item, idx) => {
               const badgeColor = item.pct >= 85 ? "#10b981" : item.pct >= 60 ? "#f59e0b" : "#ef4444";
-              const isFlagged = flaggedTeachers.some(f => f.teacher._id === item.teacher._id);
+              const isFlagged = flaggedTeachers.some(f => String(f.teacher?._id) === String(item.teacher?._id));
               return (
-                <div key={item.teacher._id} style={{
+                <div key={item.teacher?._id || idx} style={{
                   display: "flex", alignItems: "center", gap: 12,
                   padding: "10px 12px", borderRadius: 10,
                   background: isFlagged ? "#fef2f2" : "#f9fafb",
@@ -708,18 +741,96 @@ export default function AttendanceTab({ teachers: initialTeachers = [], role = "
         </Modal>
       )}
 
-      {/* Snapshot Zoom Lightbox */}
+      {/* Side-by-Side Face Comparison & Snapshot Zoom Modal */}
       {zoomPhoto && (
         <div
           onClick={() => setZoomPhoto(null)}
           style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 1200,
-            display: "flex", alignItems: "center", justifyContent: "center", cursor: "zoom-out", padding: 20
+            position: "fixed", inset: 0, background: "rgba(15,23,42,0.88)", zIndex: 1200,
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 20
           }}
         >
-          <div style={{ position: "relative", maxWidth: "90vw", maxHeight: "90vh" }}>
-            <img src={zoomPhoto} alt="Snapshot Enlarged" style={{ maxWidth: "100%", maxHeight: "85vh", borderRadius: 12, border: "2px solid #f59e0b" }} />
-            <button onClick={() => setZoomPhoto(null)} style={{ position: "absolute", top: -14, right: -14, width: 32, height: 32, borderRadius: "50%", background: "#ef4444", color: "white", border: "none", fontSize: 14, fontWeight: 900, cursor: "pointer" }}>✕</button>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "relative", maxWidth: "800px", width: "100%", background: "#1e293b",
+              borderRadius: 16, border: "2px solid #3b82f6", padding: 20, color: "white",
+              display: "flex", flexDirection: "column", gap: 16, boxShadow: "0 10px 30px rgba(0,0,0,0.5)"
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #334155", paddingBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 16, fontWeight: 800 }}>
+                <span>🔍</span> Facial Recognition & Attendance Verification
+              </div>
+              <button
+                onClick={() => setZoomPhoto(null)}
+                style={{ width: 30, height: 30, borderRadius: "50%", background: "#334155", color: "white", border: "none", fontSize: 14, fontWeight: 900, cursor: "pointer" }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Photo Comparison Container */}
+            <div style={{ display: "grid", gridTemplateColumns: zoomPhoto.profile ? "1fr 1fr" : "1fr", gap: 16 }}>
+              {/* Today's Selfie */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#93c5fd", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  📷 Today's Attendance Selfie
+                </div>
+                <div style={{ width: "100%", height: 260, borderRadius: 10, overflow: "hidden", border: "2px solid #60a5fa", background: "#0f172a" }}>
+                  <img
+                    src={typeof zoomPhoto === "string" ? zoomPhoto : zoomPhoto.snapshot}
+                    alt="Selfie"
+                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                  />
+                </div>
+              </div>
+
+              {/* Registered Profile Photo */}
+              {zoomPhoto.profile && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#86efac", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    👤 Registered Profile Baseline
+                  </div>
+                  <div style={{ width: "100%", height: 260, borderRadius: 10, overflow: "hidden", border: "2px solid #4ade80", background: "#0f172a" }}>
+                    <img
+                      src={zoomPhoto.profile}
+                      alt="Profile Baseline"
+                      style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Verification Breakdown Card */}
+            {zoomPhoto.record && (
+              <div style={{ background: "#0f172a", borderRadius: 10, padding: "12px 16px", border: "1px solid #334155", display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 10, fontSize: 12 }}>
+                <div>
+                  <div style={{ color: "#94a3b8", fontSize: 10, fontWeight: 700 }}>TEACHER / MENTOR</div>
+                  <div style={{ fontWeight: 800, color: "#f8fafc", fontSize: 14 }}>{zoomPhoto.record.teacher?.name || zoomPhoto.record.mentor?.name || "Unknown"}</div>
+                </div>
+
+                <div>
+                  <div style={{ color: "#94a3b8", fontSize: 10, fontWeight: 700 }}>FACE SIMILARITY</div>
+                  <div style={{ fontWeight: 800, color: (zoomPhoto.record.faceMatchScore ?? 0) >= 45 ? "#4ade80" : "#f87171" }}>
+                    {zoomPhoto.record.faceMatchScore != null ? `${zoomPhoto.record.faceMatchScore}% Match (${(zoomPhoto.record.faceMatchScore >= 45) ? "PASS" : "MISMATCH"})` : (zoomPhoto.record.faceVerificationResult || "N/A")}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ color: "#94a3b8", fontSize: 10, fontWeight: 700 }}>DISTANCE OFFSET</div>
+                  <div style={{ fontWeight: 800, color: "#60a5fa" }}>{zoomPhoto.record.distanceOffset != null ? `${zoomPhoto.record.distanceOffset}m away` : "—"}</div>
+                </div>
+
+                <div>
+                  <div style={{ color: "#94a3b8", fontSize: 10, fontWeight: 700 }}>VERIFICATION STATUS</div>
+                  <div style={{ fontWeight: 800, color: zoomPhoto.record.verificationStatus === "APPROVED" ? "#4ade80" : (zoomPhoto.record.verificationStatus === "REJECTED" ? "#f87171" : "#fbbf24") }}>
+                    {zoomPhoto.record.verificationStatus || "VALID"}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

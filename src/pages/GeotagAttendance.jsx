@@ -148,6 +148,11 @@ export default function GeotagAttendance({ user }) {
     return canvasRef.current.toDataURL("image/jpeg", 0.85);
   };
 
+  const [previewState, setPreviewState] = useState(null);
+  const [refetchingGps, setRefetchingGps] = useState(false);
+  const [recapturingPhoto, setRecapturingPhoto] = useState(false);
+  const [previewFeedback, setPreviewFeedback] = useState("");
+
   const calcDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371e3;
     const p1 = (lat1 * Math.PI) / 180;
@@ -158,62 +163,240 @@ export default function GeotagAttendance({ user }) {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   };
 
-  const handlePunch = (type) => {
-    if (!cameraActive) { setErrorAlert("Please activate the camera before marking geotag attendance."); return; }
+  const getTargetCoords = () => {
+    const center = isMentor ? user?.mentorProfile?.center : user?.teacherProfile?.center;
+    const policy = isMentor ? (user?.mentorProfile?.attendancePolicy || {}) : (user?.teacherProfile?.attendancePolicy || {});
+    const targetLat = policy.latitude != null ? policy.latitude : ((center && center.latitude) ? center.latitude : CAMPUS_LAT);
+    const targetLng = policy.longitude != null ? policy.longitude : ((center && center.longitude) ? center.longitude : CAMPUS_LNG);
+    const locationName = policy.assignedLocationName || center?.name || "Assigned Center";
+    const geofenceRadius = Number(policy.geofenceRadius) || 200;
+    return { targetLat, targetLng, locationName, geofenceRadius };
+  };
+
+  // Step 1: Initiate Punch (Take snapshot & acquire GPS for user review)
+  const handleInitiatePunch = (type) => {
+    if (!cameraActive) { setErrorAlert("Please activate the camera first before marking attendance."); return; }
     if (type === "checkout" && !todayRecord.checkedIn) { setErrorAlert("You must check in before you can check out."); return; }
     if (type === "checkin" && todayRecord.checkedIn) { setErrorAlert("You have already checked in today."); return; }
     if (type === "checkout" && todayRecord.checkedOut) { setErrorAlert("You have already checked out today."); return; }
-    setLoading(true); setActionType(type); setStatusReport(null); setErrorAlert("");
-    if (!navigator.geolocation) { setLoading(false); setActionType(null); setErrorAlert("Geolocation is not available on this device/browser."); return; }
+    
+    setLoading(true);
+    setActionType(type);
+    setStatusReport(null);
+    setErrorAlert("");
+    setPreviewFeedback("");
+
+    if (!navigator.geolocation) {
+      setLoading(false);
+      setActionType(null);
+      setErrorAlert("Geolocation is not available on this device/browser.");
+      return;
+    }
+
     const tryPosition = (options, isFallback = false) => {
       navigator.geolocation.getCurrentPosition(
-        (pos) => processAttendance(type, pos.coords.latitude, pos.coords.longitude),
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const { targetLat, targetLng, locationName, geofenceRadius } = getTargetCoords();
+          const dist = calcDistance(lat, lng, targetLat, targetLng);
+          const snapshot = captureSnapshot();
+          const now = new Date();
+          const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+          const dateStr = now.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+          const coordStr = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+          
+          setCoords(coordStr);
+          setPreviewState({
+            type,
+            snapshot,
+            lat,
+            lng,
+            dist: Math.round(dist),
+            timeStr,
+            dateStr,
+            coordStr,
+            accuracy: Math.round(pos.coords.accuracy || 10),
+            locationName,
+            geofenceRadius
+          });
+          setLoading(false);
+          setActionType(null);
+        },
         (error) => {
-          if (!isFallback) tryPosition({ enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }, true);
-          else { setLoading(false); setActionType(null); setErrorAlert(error.message || "Location permission denied."); }
+          if (!isFallback) {
+            tryPosition({ enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }, true);
+          } else {
+            setLoading(false);
+            setActionType(null);
+            setErrorAlert(error.message || "Location permission denied. Please allow GPS access.");
+          }
         },
         options
       );
     };
+
     tryPosition({ enableHighAccuracy: true, timeout: 7000, maximumAge: 0 });
   };
 
-  const processAttendance = async (type, lat, lng) => {
+  // Option to retake snapshot if photo was blurry or bad lighting
+  const handleRecaptureSnapshot = () => {
+    setRecapturingPhoto(true);
+    const newSnapshot = captureSnapshot();
+    if (newSnapshot && previewState) {
+      setPreviewState(prev => ({ ...prev, snapshot: newSnapshot }));
+      setPreviewFeedback("📸 Selfie recaptured successfully!");
+      setTimeout(() => setPreviewFeedback(""), 3000);
+    }
+    setRecapturingPhoto(false);
+  };
+
+  // Option to re-fetch GPS coordinates if initial fix was imprecise
+  const handleRefetchLocationTime = () => {
+    if (!navigator.geolocation) return;
+    setRefetchingGps(true);
+    setPreviewFeedback("📍 Acquiring fresh high-precision GPS...");
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const { targetLat, targetLng } = getTargetCoords();
+        const dist = calcDistance(lat, lng, targetLat, targetLng);
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        const coordStr = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        
+        setCoords(coordStr);
+        setPreviewState(prev => prev ? ({
+          ...prev,
+          lat,
+          lng,
+          dist: Math.round(dist),
+          timeStr,
+          coordStr,
+          accuracy: Math.round(pos.coords.accuracy || 10)
+        }) : null);
+        setRefetchingGps(false);
+        setPreviewFeedback("✅ GPS Location & Time updated!");
+        setTimeout(() => setPreviewFeedback(""), 3000);
+      },
+      (err) => {
+        setRefetchingGps(false);
+        setPreviewFeedback(`⚠️ GPS refresh failed: ${err.message}`);
+        setTimeout(() => setPreviewFeedback(""), 3000);
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+    );
+  };
+
+  // Step 2: Final Confirm & Submit Attendance
+  const handleConfirmSubmit = async () => {
+    if (!previewState) return;
+    const { type, lat, lng, dist, snapshot, timeStr, dateStr, coordStr } = previewState;
+    setLoading(true);
+    setActionType(type);
+    setErrorAlert("");
+
     try {
-      const center = isMentor ? user?.mentorProfile?.center : user?.teacherProfile?.center;
-      const policy = user?.teacherProfile?.attendancePolicy || {};
-      const targetLat = (!isMentor && policy.latitude != null) ? policy.latitude : ((center && center.latitude) ? center.latitude : CAMPUS_LAT);
-      const targetLng = (!isMentor && policy.longitude != null) ? policy.longitude : ((center && center.longitude) ? center.longitude : CAMPUS_LNG);
-      const dist = calcDistance(lat, lng, targetLat, targetLng);
-      const snapshot = captureSnapshot();
-      const now = new Date();
-      const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-      const dateStr = now.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-      const coordStr = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-      setCoords(coordStr);
       const recordToday = attendanceMap[todayKey] || {};
       let updatedRecord = {};
       if (type === "checkin") {
-        updatedRecord = { checkedIn: true, checkedOut: false, checkInTime: timeStr, checkOutTime: "", coords: coordStr, snapshot, distanceOffset: Math.round(dist) };
+        updatedRecord = {
+          checkedIn: true,
+          checkedOut: false,
+          checkInTime: timeStr,
+          checkOutTime: "",
+          coords: coordStr,
+          snapshot,
+          distanceOffset: dist
+        };
       } else {
-        updatedRecord = { checkedIn: recordToday.checkedIn || true, checkedOut: true, checkInTime: recordToday.checkInTime || "09:00 AM", checkOutTime: timeStr, coords: coordStr, snapshot: recordToday.snapshot || null, snapshotOut: snapshot, distanceOffset: recordToday.distanceOffset || 0, distanceOffsetOut: Math.round(dist) };
+        updatedRecord = {
+          checkedIn: recordToday.checkedIn || true,
+          checkedOut: true,
+          checkInTime: recordToday.checkInTime || "09:00 AM",
+          checkOutTime: timeStr,
+          coords: coordStr,
+          snapshot: recordToday.snapshot || null,
+          snapshotOut: snapshot,
+          distanceOffset: recordToday.distanceOffset || 0,
+          distanceOffsetOut: dist
+        };
       }
+
       const saveApi = isMentor ? saveSelfMentorAttendance : saveTeacherAttendance;
-      const response = await saveApi({ source: "geo", latitude: lat, longitude: lng, checkInTime: updatedRecord.checkInTime, checkOutTime: updatedRecord.checkOutTime, checkedIn: updatedRecord.checkedIn, checkedOut: updatedRecord.checkedOut, distanceOffset: updatedRecord.distanceOffset, distanceOffsetOut: updatedRecord.distanceOffsetOut, snapshot: updatedRecord.snapshot, snapshotOut: updatedRecord.snapshotOut, note: JSON.stringify({ coords: coordStr }) });
+      const response = await saveApi({
+        source: "geo",
+        latitude: lat,
+        longitude: lng,
+        checkInTime: updatedRecord.checkInTime,
+        checkOutTime: updatedRecord.checkOutTime,
+        checkedIn: updatedRecord.checkedIn,
+        checkedOut: updatedRecord.checkedOut,
+        distanceOffset: updatedRecord.distanceOffset,
+        distanceOffsetOut: updatedRecord.distanceOffsetOut,
+        snapshot: updatedRecord.snapshot,
+        snapshotOut: updatedRecord.snapshotOut,
+        note: JSON.stringify({ coords: coordStr })
+      });
+
       const serverRecord = response?.record || {};
+      const riskEvaluation = response?.riskEvaluation || {};
       const updatedMap = { ...attendanceMap };
-      updatedMap[todayKey] = { checkedIn: updatedRecord.checkedIn, checkedOut: updatedRecord.checkedOut, checkInTime: updatedRecord.checkInTime, checkOutTime: updatedRecord.checkOutTime, status: serverRecord.status || "present", verificationStatus: serverRecord.verificationStatus || "VALID", reviewReason: serverRecord.reviewReason || "", riskScore: serverRecord.riskScore || 0 };
+
+      updatedMap[todayKey] = {
+        checkedIn: updatedRecord.checkedIn,
+        checkedOut: updatedRecord.checkedOut,
+        checkInTime: updatedRecord.checkInTime,
+        checkOutTime: updatedRecord.checkOutTime,
+        status: serverRecord.status || "present",
+        verificationStatus: serverRecord.verificationStatus || "VALID",
+        reviewReason: serverRecord.reviewReason || "",
+        riskScore: serverRecord.riskScore || 0,
+        faceMatchScore: serverRecord.faceMatchScore ?? riskEvaluation.faceMatchScore ?? null,
+        faceVerificationResult: serverRecord.faceVerificationResult || riskEvaluation.faceVerificationResult || "N/A"
+      };
+
       setAttendanceMap(updatedMap);
-      setHistoryLogs(prev => [{ id: `GEO-${Date.now()}`, type, date: dateStr, time: timeStr, coords: coordStr, snapshot, distanceOffset: Math.round(dist) }, ...prev]);
-      const reviewInfo = serverRecord.verificationStatus === "NEEDS_REVIEW" ? ` ⚠️ Flagged for review: ${serverRecord.reviewReason || "Risk detected"}` : "";
-      setStatusReport({ success: true, type, message: `${type === "checkin" ? "Check-in" : "Check-out"} recorded at ${timeStr}. Distance from campus: ${Math.round(dist)}m.${reviewInfo}` });
+      setHistoryLogs(prev => [
+        {
+          id: `GEO-${Date.now()}`,
+          type,
+          date: dateStr,
+          time: timeStr,
+          coords: coordStr,
+          snapshot,
+          distanceOffset: dist,
+          status: serverRecord.status || "present",
+          faceMatchScore: serverRecord.faceMatchScore
+        },
+        ...prev
+      ]);
+
+      const faceNote = serverRecord.faceMatchScore != null
+        ? ` · 👤 Face Match: ${serverRecord.faceMatchScore}%`
+        : "";
+      const reviewInfo = serverRecord.verificationStatus === "NEEDS_REVIEW"
+        ? ` ⚠️ Flagged for review: ${serverRecord.reviewReason || "Risk detected"}`
+        : "";
+
+      setStatusReport({
+        success: true,
+        type,
+        message: `${type === "checkin" ? "Check-in" : "Check-out"} recorded at ${timeStr}. Distance: ${dist}m${faceNote}.${reviewInfo}`
+      });
+
+      setPreviewState(null);
     } catch (err) {
       console.error("Error saving attendance:", err);
       setErrorAlert("Failed to save attendance to backend database.");
     } finally {
-      setLoading(false); setActionType(null);
+      setLoading(false);
+      setActionType(null);
     }
   };
+
 
   const getViewDayKey = (day) => `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   const isPresent = (rec) => rec && (rec.status === "present" || rec.status === "late" || (rec.checkedIn && rec.status !== "absent" && rec.status !== "pending_review"));
@@ -395,87 +578,204 @@ export default function GeotagAttendance({ user }) {
 
               <canvas ref={canvasRef} style={{ display: "none" }} />
 
-              {/* Camera Feed */}
-              <div style={{ width: "100%", height: 200, background: "#1e293b", borderRadius: 10, overflow: "hidden", position: "relative", border: "1px solid #334155" }}>
-                <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", display: cameraActive ? "block" : "none" }} />
-                {!cameraActive && (
-                  <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: 16 }}>
-                    <span style={{ fontSize: 28, opacity: 0.45 }}>📷</span>
-                    <p style={{ margin: 0, fontSize: 11, color: "#94a3b8", textAlign: "center", maxWidth: 200, lineHeight: 1.5 }}>
-                      Camera verification required before marking attendance.
-                    </p>
-                    <button
-                      onClick={() => setCameraActive(true)}
-                      style={{ padding: "8px 18px", background: "#2563eb", color: "white", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
-                    >
-                      Activate Camera
-                    </button>
-                  </div>
-                )}
-                {cameraActive && (
-                  <>
-                    <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(15,23,42,0.7)", color: "#fff", padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}>
-                      <span style={{ width: 6, height: 6, background: "#4ade80", borderRadius: "50%", display: "inline-block" }} />
-                      Live
+              {/* Camera Feed or Interactive Preview Card */}
+              {previewState ? (
+                <div style={{ background: "#f8fafc", borderRadius: 12, border: "2px solid #3b82f6", padding: 14, display: "flex", flexDirection: "column", gap: 12, boxShadow: "0 4px 12px rgba(59,130,246,0.12)" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #e2e8f0", paddingBottom: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 800, color: "#1e3a8a" }}>
+                      <span>🔍</span> Step 2: Review Snapshot & Location
                     </div>
-                    <button onClick={() => setCameraActive(false)} style={{ position: "absolute", top: 8, right: 8, background: "rgba(220,38,38,0.75)", border: "none", color: "white", fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 5, cursor: "pointer", fontFamily: "inherit" }}>
-                      Stop
-                    </button>
-                  </>
-                )}
-              </div>
-
-              {/* Today status */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {[
-                  { label: "Check-In", time: todayRecord.checkInTime, done: todayRecord.checkedIn },
-                  { label: "Check-Out", time: todayRecord.checkOutTime, done: todayRecord.checkedOut },
-                ].map(({ label, time, done }) => (
-                  <div key={label} style={{ background: done ? "#f0fdf4" : "#f8fafc", border: `1px solid ${done ? "#bbf7d0" : "#e2e8f0"}`, borderRadius: 8, padding: "9px 12px", textAlign: "center" }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 3 }}>{label}</div>
-                    <div style={{ fontSize: 13, fontWeight: 800, color: done ? "#15803d" : "#94a3b8" }}>{time || "—"}</div>
+                    <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 6, background: previewState.type === "checkin" ? "#dcfce7" : "#fee2e2", color: previewState.type === "checkin" ? "#166534" : "#991b1b" }}>
+                      {previewState.type === "checkin" ? "Check-In Preview" : "Check-Out Preview"}
+                    </span>
                   </div>
-                ))}
-              </div>
 
-              {/* Punch Buttons */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                <button
-                  onClick={() => handlePunch("checkin")}
-                  disabled={loading || todayRecord.checkedIn}
-                  style={{
-                    padding: "11px 8px", borderRadius: 10, border: "none", fontSize: 12, fontWeight: 700,
-                    cursor: (loading || todayRecord.checkedIn) ? "not-allowed" : "pointer", fontFamily: "inherit",
-                    background: todayRecord.checkedIn ? "#d1fae5" : loading && actionType === "checkin" ? "#94a3b8" : "#16a34a",
-                    color: todayRecord.checkedIn ? "#166534" : "white",
-                    opacity: loading && actionType === "checkin" ? 0.7 : 1
-                  }}
-                >
-                  {todayRecord.checkedIn ? "✅ Checked In" : loading && actionType === "checkin" ? "Logging…" : "Check In"}
-                </button>
-                <button
-                  onClick={() => handlePunch("checkout")}
-                  disabled={loading || !todayRecord.checkedIn || todayRecord.checkedOut}
-                  style={{
-                    padding: "11px 8px", borderRadius: 10, border: "none", fontSize: 12, fontWeight: 700,
-                    cursor: (loading || !todayRecord.checkedIn || todayRecord.checkedOut) ? "not-allowed" : "pointer", fontFamily: "inherit",
-                    background: todayRecord.checkedOut ? "#d1fae5" : !todayRecord.checkedIn ? "#f1f5f9" : loading && actionType === "checkout" ? "#94a3b8" : "#dc2626",
-                    color: todayRecord.checkedOut ? "#166534" : !todayRecord.checkedIn ? "#94a3b8" : "white",
-                    opacity: loading && actionType === "checkout" ? 0.7 : 1
-                  }}
-                >
-                  {todayRecord.checkedOut ? "✅ Checked Out" : loading && actionType === "checkout" ? "Logging…" : "Check Out"}
-                </button>
-              </div>
+                  {previewFeedback && (
+                    <div style={{ padding: "6px 10px", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 6, fontSize: 11, fontWeight: 700, color: "#1d4ed8", textAlign: "center" }}>
+                      {previewFeedback}
+                    </div>
+                  )}
 
-              <div style={{ textAlign: "center", fontSize: 11, color: "#94a3b8", padding: "6px 10px", background: "#f8fafc", borderRadius: 7, border: "1px dashed #e2e8f0" }}>
-                Attendance can only be marked for <strong style={{ color: "#64748b" }}>today</strong>. Past records are locked.
-              </div>
+                  <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                    {/* Captured Selfie Thumbnail */}
+                    <div style={{ width: 100, height: 100, borderRadius: 10, overflow: "hidden", border: "2px solid #94a3b8", flexShrink: 0, position: "relative", background: "#0f172a" }}>
+                      {previewState.snapshot ? (
+                        <img src={previewState.snapshot} alt="Captured Snapshot" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      ) : (
+                        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8", fontSize: 11 }}>No Image</div>
+                      )}
+                      <div style={{ position: "absolute", bottom: 2, right: 2, background: "rgba(0,0,0,0.65)", color: "#fff", fontSize: 8, padding: "1px 4px", borderRadius: 3, fontWeight: 700 }}>
+                        Selfie
+                      </div>
+                    </div>
 
-              {coords && (
-                <div style={{ textAlign: "center", fontSize: 11, color: "#94a3b8" }}>
-                  Last coords: <span style={{ fontFamily: "monospace", color: "#2563eb" }}>{coords}</span>
+                    {/* Snapshot Metadata Details */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, fontSize: 11 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ color: "#64748b", fontWeight: 600 }}>Distance:</span>
+                        <span style={{
+                          fontWeight: 800,
+                          color: previewState.dist <= (previewState.geofenceRadius || 200) ? "#16a34a" : "#dc2626",
+                          background: previewState.dist <= (previewState.geofenceRadius || 200) ? "#f0fdf4" : "#fef2f2",
+                          padding: "1px 6px", borderRadius: 4
+                        }}>
+                          {previewState.dist <= (previewState.geofenceRadius || 200) ? `✅ ${previewState.dist}m (Within Radius)` : `⚠️ ${previewState.dist}m (Outside Radius)`}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ color: "#64748b", fontWeight: 600 }}>Captured Time:</span>
+                        <span style={{ fontWeight: 700, color: "#0f172a" }}>⏰ {previewState.timeStr}</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ color: "#64748b", fontWeight: 600 }}>GPS Accuracy:</span>
+                        <span style={{ fontWeight: 700, color: "#475569" }}>±{previewState.accuracy}m</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span style={{ color: "#64748b", fontWeight: 600 }}>Coordinates:</span>
+                        <span style={{ fontFamily: "monospace", fontSize: 10, color: "#2563eb" }}>{previewState.coordStr}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Recapture & Re-fetch Controls */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, paddingTop: 4, borderTop: "1px dashed #cbd5e1" }}>
+                    <button
+                      onClick={handleRecaptureSnapshot}
+                      disabled={recapturingPhoto || loading}
+                      style={{
+                        padding: "7px 10px", borderRadius: 8, border: "1.5px solid #cbd5e1", background: "white",
+                        color: "#334155", fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex",
+                        alignItems: "center", justifyContent: "center", gap: 5, fontFamily: "inherit"
+                      }}
+                      title="Retake camera selfie"
+                    >
+                      <span>🔄</span> {recapturingPhoto ? "Capturing…" : "Recapture Selfie"}
+                    </button>
+                    <button
+                      onClick={handleRefetchLocationTime}
+                      disabled={refetchingGps || loading}
+                      style={{
+                        padding: "7px 10px", borderRadius: 8, border: "1.5px solid #cbd5e1", background: "white",
+                        color: "#334155", fontSize: 11, fontWeight: 700, cursor: "pointer", display: "flex",
+                        alignItems: "center", justifyContent: "center", gap: 5, fontFamily: "inherit"
+                      }}
+                      title="Re-query GPS coordinates"
+                    >
+                      <span>📍</span> {refetchingGps ? "Locating…" : "Re-fetch Location"}
+                    </button>
+                  </div>
+
+                  {/* Final Submit and Cancel Buttons */}
+                  <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
+                    <button
+                      onClick={handleConfirmSubmit}
+                      disabled={loading}
+                      style={{
+                        flex: 1, padding: "10px 12px", borderRadius: 8, border: "none", fontSize: 12, fontWeight: 800,
+                        background: previewState.type === "checkin" ? "#16a34a" : "#dc2626", color: "white",
+                        cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                        opacity: loading ? 0.7 : 1, fontFamily: "inherit", boxShadow: "0 2px 6px rgba(0,0,0,0.1)"
+                      }}
+                    >
+                      {loading ? "Verifying & Submitting…" : `🚀 Confirm & Submit ${previewState.type === "checkin" ? "Check-In" : "Check-Out"}`}
+                    </button>
+                    <button
+                      onClick={() => setPreviewState(null)}
+                      disabled={loading}
+                      style={{
+                        padding: "10px 14px", borderRadius: 8, border: "1.5px solid #e2e8f0", background: "#f1f5f9",
+                        color: "#64748b", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit"
+                      }}
+                    >
+                      ✕ Cancel
+                    </button>
+                  </div>
                 </div>
+              ) : (
+                <>
+                  {/* Camera Feed */}
+                  <div style={{ width: "100%", height: 200, background: "#1e293b", borderRadius: 10, overflow: "hidden", position: "relative", border: "1px solid #334155" }}>
+                    <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", display: cameraActive ? "block" : "none" }} />
+                    {!cameraActive && (
+                      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: 16 }}>
+                        <span style={{ fontSize: 28, opacity: 0.45 }}>📷</span>
+                        <p style={{ margin: 0, fontSize: 11, color: "#94a3b8", textAlign: "center", maxWidth: 200, lineHeight: 1.5 }}>
+                          Camera verification required before marking attendance.
+                        </p>
+                        <button
+                          onClick={() => setCameraActive(true)}
+                          style={{ padding: "8px 18px", background: "#2563eb", color: "white", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}
+                        >
+                          Activate Camera
+                        </button>
+                      </div>
+                    )}
+                    {cameraActive && (
+                      <>
+                        <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(15,23,42,0.7)", color: "#fff", padding: "3px 8px", borderRadius: 5, fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}>
+                          <span style={{ width: 6, height: 6, background: "#4ade80", borderRadius: "50%", display: "inline-block" }} />
+                          Live Camera
+                        </div>
+                        <button onClick={() => setCameraActive(false)} style={{ position: "absolute", top: 8, right: 8, background: "rgba(220,38,38,0.75)", border: "none", color: "white", fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 5, cursor: "pointer", fontFamily: "inherit" }}>
+                          Stop
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Today status */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    {[
+                      { label: "Check-In", time: todayRecord.checkInTime, done: todayRecord.checkedIn },
+                      { label: "Check-Out", time: todayRecord.checkOutTime, done: todayRecord.checkedOut },
+                    ].map(({ label, time, done }) => (
+                      <div key={label} style={{ background: done ? "#f0fdf4" : "#f8fafc", border: `1px solid ${done ? "#bbf7d0" : "#e2e8f0"}`, borderRadius: 8, padding: "9px 12px", textAlign: "center" }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 3 }}>{label}</div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: done ? "#15803d" : "#94a3b8" }}>{time || "—"}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Punch Buttons (Step 1: Capture & Review) */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                    <button
+                      onClick={() => handleInitiatePunch("checkin")}
+                      disabled={loading || todayRecord.checkedIn}
+                      style={{
+                        padding: "11px 8px", borderRadius: 10, border: "none", fontSize: 12, fontWeight: 700,
+                        cursor: (loading || todayRecord.checkedIn) ? "not-allowed" : "pointer", fontFamily: "inherit",
+                        background: todayRecord.checkedIn ? "#d1fae5" : loading && actionType === "checkin" ? "#94a3b8" : "#16a34a",
+                        color: todayRecord.checkedIn ? "#166534" : "white",
+                        opacity: loading && actionType === "checkin" ? 0.7 : 1
+                      }}
+                    >
+                      {todayRecord.checkedIn ? "✅ Checked In" : loading && actionType === "checkin" ? "Reading GPS…" : "Capture & Check In"}
+                    </button>
+                    <button
+                      onClick={() => handleInitiatePunch("checkout")}
+                      disabled={loading || !todayRecord.checkedIn || todayRecord.checkedOut}
+                      style={{
+                        padding: "11px 8px", borderRadius: 10, border: "none", fontSize: 12, fontWeight: 700,
+                        cursor: (loading || !todayRecord.checkedIn || todayRecord.checkedOut) ? "not-allowed" : "pointer", fontFamily: "inherit",
+                        background: todayRecord.checkedOut ? "#d1fae5" : !todayRecord.checkedIn ? "#f1f5f9" : loading && actionType === "checkout" ? "#94a3b8" : "#dc2626",
+                        color: todayRecord.checkedOut ? "#166534" : !todayRecord.checkedIn ? "#94a3b8" : "white",
+                        opacity: loading && actionType === "checkout" ? 0.7 : 1
+                      }}
+                    >
+                      {todayRecord.checkedOut ? "✅ Checked Out" : loading && actionType === "checkout" ? "Reading GPS…" : "Capture & Check Out"}
+                    </button>
+                  </div>
+
+                  <div style={{ textAlign: "center", fontSize: 11, color: "#94a3b8", padding: "6px 10px", background: "#f8fafc", borderRadius: 7, border: "1px dashed #e2e8f0" }}>
+                    Attendance can only be marked for <strong style={{ color: "#64748b" }}>today</strong>. You can review photo and GPS before submitting.
+                  </div>
+
+                  {coords && (
+                    <div style={{ textAlign: "center", fontSize: 11, color: "#94a3b8" }}>
+                      Last coords: <span style={{ fontFamily: "monospace", color: "#2563eb" }}>{coords}</span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>
