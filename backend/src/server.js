@@ -1,3 +1,5 @@
+const ML_SERVICE_URL =
+  process.env.ML_SERVICE_URL || "http://127.0.0.1:8003";
 import express from "express";
 // Start: Dnyaneshwari Thorat
 import { isValidPhoneNumber } from "libphonenumber-js";
@@ -708,7 +710,124 @@ app.use(async (req, res, next) => {
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "teacher-training-portal-api", database: "mongodb" });
 });
+app.get(
+  "/api/teacher/children/:id/risk-analytics",
+  requireAuth,
+  requireRole("teacher", "fellow"),
+  async (req, res, next) => {
+    try {
+      const childId = req.params.id;
+      requireObjectId(childId, "childId");
 
+      const child = await Child.findById(childId)
+        .populate("center", "name city")
+        .populate("class", "name ageGroup");
+
+      if (!child) {
+        return res.status(404).json({ message: "Child not found." });
+      }
+
+      const assessments = await ChildAssessment.find({
+        child: childId,
+      }).sort({ assessmentDate: -1, updatedAt: -1 });
+
+      if (!assessments.length) {
+        return res.json({
+          success: true,
+          message: "No assessment found.",
+          risk: null,
+        });
+      }
+
+      const latestAssessment = assessments[0];
+      const sectionScores = latestAssessment.sectionScores || [];
+
+      const getScore = (keywords) => {
+        const section = sectionScores.find((item) => {
+          const title = String(item.title || "").toLowerCase();
+          return keywords.some((keyword) => title.includes(keyword));
+        });
+
+        return section?.score ?? 0;
+      };
+
+      const motorScore = Math.round(
+        (getScore(["motor", "physical"]) / 24) * 100
+      );
+      const cognitiveScore = Math.round(
+        (getScore(["cognitive"]) / 24) * 100
+      );
+      const languageScore = Math.round(
+        (getScore(["language"]) / 24) * 100
+      );
+      const socialScore = Math.round(
+        (getScore(["social", "emotional"]) / 24) * 100
+      );
+
+      const ageGroup = child.class?.ageGroup || "";
+      let ageMonths = 0;
+
+      if (ageGroup.includes("3-4")) ageMonths = 42;
+      else if (ageGroup.includes("2-3")) ageMonths = 30;
+      else if (ageGroup.includes("4-5")) ageMonths = 54;
+      else if (ageGroup.includes("5-6")) ageMonths = 66;
+      else if (ageGroup.includes("1-2")) ageMonths = 18;
+
+      const observationDate =
+        latestAssessment.assessmentDate ||
+        latestAssessment.updatedAt ||
+        new Date();
+
+      const date = new Date(observationDate);
+
+      const centerName = child.center?.name || "";
+      const region = child.center?.city || "";
+
+      const response = await fetch(`${ML_SERVICE_URL}/predict`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          age_months: ageMonths,
+          motor_skill_score: motorScore,
+          cognitive_skill_score: cognitiveScore,
+          language_skill_score: languageScore,
+          social_skill_score: socialScore,
+          observation_year: date.getFullYear(),
+          observation_month: date.getMonth() + 1,
+          observation_day: date.getDate(),
+          center: centerName,
+          region: region,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `ML service failed: ${response.status} ${errorText}`
+        );
+      }
+
+      const prediction = await response.json();
+
+      res.json({
+        success: true,
+        childId,
+        assessmentStage: latestAssessment.stage,
+        scores: {
+          motor: motorScore,
+          cognitive: cognitiveScore,
+          language: languageScore,
+          social: socialScore,
+        },
+        risk: prediction,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 app.post("/api/auth/login", async (req, res, next) => {
   try {
     const { email, password } = req.body;
