@@ -1,9 +1,6 @@
 // Prajwal start
 import { useState, useEffect } from "react";
 import { SectionCard, S, Badge, StatusBadge } from "../components/Shared";
-// Start: Dnyaneshwari Thorat
-import { getChildAssessments, saveChildAssessment, getActiveQuestionBank } from "../services/api";
-// End: Dnyaneshwari Thorat
 
 import {
   RATING_SCALE_3,
@@ -13,7 +10,12 @@ import {
   scoreOf,
   computeSectionScores,
 } from "../data/childAssessmentSections";
-
+import {
+  getChildAssessments,
+  saveChildAssessment,
+  getActiveQuestionBank,
+  getChildRiskAnalytics
+} from "../services/api";
 /* ─────────────────────────────────────────
    Child Dashboard — Module 1
    (Child Profile & Assessment)
@@ -1407,12 +1409,13 @@ export default function ChildDashboardModal({ child, onClose }) {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ name: child?.name || "" });
   const [refreshKey, setRefreshKey] = useState(0);
-
-  useEffect(() => {
-    setForm({ name: child?.name || "" });
-    setTab("profile");
-    setEditing(false);
-  }, [child]);
+  const [riskAnalytics, setRiskAnalytics] = useState(null);
+  const [riskLoading, setRiskLoading] = useState(false);
+    useEffect(() => {
+      setForm({ name: child?.name || "" });
+      setTab("profile");
+      setEditing(false);
+    }, [child]);
 
   const handleSaveProfile = () => {
     setSaving(true);
@@ -1448,9 +1451,31 @@ export default function ChildDashboardModal({ child, onClose }) {
       <span>{icon}</span> {label}
     </button>
   );
+  useEffect(() => {
+  const loadRiskAnalytics = async () => {
+    if (!child?.id) return;
+      const childId = child?.id || child?._id;
+      if (!childId) return;
+    try {
+      setRiskLoading(true);
+      const data = await getChildRiskAnalytics(childId);
 
-  if (!child) return null;
+      console.log("RISK DATA:", data);
 
+      setRiskAnalytics(data?.risk || null);;
+
+      } catch (error) {
+        alert("Risk Analytics Error: " + error.message);
+        console.error("Risk analytics error:", error);
+
+
+      } finally {
+        setRiskLoading(false);
+      }
+  };
+  console.log("🔥 loadRiskAnalytics called");
+  loadRiskAnalytics();
+}, [child?.id, refreshKey]);
   return (
     <div
       style={{
@@ -1484,6 +1509,7 @@ export default function ChildDashboardModal({ child, onClose }) {
           {tabBtn("profile", "Child Profile", "🧾")}
           {tabBtn("assessment", "Child Assessment", "📊")}
           {tabBtn("activities", "Activity Suggestions", "🎯")}
+          {tabBtn("risk", "Risk Analytics", "⚠️")}
         </div>
 
         {/* Content */}
@@ -1498,7 +1524,230 @@ export default function ChildDashboardModal({ child, onClose }) {
             <ActivitySuggestionsTab key={`${child.id}_${refreshKey}`} child={child} />
           )}
         </div>
+        {tab === "risk" && (
+  <div style={{ padding: "24px" }}>
+    {riskLoading ? (
+      <div
+        style={{
+          padding: 40,
+          textAlign: "center",
+          color: "#64748b",
+          fontWeight: 600,
+        }}
+      >
+        🔄 Analyzing child assessment...
+      </div>
+    ) : riskAnalytics ? (
+      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
+        {/* Header */}
+        <div
+          style={{
+            background: "linear-gradient(135deg, #0f172a, #1e293b)",
+            borderRadius: 16,
+            padding: "22px 24px",
+            color: "white",
+          }}
+        >
+          <div style={{ fontSize: 20, fontWeight: 800 }}>
+            📊 Child Risk Analytics
+          </div>
+          <div style={{ fontSize: 12, color: "#cbd5e1", marginTop: 5 }}>
+            AI-based developmental risk assessment
+          </div>
+        </div>
+
+        {/* Summary Cards */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 16,
+          }}
+        >
+
+          {/* Predicted Risk */}
+          <div
+            style={{
+              background: "white",
+              border: "1px solid #e2e8f0",
+              borderRadius: 16,
+              padding: 22,
+              boxShadow: "0 3px 10px rgba(0,0,0,0.04)",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: "#64748b",
+                textTransform: "uppercase",
+                marginBottom: 10,
+              }}
+            >
+              Predicted Risk
+            </div>
+
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "9px 18px",
+                borderRadius: 999,
+                fontSize: 18,
+                fontWeight: 800,
+                background:
+                  riskAnalytics.predictedRisk === "High"
+                    ? "#fee2e2"
+                    : riskAnalytics.predictedRisk === "Medium"
+                    ? "#fef3c7"
+                    : "#dcfce7",
+                color:
+                  riskAnalytics.predictedRisk === "High"
+                    ? "#b91c1c"
+                    : riskAnalytics.predictedRisk === "Medium"
+                    ? "#b45309"
+                    : "#15803d",
+              }}
+            >
+              <span>
+                {riskAnalytics.predictedRisk === "High"
+                  ? "🔴"
+                  : riskAnalytics.predictedRisk === "Medium"
+                  ? "🟠"
+                  : "🟢"}
+              </span>
+
+              {riskAnalytics.predictedRisk}
+            </div>
+          </div>
+
+          {/* Risk Score */}
+          <div
+            style={{
+              background: "white",
+              border: "1px solid #e2e8f0",
+              borderRadius: 16,
+              padding: 22,
+              boxShadow: "0 3px 10px rgba(0,0,0,0.04)",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: "#64748b",
+                textTransform: "uppercase",
+                marginBottom: 10,
+              }}
+            >
+              Risk Score
+            </div>
+
+            <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+              <span
+                style={{
+                  fontSize: 34,
+                  fontWeight: 800,
+                  color: "#0f172a",
+                }}
+              >
+                {riskAnalytics.riskScore}
+              </span>
+
+              <span style={{ fontSize: 13, color: "#64748b" }}>
+                / 100
+              </span>
+            </div>
+
+            <div
+              style={{
+                marginTop: 10,
+                height: 8,
+                background: "#f1f5f9",
+                borderRadius: 999,
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: `${Math.min(riskAnalytics.riskScore || 0, 100)}%`,
+                  height: "100%",
+                  borderRadius: 999,
+                  background:
+                    riskAnalytics.predictedRisk === "High"
+                      ? "#ef4444"
+                      : riskAnalytics.predictedRisk === "Medium"
+                      ? "#f59e0b"
+                      : "#22c55e",
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Teacher Guidance */}
+        <div
+          style={{
+            background: "#f8fafc",
+            border: "1px solid #e2e8f0",
+            borderRadius: 16,
+            padding: 20,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 14,
+              fontWeight: 800,
+              color: "#0f172a",
+              marginBottom: 8,
+            }}
+          >
+            📝 Teacher Guidance
+          </div>
+
+          <div
+            style={{
+              fontSize: 13,
+              color: "#475569",
+              lineHeight: 1.6,
+            }}
+          >
+            {riskAnalytics.predictedRisk === "High"
+              ? "Closer observation and additional developmental support may be required."
+              : riskAnalytics.predictedRisk === "Medium"
+              ? "Continue regular monitoring and provide targeted developmental activities."
+              : "Continue regular developmental observation and routine assessment."}
+          </div>
+        </div>
+
+        {/* Note */}
+        <div
+          style={{
+            fontSize: 11,
+            color: "#94a3b8",
+            textAlign: "center",
+            paddingTop: 2,
+          }}
+        >
+          ⚠️ Risk prediction is a support tool for teacher review and not an automatic decision.
+        </div>
+
+      </div>
+    ) : (
+      <div
+        style={{
+          padding: 40,
+          textAlign: "center",
+          color: "#64748b",
+        }}
+      >
+        No risk analysis available.
+      </div>
+    )}
+  </div>
+)}
         {/* Footer */}
         <div style={{ padding: "14px 24px", borderTop: "1px solid #e5e7eb", background: "white", borderRadius: "0 0 20px 20px", display: "flex", justifyContent: "flex-end" }}>
           <button onClick={onClose} style={S.exportBtn}>← Back</button>
